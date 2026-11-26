@@ -845,15 +845,23 @@ public class QuestionServiceImpl implements QuestionService {
         String currentStatus = q.getStatus() != null ? q.getStatus().toUpperCase() : "INACTIVE";
         String newStatus = req.getStatus() != null ? req.getStatus().toUpperCase() : "";
 
+        List<AnswerOption> options = null;
+        CodeConfigDto codeConfig = null;
+        List<TestCaseDto> testCases = null;
+        boolean codeLoaded = false;
+
         if ("INACTIVE".equals(currentStatus) && "ACTIVE".equals(newStatus)) {
             if (!"APPROVED".equals(q.getApprovalStatus())) {
                 throw new BadRequestException("Cannot activate question that is not approved");
             }
-            List<AnswerOption> options = answerOptionRepository.findByQuestion_QuestionId(q.getQuestionId());
+            options = answerOptionRepository.findByQuestion_QuestionId(q.getQuestionId());
             QuestionPayload payload = QuestionPayload.fromEntity(q, options, objectMapper);
             // CODE settings are stored in separate tables; load them so activation validates the real data.
-            payload.setCodeConfig(codeConfigOf(q));
-            payload.setTestCases(testCasesOf(q));
+            codeConfig = codeConfigOf(q);
+            testCases = testCasesOf(q);
+            codeLoaded = true;
+            payload.setCodeConfig(codeConfig);
+            payload.setTestCases(testCases);
             questionValidator.validateOrThrow(payload);
         } else if ("ACTIVE".equals(currentStatus) && "ARCHIVED".equals(newStatus)) {
             checkArchiveImpact(q, Set.of(q.getQuestionId()));
@@ -867,8 +875,14 @@ public class QuestionServiceImpl implements QuestionService {
 
         q.setStatus(newStatus);
         q = questionRepository.save(q);
-        List<AnswerOption> options = answerOptionRepository.findByQuestion_QuestionId(q.getQuestionId());
-        return mapToDetailDto(q, options);
+        if (options == null) {
+            options = answerOptionRepository.findByQuestion_QuestionId(q.getQuestionId());
+        }
+        if (!codeLoaded) {
+            codeConfig = codeConfigOf(q);
+            testCases = testCasesOf(q);
+        }
+        return mapToDetailDto(q, options, codeConfig, testCases);
     }
 
     @Override
@@ -878,27 +892,101 @@ public class QuestionServiceImpl implements QuestionService {
             throw new BadRequestException("Question IDs are required");
         }
         String newStatus = req.getStatus() != null ? req.getStatus().toUpperCase() : "";
-        List<Question> batch = new ArrayList<>();
-        for (Long id : req.getQuestionIds()) {
-            Question question = questionRepository.findActiveById(id)
-                    .orElseThrow(() -> new ResourceNotFoundException("Question not found"));
-            if (!accessPolicy.canChangeStatus(currentUser, question)) {
+        Set<Long> uniqueIds = new LinkedHashSet<>(req.getQuestionIds());
+
+        List<Question> initial = questionRepository.findActiveByIdsWithHierarchy(uniqueIds);
+        if (initial.size() != uniqueIds.size()) {
+            throw new ResourceNotFoundException("Question not found");
+        }
+
+        Map<Long, Boolean> courseAccessCache = new HashMap<>();
+        for (Question question : initial) {
+            if (question.getCourse() == null) {
                 throw new ForbiddenException("You do not have permission to change status of this question");
             }
-            batch.add(question);
-        }
-        lockQuestionCourses(batch);
-        if ("ARCHIVED".equals(newStatus)) {
-            Set<Long> batchIds = batch.stream().map(Question::getQuestionId).collect(Collectors.toSet());
-            for (Question question : batch) {
-                entityManager.refresh(question);
-                if ("ACTIVE".equals(question.getStatus())) checkArchiveImpact(question, batchIds);
+            boolean allowed = courseAccessCache.computeIfAbsent(
+                    question.getCourse().getCourseId(),
+                    cid -> accessPolicy.canChangeStatus(currentUser, question));
+            if (!allowed) {
+                throw new ForbiddenException("You do not have permission to change status of this question");
             }
         }
-        List<QuestionDetailDto> results = new ArrayList<>();
+
+        lockQuestionCourses(initial);
+        for (Question question : initial) {
+            entityManager.detach(question);
+        }
+
+        List<Question> refreshed = questionRepository.findActiveByIdsWithHierarchy(uniqueIds);
+        Map<Long, Question> byId = new HashMap<>(refreshed.size() * 2);
+        for (Question question : refreshed) {
+            byId.put(question.getQuestionId(), question);
+        }
+        if (byId.size() != uniqueIds.size()) {
+            throw new ResourceNotFoundException("Question not found");
+        }
+
+        Map<Long, List<AnswerOption>> optionsByQId = answerOptionRepository.findByQuestionIds(uniqueIds).stream()
+                .collect(Collectors.groupingBy(o -> o.getQuestion().getQuestionId()));
+
+        List<Long> codeQIds = refreshed.stream()
+                .filter(q -> "CODE".equals(q.getQuestionType()))
+                .map(Question::getQuestionId)
+                .toList();
+        Map<Long, CodeConfigDto> codeConfigByQId = new HashMap<>();
+        Map<Long, List<TestCaseDto>> testCasesByQId = new HashMap<>();
+        if (!codeQIds.isEmpty()) {
+            for (CodeQuestionConfig cfg : codeQuestionConfigRepository.findAllById(codeQIds)) {
+                codeConfigByQId.put(cfg.getQuestionId(), toCodeConfigDto(cfg));
+            }
+            for (CodeTestCase tc : codeTestCaseRepository.findByQuestionIds(codeQIds)) {
+                testCasesByQId.computeIfAbsent(tc.getQuestion().getQuestionId(), k -> new ArrayList<>())
+                        .add(toTestCaseDto(tc));
+            }
+        }
+
+        List<Question> uniqueQuestions = new ArrayList<>(uniqueIds.size());
+        for (Long id : uniqueIds) {
+            Question q = byId.get(id);
+            String currentStatus = q.getStatus() != null ? q.getStatus().toUpperCase() : "INACTIVE";
+
+            if ("INACTIVE".equals(currentStatus) && "ACTIVE".equals(newStatus)) {
+                if (!"APPROVED".equals(q.getApprovalStatus())) {
+                    throw new BadRequestException("Cannot activate question that is not approved");
+                }
+                List<AnswerOption> options = optionsByQId.getOrDefault(id, List.of());
+                QuestionPayload payload = QuestionPayload.fromEntity(q, options, objectMapper);
+                payload.setCodeConfig(codeConfigByQId.get(id));
+                payload.setTestCases("CODE".equals(q.getQuestionType())
+                        ? testCasesByQId.getOrDefault(id, List.of())
+                        : null);
+                questionValidator.validateOrThrow(payload);
+            } else if ("ACTIVE".equals(currentStatus) && "ARCHIVED".equals(newStatus)) {
+                checkArchiveImpact(q, uniqueIds);
+            } else if ("ACTIVE".equals(currentStatus) && ("INACTIVE".equals(newStatus) || "DRAFT".equals(newStatus))) {
+                throw new ResourceConflictException("Once active, a question can only be updated to archived");
+            } else if ("ARCHIVED".equals(currentStatus)) {
+                throw new ResourceConflictException("Archived questions cannot change status");
+            } else if (!currentStatus.equals(newStatus)) {
+                throw new ResourceConflictException("Invalid status transition from " + currentStatus + " to " + newStatus);
+            }
+
+            q.setStatus(newStatus);
+            uniqueQuestions.add(q);
+        }
+
+        questionRepository.saveAll(uniqueQuestions);
+        questionRepository.flush();
+
+        List<QuestionDetailDto> results = new ArrayList<>(req.getQuestionIds().size());
         for (Long id : req.getQuestionIds()) {
-            QuestionStatusRequest sReq = QuestionStatusRequest.builder().status(newStatus).build();
-            results.add(updateQuestionStatus(id, sReq, currentUser));
+            Question q = byId.get(id);
+            List<AnswerOption> options = optionsByQId.getOrDefault(id, List.of());
+            CodeConfigDto codeConfig = codeConfigByQId.get(id);
+            List<TestCaseDto> testCases = "CODE".equals(q.getQuestionType())
+                    ? testCasesByQId.getOrDefault(id, List.of())
+                    : null;
+            results.add(mapToDetailDto(q, options, codeConfig, testCases));
         }
         return results;
     }
@@ -1174,6 +1262,10 @@ public class QuestionServiceImpl implements QuestionService {
     public CodeConfigDto codeConfigOf(Question q) {
         if (!"CODE".equals(q.getQuestionType())) return null;
         CodeQuestionConfig cfg = codeQuestionConfigRepository.findById(q.getQuestionId()).orElse(null);
+        return toCodeConfigDto(cfg);
+    }
+
+    private CodeConfigDto toCodeConfigDto(CodeQuestionConfig cfg) {
         if (cfg == null) return null;
         List<String> langs = null;
         try {
@@ -1193,16 +1285,25 @@ public class QuestionServiceImpl implements QuestionService {
     public List<TestCaseDto> testCasesOf(Question q) {
         if (!"CODE".equals(q.getQuestionType())) return null;
         List<CodeTestCase> cases = codeTestCaseRepository.findByQuestionQuestionIdOrderByOrderIndexAscTestCaseIdAsc(q.getQuestionId());
-        return cases.stream().map(tc -> TestCaseDto.builder()
+        return cases.stream().map(this::toTestCaseDto).collect(Collectors.toList());
+    }
+
+    private TestCaseDto toTestCaseDto(CodeTestCase tc) {
+        return TestCaseDto.builder()
                 .testCaseId(tc.getTestCaseId())
                 .inputData(tc.getInputData())
                 .expectedOutput(tc.getExpectedOutput())
                 .hidden(tc.getHidden())
                 .orderIndex(tc.getOrderIndex())
-                .build()).collect(Collectors.toList());
+                .build();
     }
 
     private QuestionDetailDto mapToDetailDto(Question q, List<AnswerOption> options) {
+        return mapToDetailDto(q, options, codeConfigOf(q), testCasesOf(q));
+    }
+
+    private QuestionDetailDto mapToDetailDto(
+            Question q, List<AnswerOption> options, CodeConfigDto codeConfig, List<TestCaseDto> testCases) {
         Object metadataObj = parseJson(q.getQuestionMetadata());
         Object answerKeyObj = parseJson(q.getAnswerKey());
         Object rubricObj = parseJson(q.getEssayGradingRubric());
@@ -1215,9 +1316,6 @@ public class QuestionServiceImpl implements QuestionService {
                 .explanation(o.getExplanation())
                 .orderIndex(o.getOrderIndex())
                 .build()).collect(Collectors.toList());
-
-        CodeConfigDto codeConfig = codeConfigOf(q);
-        List<TestCaseDto> testCases = testCasesOf(q);
 
         return QuestionDetailDto.builder()
                 .questionId(q.getQuestionId())
