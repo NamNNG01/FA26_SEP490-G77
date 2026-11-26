@@ -1,7 +1,7 @@
 import type { Granularity } from '@/services/adminDashboard.service';
 
 const vndFormatter = new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND', maximumFractionDigits: 0 });
-const integerFormatter = new Intl.NumberFormat('vi-VN');
+const integerFormatter = new Intl.NumberFormat('en-US');
 
 /** 1250000 → "1.250.000 ₫" */
 export function formatVnd(value: number): string {

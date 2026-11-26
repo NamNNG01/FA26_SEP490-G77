@@ -8,7 +8,7 @@ import { Icon } from '@/assets/icons';
 import type { CmCourseStat } from '@/services/cmDashboard.types';
 import { LabelWithInfo, Panel, PanelEmpty, PanelSkeleton } from './cmDashboardUi';
 
-/** Case- and accent-insensitive, so "cau truc" finds "Cấu trúc". */
+/** Case- and accent-insensitive normalization for search matching. */
 const normalize = (s: string) =>
   s.normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/đ/g, 'd').replace(/Đ/g, 'D').toLowerCase();
 

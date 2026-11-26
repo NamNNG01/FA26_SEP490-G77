@@ -29,11 +29,11 @@ public class ManagerDiscussionServiceImpl implements ManagerDiscussionService {
     private static final Set<String> TAGS = Set.of("question", "tip", "announcement");
 
     private static final List<String> REJECTION_TEMPLATES = List.of(
-            "Nội dung không liên quan đến học tập",
-            "Chứa thông tin cá nhân, link lạ hoặc quảng cáo",
-            "Hình ảnh mờ, không đọc được hoặc không phù hợp",
-            "Ngôn từ thiếu chuẩn mực, không tôn trọng cộng đồng",
-            "Nội dung quá ngắn hoặc chưa rõ câu hỏi"
+            "Content is not related to studying",
+            "Contains personal information, suspicious links, or advertisements",
+            "Image is blurry, unreadable, or inappropriate",
+            "Inappropriate or disrespectful language",
+            "Content is too short or the question is unclear"
     );
 
     private final DiscussionRepository discussionRepository;
@@ -43,7 +43,7 @@ public class ManagerDiscussionServiceImpl implements ManagerDiscussionService {
     private final CommunityHelper communityHelper;
 
     /**
-     * Chỉ Admin mới có quyền kiểm duyệt cộng đồng.
+     * Only Admins have permission to moderate the community.
      */
     private User validateAdmin(Long userId) {
         if (userId == null) {
@@ -58,7 +58,7 @@ public class ManagerDiscussionServiceImpl implements ManagerDiscussionService {
     }
 
     /**
-     * Chuyển đổi entity Discussion sang DiscussionItemDto cho danh sách.
+     * Convert a Discussion entity to DiscussionItemDto for list views.
      */
     private DiscussionItemDto mapToItemDto(Discussion d, Long currentUserId) {
         User author = d.getUser();
@@ -93,7 +93,7 @@ public class ManagerDiscussionServiceImpl implements ManagerDiscussionService {
     }
 
     /**
-     * Chuyển đổi entity Discussion sang DiscussionDetailDto cho màn hình chi tiết.
+     * Convert a Discussion entity to DiscussionDetailDto for detail views.
      */
     private DiscussionDetailDto mapToDetailDto(Discussion d, Long currentUserId, List<DiscussionComment> comments) {
         User author = d.getUser();
@@ -263,8 +263,8 @@ public class ManagerDiscussionServiceImpl implements ManagerDiscussionService {
 
         communityHelper.sendNotification(
                 discussion.getUser(),
-                "Bài viết cộng đồng đã được duyệt",
-                "Bài viết \"" + discussion.getTitle() + "\" của bạn đã được Admin phê duyệt và hiển thị công khai.",
+                "Community post approved",
+                "Your post \"" + discussion.getTitle() + "\" has been approved by an Admin and is now public.",
                 "COMMUNITY_APPROVED",
                 discussion.getDiscussionId()
         );
@@ -281,8 +281,8 @@ public class ManagerDiscussionServiceImpl implements ManagerDiscussionService {
 
         communityHelper.sendNotification(
                 discussion.getUser(),
-                "Bài viết cộng đồng chưa được duyệt",
-                "Bài viết \"" + discussion.getTitle() + "\" bị từ chối. Lý do: " + reason + ". Bạn có thể chỉnh sửa và gửi duyệt lại.",
+                "Community post rejected",
+                "Your post \"" + discussion.getTitle() + "\" was rejected. Reason: " + reason + ". You can edit and resubmit it for review.",
                 "COMMUNITY_REJECTED",
                 discussion.getDiscussionId()
         );
@@ -557,8 +557,8 @@ public class ManagerDiscussionServiceImpl implements ManagerDiscussionService {
 
         communityHelper.sendNotification(
                 target,
-                "Tài khoản bị tạm khóa tương tác cộng đồng",
-                "Bạn bị tạm khóa đăng bài và bình luận trong " + request.getDays() + " ngày. Lý do: " + request.getReason().trim(),
+                "Community interaction temporarily muted",
+                "You are temporarily muted from posting and commenting for " + request.getDays() + " days. Reason: " + request.getReason().trim(),
                 "COMMUNITY_MUTED",
                 0L
         );

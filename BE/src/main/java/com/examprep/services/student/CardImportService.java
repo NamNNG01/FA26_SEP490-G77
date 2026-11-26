@@ -277,15 +277,15 @@ public class CardImportService {
             String back = r.back != null ? r.back.trim() : "";
 
             if (front.isEmpty()) {
-                errors.add(new ValidationError("FRONT_EMPTY", "Mặt trước đang trống"));
+                errors.add(new ValidationError("FRONT_EMPTY", "Front face is empty"));
             } else if (front.length() > 2000) {
-                errors.add(new ValidationError("FRONT_TOO_LONG", "Mặt trước vượt quá 2000 ký tự"));
+                errors.add(new ValidationError("FRONT_TOO_LONG", "Front face exceeds 2000 characters"));
             }
 
             if (back.isEmpty()) {
-                errors.add(new ValidationError("BACK_EMPTY", "Mặt sau đang trống"));
+                errors.add(new ValidationError("BACK_EMPTY", "Back face is empty"));
             } else if (back.length() > 2000) {
-                errors.add(new ValidationError("BACK_TOO_LONG", "Mặt sau vượt quá 2000 ký tự"));
+                errors.add(new ValidationError("BACK_TOO_LONG", "Back face exceeds 2000 characters"));
             }
 
             boolean duplicate = false;
@@ -294,7 +294,7 @@ public class CardImportService {
                 if (fileSeen.contains(key) || deckCards.contains(key)) {
                     duplicate = true;
                     duplicateCount++;
-                    errors.add(new ValidationError("DUPLICATE_IN_FILE", "Thẻ bị trùng lặp"));
+                    errors.add(new ValidationError("DUPLICATE_IN_FILE", "Duplicate card in file"));
                 } else {
                     fileSeen.add(key);
                 }
@@ -321,105 +321,122 @@ public class CardImportService {
 
     @Transactional
     public BulkSaveResponse bulk(Long userId, BulkSaveRequest req) {
-        Deck deck = null;
-        if (req.deckId() != null) {
-            deck = deckRepository.findById(req.deckId())
-                    .orElseThrow(() -> new BaseException(ResponseCode.RESOURCE_NOT_FOUND, "Deck not found", Map.of("code", "DECK_NOT_FOUND")));
-
-            if (!canModifyDeck(userId, deck)) {
-                throw new BaseException(ResponseCode.FORBIDDEN, "Not authorized", Map.of("code", "FORBIDDEN_DECK"));
-            }
-            if ("PENDING_REVIEW".equals(deck.getReviewStatus()) || "APPROVED".equals(deck.getReviewStatus())) {
-                throw new BaseException(ResponseCode.CONFLICT, "Deck is locked by review status", Map.of("code", "DECK_LOCKED"));
-            }
-            if (deck.getMode() != null && !"FLASHCARD".equals(deck.getMode())) {
-                throw new BaseException(ResponseCode.BAD_REQUEST, "Bulk save only supports FLASHCARD mode decks", Map.of("code", "INVALID_DECK_MODE"));
-            }
-        } else if (req.newDeck() != null) {
-            var nd = req.newDeck();
-            if (nd.moduleId() != null && nd.courseId() == null) {
-                throw new BaseException(ResponseCode.BAD_REQUEST, "A module requires a course", Map.of("code", "COURSE_REQUIRED"));
-            }
-            User owner = userRepository.findById(userId)
-                    .orElseThrow(() -> new ResourceNotFoundException("User not found."));
-            Course course = null;
-            if (nd.courseId() != null) {
-                course = courseRepository.findById(nd.courseId())
-                        .orElseThrow(() -> new BaseException(ResponseCode.RESOURCE_NOT_FOUND, "Course not found", Map.of("code", "COURSE_NOT_FOUND")));
-                boolean isAdmin = User.ROLE_ADMIN.equals(owner.getRoleName());
-                boolean isManager = User.ROLE_COURSE_MANAGER.equals(owner.getRoleName())
-                        && (course.getManager().getUserId().equals(userId)
-                        || courseManagerRepository.existsByCourse_CourseIdAndUser_UserId(nd.courseId(), userId));
-                if (!isAdmin && !isManager) {
-                    throw new BaseException(ResponseCode.FORBIDDEN, "Not manager", Map.of("code", "FORBIDDEN_COURSE"));
-                }
-            }
-            Module module = null;
-            if (nd.moduleId() != null) {
-                module = moduleRepository.findById(nd.moduleId())
-                        .orElseThrow(() -> new BaseException(ResponseCode.RESOURCE_NOT_FOUND, "Module not found", Map.of("code", "MODULE_NOT_FOUND")));
-                if (!module.getCourse().getCourseId().equals(course.getCourseId())) {
-                    throw new BaseException(ResponseCode.BAD_REQUEST, "The module does not belong to the deck's course", Map.of("code", "MODULE_COURSE_MISMATCH"));
-                }
-            }
-            deck = Deck.builder().user(owner).course(course).module(module).title(nd.title().strip())
-                    .description(nd.description()).isPublic(Boolean.TRUE.equals(nd.isPublic())).build();
-            deck = deckRepository.save(deck);
-        } else {
-            throw new BaseException(ResponseCode.BAD_REQUEST, "deckId or newDeck required", Map.of("code", "VALIDATION_FAILED"));
-        }
-
-        if ("AI".equalsIgnoreCase(req.source())) {
-            if (req.aiGenerationId() != null) {
-                aiUsageLogRepository.findById(req.aiGenerationId()).ifPresent(log -> {
-                    if (log.getUser() != null && userId.equals(log.getUser().getUserId())) {
-                        log.setSavedAt(Instant.now());
-                        aiUsageLogRepository.save(log);
-                    }
-                });
-            }
-        }
-
         if (req.cards() == null || req.cards().isEmpty()) {
             throw new BaseException(ResponseCode.BAD_REQUEST, "Cards required", Map.of("code", "VALIDATION_FAILED"));
         }
-        if (req.cards().size() > 500) {
-            throw new BaseException(ResponseCode.BAD_REQUEST, "Too many cards", Map.of("code", "BATCH_TOO_LARGE"));
-        }
+
+        boolean isExistingDeck = req.deckId() != null;
+        Deck deck = isExistingDeck
+                ? loadTargetDeck(userId, req.deckId())
+                : createTargetDeck(userId, req.newDeck());
+
+        markAiGenerationSaved(userId, req);
 
         boolean skipDup = req.skipDuplicates() == null || req.skipDuplicates();
-        Set<String> existingKeys = new HashSet<>();
-        cards.findByDeckDeckIdOrderByCardIdAsc(deck.getDeckId()).forEach(c -> existingKeys.add(normalizeText(c.getFrontText()) + "|||" + normalizeText(c.getBackText())));
+        Set<String> seenKeys = (skipDup && isExistingDeck) ? loadCardKeys(deck.getDeckId()) : new HashSet<>();
 
-        int position = cards.maxPosition(deck.getDeckId());
+        int position = isExistingDeck ? cards.maxPosition(deck.getDeckId()) : 0;
         List<Flashcard> toSave = new ArrayList<>();
         int skipped = 0;
-        List<Long> cardIds = new ArrayList<>();
 
         for (var ci : req.cards()) {
-            String front = ci.frontText() != null ? ci.frontText().trim() : "";
-            String back = ci.backText() != null ? ci.backText().trim() : "";
-            if (front.isEmpty() || back.isEmpty()) continue;
-
-            String key = normalizeText(front) + "|||" + normalizeText(back);
-            if (skipDup && existingKeys.contains(key)) {
+            String front = ci.frontText().trim();
+            String back = ci.backText().trim();
+            if (skipDup && !seenKeys.add(cardKey(front, back))) {
                 skipped++;
                 continue;
             }
-            existingKeys.add(key);
-            Flashcard fc = Flashcard.builder()
+            toSave.add(Flashcard.builder()
                     .deck(deck)
                     .frontText(front)
                     .backText(back)
                     .position(++position)
-                    .build();
-            toSave.add(fc);
+                    .build());
         }
 
-        List<Flashcard> saved = cards.saveAll(toSave);
-        saved.forEach(s -> cardIds.add(s.getCardId()));
+        List<Long> cardIds = cards.saveAll(toSave).stream()
+                .map(Flashcard::getCardId)
+                .toList();
 
-        return new BulkSaveResponse(deck.getDeckId(), saved.size(), skipped, cardIds);
+        return new BulkSaveResponse(deck.getDeckId(), cardIds.size(), skipped, cardIds);
+    }
+
+    private Deck loadTargetDeck(Long userId, Long deckId) {
+        Deck deck = deckRepository.findById(deckId)
+                .orElseThrow(() -> new BaseException(ResponseCode.RESOURCE_NOT_FOUND, "Deck not found", Map.of("code", "DECK_NOT_FOUND")));
+        if (!canModifyDeck(userId, deck)) {
+            throw new BaseException(ResponseCode.FORBIDDEN, "Not authorized", Map.of("code", "FORBIDDEN_DECK"));
+        }
+        if (deck.getMode() != null && !"FLASHCARD".equals(deck.getMode())) {
+            throw new BaseException(ResponseCode.BAD_REQUEST, "Bulk save only supports FLASHCARD mode decks", Map.of("code", "INVALID_DECK_MODE"));
+        }
+        return deck;
+    }
+
+    private Deck createTargetDeck(Long userId, NewDeckRequest nd) {
+        if (nd == null) {
+            throw new BaseException(ResponseCode.BAD_REQUEST, "deckId or newDeck required", Map.of("code", "VALIDATION_FAILED"));
+        }
+        if (nd.moduleId() != null && nd.courseId() == null) {
+            throw new BaseException(ResponseCode.BAD_REQUEST, "A module requires a course", Map.of("code", "COURSE_REQUIRED"));
+        }
+        User owner = userRepository.findById(userId)
+                .orElseThrow(() -> new ResourceNotFoundException("User not found."));
+
+        Course course = null;
+        if (nd.courseId() != null) {
+            course = courseRepository.findById(nd.courseId())
+                    .orElseThrow(() -> new BaseException(ResponseCode.RESOURCE_NOT_FOUND, "Course not found", Map.of("code", "COURSE_NOT_FOUND")));
+            boolean isAdmin = User.ROLE_ADMIN.equals(owner.getRoleName());
+            boolean isManager = User.ROLE_COURSE_MANAGER.equals(owner.getRoleName())
+                    && ((course.getManager() != null && course.getManager().getUserId().equals(userId))
+                    || courseManagerRepository.existsByCourse_CourseIdAndUser_UserId(nd.courseId(), userId));
+            if (!isAdmin && !isManager) {
+                throw new BaseException(ResponseCode.FORBIDDEN, "Not manager", Map.of("code", "FORBIDDEN_COURSE"));
+            }
+        }
+
+        Module module = null;
+        if (nd.moduleId() != null) {
+            module = moduleRepository.findById(nd.moduleId())
+                    .orElseThrow(() -> new BaseException(ResponseCode.RESOURCE_NOT_FOUND, "Module not found", Map.of("code", "MODULE_NOT_FOUND")));
+            if (!module.getCourse().getCourseId().equals(course.getCourseId())) {
+                throw new BaseException(ResponseCode.BAD_REQUEST, "The module does not belong to the deck's course", Map.of("code", "MODULE_COURSE_MISMATCH"));
+            }
+        }
+
+        Deck deck = Deck.builder()
+                .user(owner)
+                .course(course)
+                .module(module)
+                .title(nd.title().strip())
+                .description(nd.description())
+                .isPublic(Boolean.TRUE.equals(nd.isPublic()))
+                .build();
+        return deckRepository.save(deck);
+    }
+
+    private void markAiGenerationSaved(Long userId, BulkSaveRequest req) {
+        if (!"AI".equalsIgnoreCase(req.source()) || req.aiGenerationId() == null) {
+            return;
+        }
+        aiUsageLogRepository.findById(req.aiGenerationId()).ifPresent(usageLog -> {
+            if (usageLog.getUser() != null && userId.equals(usageLog.getUser().getUserId())) {
+                usageLog.setSavedAt(Instant.now());
+                aiUsageLogRepository.save(usageLog);
+            }
+        });
+    }
+
+    private Set<String> loadCardKeys(Long deckId) {
+        Set<String> keys = new HashSet<>();
+        cards.findByDeckDeckIdOrderByCardIdAsc(deckId)
+                .forEach(c -> keys.add(cardKey(c.getFrontText(), c.getBackText())));
+        return keys;
+    }
+
+    private String cardKey(String front, String back) {
+        return normalizeText(front) + "|||" + normalizeText(back);
     }
 
     public record ParsedRow(int rowIndex, String front, String back) {}
@@ -444,7 +461,7 @@ public class CardImportService {
                 if (rows.size() >= 500) break;
             }
             if (ignored > 0) {
-                warnings.add(new PreviewWarning("ROWS_IGNORED", "Bỏ qua " + ignored + " dòng trống"));
+                warnings.add(new PreviewWarning("ROWS_IGNORED", "Ignored " + ignored + " empty row(s)"));
             }
         } catch (BaseException e) {
             throw e;
@@ -476,7 +493,7 @@ public class CardImportService {
                 if (rows.size() >= 500) break;
             }
             if (ignored > 0) {
-                warnings.add(new PreviewWarning("ROWS_IGNORED", "Bỏ qua " + ignored + " dòng trống"));
+                warnings.add(new PreviewWarning("ROWS_IGNORED", "Ignored " + ignored + " empty row(s)"));
             }
         } catch (BaseException e) {
             throw e;

@@ -5,7 +5,6 @@ import com.examprep.dto.PageResponse;
 import com.examprep.dto.question.QuestionCreateRequest;
 import com.examprep.dto.student.ContributionDetailDto;
 import com.examprep.dto.student.ContributionItemDto;
-import com.examprep.dto.student.TipContributionRequestDto;
 import com.examprep.security.UserPrincipal;
 import com.examprep.services.student.StudentContributionService;
 import io.swagger.v3.oas.annotations.Operation;
@@ -23,7 +22,7 @@ import java.util.Map;
 @RestController
 @RequestMapping("/api/v1/student")
 @RequiredArgsConstructor
-@Tag(name = "Student Contributions", description = "Student question and tip contributions APIs")
+@Tag(name = "Student Contributions", description = "Student question contributions APIs")
 public class StudentContributionController {
 
     private final StudentContributionService contributionService;
@@ -70,15 +69,5 @@ public class StudentContributionController {
     ) {
         Map<String, Object> data = contributionService.resubmitContribution(contributionId, requestBody, currentUser != null ? currentUser.getId() : null);
         return ResponseEntity.ok(ApiResponse.success(data, "Contribution resubmitted successfully"));
-    }
-
-    @PostMapping("/tips/contributions")
-    @Operation(summary = "CQ-06: Student tip contribution")
-    public ResponseEntity<ApiResponse<Map<String, Object>>> createTipContribution(
-            @Valid @RequestBody TipContributionRequestDto request,
-            @AuthenticationPrincipal UserPrincipal currentUser
-    ) {
-        Map<String, Object> data = contributionService.createTipContribution(request, currentUser != null ? currentUser.getId() : null);
-        return ResponseEntity.status(HttpStatus.CREATED).body(ApiResponse.success(data, "Tip contribution submitted successfully"));
     }
 }

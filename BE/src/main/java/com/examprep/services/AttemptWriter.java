@@ -31,7 +31,7 @@ import java.util.Optional;
 /**
  * The transactional write path of the student attempt APIs: SA-03 (batch draft save) and SA-04
  * (submit). Both lock the attempt row first so a save and a submit of the same attempt can never
- * interleave (spec 6.4: "một transaction, khóa bài bằng FOR UPDATE").
+ * interleave (spec 6.4: "single transaction, lock attempt with FOR UPDATE").
  */
 @Component
 @RequiredArgsConstructor

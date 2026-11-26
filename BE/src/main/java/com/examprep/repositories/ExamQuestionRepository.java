@@ -15,14 +15,12 @@ public interface ExamQuestionRepository extends JpaRepository<ExamQuestion, Long
     java.util.Optional<ExamQuestion> findByExamExamIdAndQuestionQuestionId(Long examId, Long questionId);
     void deleteByExamExamId(Long examId);
 
-    // Hàm từ nhánh của bạn
     List<ExamQuestion> findByQuestion_QuestionId(Long questionId);
     void deleteByQuestion_QuestionId(Long questionId);
     boolean existsByQuestion_QuestionIdAndExam_Status(Long questionId, String status);
     boolean existsByQuestion_QuestionIdAndExam_Mode(Long questionId, String mode);
     boolean existsByQuestion_QuestionIdAndExam_ModeNot(Long questionId, String mode);
 
-    // Hàm từ người khác pull về
     @Query("SELECT COUNT(eq) FROM ExamQuestion eq " +
             "WHERE eq.question.group.groupId = :groupId AND eq.exam.status = :examStatus")
     long countByQuestionGroupIdAndExamStatus(@Param("groupId") Long groupId,

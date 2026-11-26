@@ -172,7 +172,7 @@ class QuestionImportApiTest {
         var xlsxJson = com.fasterxml.jackson.databind.json.JsonMapper.builder().build()
                 .readTree(xlsxPreview.getResponse().getContentAsString()).path("data");
         assertEquals("XLSX", xlsxJson.path("fileType").asText());
-        assertEquals(9, xlsxJson.path("totalBlocks").asInt());
+        assertEquals(8, xlsxJson.path("totalBlocks").asInt());
         assertEquals(0, xlsxJson.path("totalErrors").asInt());
     }
 

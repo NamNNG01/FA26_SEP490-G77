@@ -597,7 +597,7 @@ function ManagerReply({ comment, busy, hiding, reason, onStartHide, onCancelHide
 }) {
   const hidden = comment.status === 'HIDDEN';
   return <article className={`flex flex-wrap items-start gap-3 p-4 ${hidden ? 'bg-surface-muted' : ''}`}>
-    <Avatar name={comment.author.displayName} src={comment.isAnonymous || /anonymous|ẩn danh/i.test(comment.author.displayName) ? '/images/anonymous_student.png' : comment.author.avatarUrl || undefined} size="sm" />
+    <Avatar name={comment.author.displayName} src={comment.isAnonymous || /anonymous/i.test(comment.author.displayName) ? '/images/anonymous_student.png' : comment.author.avatarUrl || undefined} size="sm" />
     <div className="min-w-0 flex-1"><div className="flex flex-wrap items-center gap-2"><p className="text-xs text-content-subtle">{comment.author.displayName} · {dateLabel(comment.createdAt)}</p>{hidden && <Badge variant="danger">Hidden</Badge>}</div><p className="mt-2 whitespace-pre-wrap text-sm text-content-secondary">{comment.content}</p>{comment.imageUrl && <ImageViewer src={comment.imageUrl} alt="Reply attachment" className="mt-3" imageClassName="max-h-52" />}
       {hiding && <section className="mt-4 rounded-lg border border-warning-line bg-warning-light p-3">
         <label className="grid gap-1.5 text-sm font-medium text-content">Reason for hiding this reply

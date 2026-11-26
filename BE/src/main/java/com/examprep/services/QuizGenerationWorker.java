@@ -360,7 +360,7 @@ public class QuizGenerationWorker {
                 .module(module)
                 .createdBy(student)
                 .title(title)
-                .description("Đề trích từ tài liệu: " + (claimed.docTitle() == null ? "" : claimed.docTitle()))
+                .description("Quiz generated from document: " + (claimed.docTitle() == null ? "" : claimed.docTitle()))
                 .durationMinutes(examDuration)
                 .mode(Exam.MODE_MATERIAL_QUIZ)
                 .generationType("STATIC")

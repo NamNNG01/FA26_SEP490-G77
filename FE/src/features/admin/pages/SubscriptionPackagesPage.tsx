@@ -51,7 +51,7 @@ const toPayload = (f: FormState): SubscriptionPlanPayload => ({
   aiTokenLimit: Number(f.aiTokenLimit), features: [], isActive: f.isActive, sortOrder: Number(f.sortOrder),
 });
 const priceLabel = (price: number) => (price === 0 ? 'Free' : formatVnd(price));
-const dateLabel = (value?: string | null) => (value ? new Date(value).toLocaleString('vi-VN', { timeZone: 'Asia/Ho_Chi_Minh' }) : '—');
+const dateLabel = (value?: string | null) => (value ? new Date(value).toLocaleString('en-US', { timeZone: 'Asia/Ho_Chi_Minh' }) : '—');
 
 /** `data.code` of a BE error (PLAN_NAME_EXISTS, PLAN_HAS_ACTIVE_SUBSCRIBERS, …). */
 function errorCode(err: unknown): string | null {

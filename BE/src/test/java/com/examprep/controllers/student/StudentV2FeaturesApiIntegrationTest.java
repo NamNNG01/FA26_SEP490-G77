@@ -305,7 +305,7 @@ class StudentV2FeaturesApiIntegrationTest {
     /**
      * Parses a response body as UTF-8. MockHttpServletResponse#getContentAsString falls back to
      * ISO-8859-1 for an application/json response without an explicit charset, which turns the
-     * masked display name (Học sinh ẩn danh) into mojibake before it can be compared.
+     * masked display name (Anonymous Student) into mojibake before it can be compared.
      */
     private JsonNode utf8(org.springframework.test.web.servlet.ResultActions actions) throws Exception {
         return json.readTree(actions.andReturn().getResponse()

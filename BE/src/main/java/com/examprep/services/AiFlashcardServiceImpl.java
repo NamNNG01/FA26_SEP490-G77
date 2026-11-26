@@ -96,10 +96,10 @@ public class AiFlashcardServiceImpl implements AiFlashcardService {
         boolean hasFile = file != null && !file.isEmpty();
         boolean hasText = text != null && !text.isBlank();
         if (hasFile && hasText) {
-            throw ContestRules.error(ResponseCode.BAD_REQUEST, "INPUT_CONFLICT", "Chỉ được truyền text hoặc file, không truyền cả hai");
+            throw ContestRules.error(ResponseCode.BAD_REQUEST, "INPUT_CONFLICT", "Provide either text or a file, not both");
         }
         if (!hasFile && !hasText) {
-            throw ContestRules.error(ResponseCode.BAD_REQUEST, "INPUT_REQUIRED", "Cần truyền text hoặc file");
+            throw ContestRules.error(ResponseCode.BAD_REQUEST, "INPUT_REQUIRED", "Either text or a file is required");
         }
 
         // 3. File extension and size.
@@ -109,15 +109,15 @@ public class AiFlashcardServiceImpl implements AiFlashcardService {
         // 4. Generation options.
         int cards = numberOfCards == null ? DEFAULT_CARDS : numberOfCards;
         if (cards < 1 || cards > maxCards) {
-            throw ContestRules.invalid("numberOfCards", "numberOfCards phải từ 1 đến " + maxCards);
+            throw ContestRules.invalid("numberOfCards", "numberOfCards must be between 1 and " + maxCards);
         }
         String lang = language == null ? "AUTO" : language.strip().toUpperCase(Locale.ROOT);
-        if (!LANGUAGES.contains(lang)) throw ContestRules.invalid("language", "language phải là AUTO, VI hoặc EN");
+        if (!LANGUAGES.contains(lang)) throw ContestRules.invalid("language", "language must be AUTO, VI, or EN");
         String cardStyle = style == null ? "QA" : style.strip().toUpperCase(Locale.ROOT);
-        if (!STYLES.contains(cardStyle)) throw ContestRules.invalid("style", "style phải là QA hoặc TERM_DEFINITION");
+        if (!STYLES.contains(cardStyle)) throw ContestRules.invalid("style", "style must be QA or TERM_DEFINITION");
         String focus = focusTopic == null ? "" : focusTopic.strip();
         if (focus.length() > MAX_FOCUS_TOPIC_CHARS) {
-            throw ContestRules.invalid("focusTopic", "focusTopic tối đa " + MAX_FOCUS_TOPIC_CHARS + " ký tự");
+            throw ContestRules.invalid("focusTopic", "focusTopic must not exceed " + MAX_FOCUS_TOPIC_CHARS + " characters");
         }
 
         // 5. Optional course: it must exist and the caller must be allowed to use it.
@@ -126,11 +126,11 @@ public class AiFlashcardServiceImpl implements AiFlashcardService {
         // 6. Content extraction + size checks.
         String content = (hasFile ? extract(file, fileName) : text).strip();
         if (content.length() < minContentChars) {
-            throw ContestRules.error(ResponseCode.UNPROCESSABLE_VALIDATION_ERROR, "EMPTY_CONTENT", "Nội dung quá ngắn");
+            throw ContestRules.error(ResponseCode.UNPROCESSABLE_VALIDATION_ERROR, "EMPTY_CONTENT", "Content is too short");
         }
         if (content.length() > MAX_CONTENT_CHARS) {
             throw ContestRules.error(ResponseCode.UNPROCESSABLE_VALIDATION_ERROR, "CONTENT_TOO_LONG",
-                    "Nội dung tối đa " + MAX_CONTENT_CHARS + " ký tự");
+                    "Content must not exceed " + MAX_CONTENT_CHARS + " characters");
         }
 
         String title = clip(hasFile ? fileName : "AI text input", TITLE_CHARS);
@@ -199,11 +199,11 @@ public class AiFlashcardServiceImpl implements AiFlashcardService {
         // Ownership is part of the lookup: a foreign job is indistinguishable from a missing one (404).
         AiUsageLog job = logs.findByLogIdAndUserUserId(generationId, userId)
                 .orElseThrow(() -> ContestRules.error(ResponseCode.FLASHCARD_GENERATION_NOT_FOUND,
-                        "GENERATION_NOT_FOUND", "Không tìm thấy lượt tạo flashcard"));
+                        "GENERATION_NOT_FOUND", "Flashcard generation job not found"));
         if (!PURPOSE.equals(job.getPurpose())) {
             // A log id of another AI purpose is not a generation, even when the caller owns it.
             throw ContestRules.error(ResponseCode.FLASHCARD_GENERATION_NOT_FOUND,
-                    "GENERATION_NOT_FOUND", "Không tìm thấy lượt tạo flashcard");
+                    "GENERATION_NOT_FOUND", "Flashcard generation job not found");
         }
         boolean saved = job.getSavedAt() != null;
         String status = job.getStatus();
@@ -278,23 +278,23 @@ public class AiFlashcardServiceImpl implements AiFlashcardService {
         String extension = dot >= 0 ? fileName.substring(dot + 1).toLowerCase(Locale.ROOT) : "";
         if (!EXTENSIONS.contains(extension)) {
             throw ContestRules.error(ResponseCode.FLASHCARD_UNSUPPORTED_FILE_TYPE, "UNSUPPORTED_FILE_TYPE",
-                    "Chỉ hỗ trợ tệp PDF, DOCX và TXT");
+                    "Only PDF, DOCX, and TXT files are supported");
         }
         if (file.getSize() > MAX_FILE_BYTES) {
-            throw ContestRules.error(ResponseCode.PAYLOAD_TOO_LARGE, "FILE_TOO_LARGE", "Tệp tối đa 10MB");
+            throw ContestRules.error(ResponseCode.PAYLOAD_TOO_LARGE, "FILE_TOO_LARGE", "File size must not exceed 10MB");
         }
     }
 
     /** STUDENT needs an ACTIVE enrollment; COURSE_MANAGER must own (or co-manage) the course. */
     private Course requireCourse(Long courseId, UserPrincipal user) {
         if (!courses.existsById(courseId)) {
-            throw ContestRules.error(ResponseCode.RESOURCE_NOT_FOUND, "COURSE_NOT_FOUND", "Không tìm thấy khoá học");
+            throw ContestRules.error(ResponseCode.RESOURCE_NOT_FOUND, "COURSE_NOT_FOUND", "Course not found");
         }
         boolean allowed = User.ROLE_STUDENT.equals(user.getRole())
                 ? enrollments.existsByCourse_CourseIdAndUser_UserIdAndStatus(courseId, user.getId(), Enrollment.STATUS_ACTIVE)
                 : courses.countOwnedCourse(courseId, user.getId()) > 0;
         if (!allowed) {
-            throw ContestRules.error(ResponseCode.FORBIDDEN, "FORBIDDEN_COURSE", "Bạn không có quyền dùng khoá học này");
+            throw ContestRules.error(ResponseCode.FORBIDDEN, "FORBIDDEN_COURSE", "You do not have access to this course");
         }
         return courses.getReferenceById(courseId);
     }
@@ -306,13 +306,13 @@ public class AiFlashcardServiceImpl implements AiFlashcardService {
         } catch (BadRequestException ex) {
             if (fileName.toLowerCase(Locale.ROOT).endsWith(".pdf")) {
                 throw ContestRules.error(ResponseCode.UNPROCESSABLE_VALIDATION_ERROR, "PDF_NO_TEXT_LAYER",
-                        "PDF không có lớp văn bản để đọc");
+                        "PDF has no readable text layer");
             }
             throw ContestRules.error(ResponseCode.UNPROCESSABLE_VALIDATION_ERROR, "EMPTY_CONTENT",
-                    "Không đọc được nội dung tệp");
+                    "Failed to read file content");
         } catch (IOException ex) {
             throw ContestRules.error(ResponseCode.UNPROCESSABLE_VALIDATION_ERROR, "EMPTY_CONTENT",
-                    "Không đọc được nội dung tệp");
+                    "Failed to read file content");
         }
     }
 

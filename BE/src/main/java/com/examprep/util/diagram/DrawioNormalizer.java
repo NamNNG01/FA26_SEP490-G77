@@ -18,7 +18,7 @@ import java.util.zip.Inflater;
 
 /**
  * Reduces a draw.io file to what a grader needs: labelled shapes and the relations between them.
- * Colours, fonts and coordinates are dropped (SE-02 "chuẩn hóa DIAGRAM"); the only thing kept from the geometry is
+ * Colours, fonts and coordinates are dropped (SE-02 "DIAGRAM normalization"); the only thing kept from the geometry is
  * the top-to-bottom order of connections, which is the message order of a sequence diagram.
  */
 public final class DrawioNormalizer {

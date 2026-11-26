@@ -82,6 +82,6 @@ public class StudentFlashcardController {
             @AuthenticationPrincipal UserPrincipal user,
             @Valid @RequestBody BulkSaveRequest request) {
         BulkSaveResponse resp = cardImportService.bulk(user.getId(), request);
-        return ResponseEntity.status(HttpStatus.CREATED).body(ApiResponse.success(resp, "Đã lưu flashcard"));
+        return ResponseEntity.status(HttpStatus.CREATED).body(ApiResponse.success(resp, "Flashcard saved"));
     }
 }

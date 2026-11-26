@@ -47,7 +47,7 @@ const STYLE_OPTIONS = [
 
 const fmt = (n: number) => n.toLocaleString('en-US');
 /** The free quota is daily on the BE, so the reset time matters as much as the date. */
-const dateTimeLabel = (iso: string) => new Date(iso).toLocaleString('vi-VN', { timeZone: 'Asia/Ho_Chi_Minh', hour: '2-digit', minute: '2-digit', day: '2-digit', month: '2-digit', year: 'numeric' });
+const dateTimeLabel = (iso: string) => new Date(iso).toLocaleString('en-US', { timeZone: 'Asia/Ho_Chi_Minh', hour: '2-digit', minute: '2-digit', day: '2-digit', month: '2-digit', year: 'numeric' });
 
 /** API 31 → poll API 32 → review → API 30 (source = AI). Student "My decks" only. */
 export function AiFlashcardGenerateModal({ onClose, onSaved }: {

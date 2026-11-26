@@ -7,7 +7,6 @@ Quy tac ngan:
 - Dong tuy chon: EXPLANATION: giai thich (toi da 255 ky tu).
 - POINTS khong con ho tro trong file; diem cau hoi duoc dat khi them vao de thi.
 - CODE: 1 CODE_CONFIG JSON (1 ngon ngu trong allowedLanguages) + it nhat 1 TEST_CASE hidden=false va 1 hidden=true.
-- DIAGRAM / DIAGRAM_ESSAY: DIAGRAM_XML: XML draw.io (<mxGraphModel>...</mxGraphModel>) va RUBRIC:.
 
 [TYPE: SINGLE_CHOICE]
 Q1. What is the output of 2 + 2?
@@ -82,14 +81,3 @@ CODE_CONFIG: {"allowedLanguages":["JAVA"],"codeTemplate":"","timeLimitMs":5000,"
 TEST_CASE: {"inputData":"2 3\n","expectedOutput":"5","hidden":false}
 TEST_CASE: {"inputData":"-4 1\n","expectedOutput":"-3","hidden":true}
 TEST_CASE: {"inputData":"0 0\n","expectedOutput":"0","hidden":true}
-
-[TYPE: DIAGRAM_ESSAY]
-Q9. Draw a class diagram for the described library and explain the relationships.
-DIFFICULTY: HARD
-DIAGRAM_XML: <mxGraphModel><root><mxCell id="0"/><mxCell id="1" parent="0"/></root></mxGraphModel>
-RUBRIC:
-- Classes and attributes | 2 | Includes the required classes and attributes.
-- Relationships | 3 | Uses correct associations and multiplicities.
-- Explanation | 2 | Explains the design choices clearly.
-SAMPLE:
-The library separates books from physical copies so each title can have multiple lendable copies.

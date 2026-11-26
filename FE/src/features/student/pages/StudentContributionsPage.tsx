@@ -334,7 +334,7 @@ function ContributionDetail({ contributionId }: { contributionId: string }) {
       <section className="card space-y-5 p-5 sm:p-6">
         <div className="flex flex-wrap items-start justify-between gap-3">
           <div>
-            <Badge variant={item.type === "tip" ? "success" : "info"}>
+            <Badge variant="info">
               {titleCase(item.type)}
             </Badge>
             <h1 className="mt-2 text-xl font-bold text-content">

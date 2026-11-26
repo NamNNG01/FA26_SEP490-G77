@@ -149,8 +149,7 @@ public class DocxTextExtractor implements DocumentTextExtractor {
                 .trim();
 
         if (normalized.startsWith("CODE_CONFIG:")
-                || normalized.startsWith("TEST_CASE:")
-                || normalized.startsWith("DIAGRAM_XML:")) {
+                || normalized.startsWith("TEST_CASE:")) {
             return normalized;
         }
 

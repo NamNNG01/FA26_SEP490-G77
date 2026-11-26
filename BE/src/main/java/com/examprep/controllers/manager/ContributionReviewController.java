@@ -64,7 +64,7 @@ public class ContributionReviewController {
         Long version = extractVersion(body);
         String note = extractText(body, "note");
         Map<String, Object> result = service.approve(principal.getId(), id, version, note);
-        return ResponseEntity.ok(ApiResponse.success(result, "Đã duyệt câu hỏi."));
+        return ResponseEntity.ok(ApiResponse.success(result, "Question approved."));
     }
 
     @PostMapping("/{id}/reject")
@@ -76,7 +76,7 @@ public class ContributionReviewController {
         Long version = extractVersion(body);
         String reason = extractText(body, "reason");
         Map<String, Object> result = service.reject(principal.getId(), id, version, reason);
-        return ResponseEntity.ok(ApiResponse.success(result, "Đã từ chối câu hỏi."));
+        return ResponseEntity.ok(ApiResponse.success(result, "Question rejected."));
     }
 
     @GetMapping("/stats")

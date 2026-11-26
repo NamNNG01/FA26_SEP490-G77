@@ -38,7 +38,7 @@ public class TemplateQuestionMapper {
         if (!ImportedQuestionAssembler.SUPPORTED_TYPES.contains(qType)) {
             return assembler.buildAndValidate(new ImportedQuestionAssembler.Input(
                     blockIndex, startLine, qType, null, "", null, null,
-                    List.of(), List.of(), List.of(), List.of(), null, List.of(), null, preErrors
+                    List.of(), List.of(), List.of(), List.of(), null, List.of(), preErrors
             ));
         }
 
@@ -47,7 +47,7 @@ public class TemplateQuestionMapper {
             preErrors.add(new ImportErrorDto("content", "Question text (Q1., etc.) is required", startLine));
             return assembler.buildAndValidate(new ImportedQuestionAssembler.Input(
                     blockIndex, startLine, qType, null, "", null, null,
-                    List.of(), List.of(), List.of(), List.of(), null, List.of(), null, preErrors
+                    List.of(), List.of(), List.of(), List.of(), null, List.of(), preErrors
             ));
         }
 
@@ -75,8 +75,6 @@ public class TemplateQuestionMapper {
         List<String> sampleLines = new ArrayList<>();
         List<String> testCaseJson = new ArrayList<>();
         String codeConfigJson = null;
-        StringBuilder diagramXml = new StringBuilder();
-        boolean parsingDiagramXml = false;
 
         boolean parsingContent = qLineIndex >= 0;
         boolean parsingRubric = false;
@@ -87,16 +85,6 @@ public class TemplateQuestionMapper {
         for (int i = qLineIndex + 1; i < lines.size(); i++) {
             String line = lines.get(i);
             if (line.trim().isEmpty()) continue;
-
-            if (parsingDiagramXml) {
-                if (line.startsWith("RUBRIC:") || line.startsWith("SAMPLE:") || line.startsWith("ANSWER:")
-                        || line.startsWith("DIFFICULTY:") || line.startsWith("EXPLANATION:")) {
-                    parsingDiagramXml = false;
-                } else {
-                    diagramXml.append(line);
-                    continue;
-                }
-            }
 
             if (line.startsWith("CODE_CONFIG:")) {
                 parsingContent = false;
@@ -110,14 +98,6 @@ public class TemplateQuestionMapper {
                 parsingRubric = false;
                 parsingSample = false;
                 testCaseJson.add(line.substring("TEST_CASE:".length()).trim());
-                continue;
-            }
-            if (line.startsWith("DIAGRAM_XML:")) {
-                parsingContent = false;
-                parsingRubric = false;
-                parsingSample = false;
-                parsingDiagramXml = true;
-                diagramXml.append(line.substring("DIAGRAM_XML:".length()).trim());
                 continue;
             }
             if (line.startsWith("ANSWER:")) {
@@ -223,7 +203,6 @@ public class TemplateQuestionMapper {
                 sampleLines,
                 codeConfigJson,
                 testCaseJson,
-                diagramXml.toString().trim(),
                 preErrors
         ));
     }

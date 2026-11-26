@@ -379,7 +379,7 @@ public class StudentContestServiceImpl implements StudentContestService {
             Map<String, Object> res = new HashMap<>();
             res.put("generatedAt", Instant.now());
             res.put("rows", List.of());
-            res.put("message", "Bảng xếp hạng sẽ mở sau khi kết thúc");
+            res.put("message", "Leaderboard will be available after the contest ends");
             return res;
         }
 
@@ -458,7 +458,7 @@ public class StudentContestServiceImpl implements StudentContestService {
                     String valText = "";
                     if (r.getDiscount() != null) {
                         BigDecimal v = ContestRules.value(r.getDiscount());
-                        valText = (v != null ? v.toPlainString() : "") + ("PERCENT".equals(r.getDiscount().getDiscountType()) ? "%" : "đ");
+                        valText = (v != null ? v.toPlainString() : "") + ("PERCENT".equals(r.getDiscount().getDiscountType()) ? "%" : " VND");
                     } else if (r.getName() != null) {
                         valText = r.getName();
                     }
@@ -643,7 +643,7 @@ public class StudentContestServiceImpl implements StudentContestService {
                     String valText = "";
                     if (r.getDiscount() != null) {
                         BigDecimal v = ContestRules.value(r.getDiscount());
-                        valText = (v != null ? v.toPlainString() : "") + ("PERCENT".equals(r.getDiscount().getDiscountType()) ? "%" : "đ");
+                        valText = (v != null ? v.toPlainString() : "") + ("PERCENT".equals(r.getDiscount().getDiscountType()) ? "%" : " VND");
                     } else if (r.getName() != null) {
                         valText = r.getName();
                     }

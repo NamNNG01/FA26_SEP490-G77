@@ -47,7 +47,7 @@ public class GlobalExceptionHandler {
         return ResponseEntity.status(HttpStatus.CONFLICT)
                 .body(ApiResponse.builder()
                         .success(false)
-                        .message("Nội dung vừa được người khác thay đổi, vui lòng tải lại.")
+                        .message("The content was modified by another user. Please reload and try again.")
                         .data(errorData)
                         .build());
     }

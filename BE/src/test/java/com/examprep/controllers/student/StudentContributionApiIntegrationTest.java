@@ -192,12 +192,14 @@ class StudentContributionApiIntegrationTest {
     }
 
     @Test void testCQ03AndCQ04ListAndDetail() throws Exception {
-        // Create tip contribution CQ-06
-        String tipReq = "{\"courseId\":" + course.getCourseId() + ",\"title\":\"Tip 1\",\"content\":\"Always practice coding.\"}";
-        JsonNode data = json.readTree(mvc.perform(post("/api/v1/student/tips/contributions")
+        // Create question contribution CQ-01
+        String qReq = "{\"courseId\":" + course.getCourseId() + ",\"moduleId\":" + oop.getModuleId()
+                + ",\"questionType\":\"SINGLE_CHOICE\",\"difficulty\":\"MEDIUM\",\"content\":\"Question for list and detail\","
+                + "\"options\":[{\"optionText\":\"Option A\",\"isCorrect\":true},{\"optionText\":\"Option B\",\"isCorrect\":false}]}";
+        JsonNode data = json.readTree(mvc.perform(post("/api/v1/student/contributions")
                 .with(as(student))
                 .contentType(MediaType.APPLICATION_JSON)
-                .content(tipReq))
+                .content(qReq))
                 .andExpect(status().isCreated())
                 .andReturn().getResponse().getContentAsString()).path("data");
 
@@ -205,7 +207,7 @@ class StudentContributionApiIntegrationTest {
 
         // CQ-03: List contributions with filter & pagination
         mvc.perform(get("/api/v1/student/contributions")
-                .param("type", "tip")
+                .param("type", "question")
                 .param("status", "PENDING")
                 .param("page", "0")
                 .param("size", "10")
@@ -218,7 +220,7 @@ class StudentContributionApiIntegrationTest {
         mvc.perform(get("/api/v1/student/contributions/" + contribId)
                 .with(as(student)))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.data.title").value("Tip 1"))
+                .andExpect(jsonPath("$.data.content").value("Question for list and detail"))
                 .andExpect(jsonPath("$.data.status").value("PENDING"));
 
         mvc.perform(get("/api/v1/student/contributions/" + contribId)
@@ -231,22 +233,28 @@ class StudentContributionApiIntegrationTest {
     }
 
     @Test void testCQ05ResubmitComprehensive() throws Exception {
-        // Create tip
-        String tipReq = "{\"courseId\":" + course.getCourseId() + ",\"title\":\"Tip 1\",\"content\":\"Content 1\"}";
-        JsonNode data = json.readTree(mvc.perform(post("/api/v1/student/tips/contributions")
+        // Create question contribution
+        String qReq = "{\"courseId\":" + course.getCourseId() + ",\"moduleId\":" + oop.getModuleId()
+                + ",\"questionType\":\"SINGLE_CHOICE\",\"difficulty\":\"MEDIUM\",\"content\":\"Initial question content\","
+                + "\"options\":[{\"optionText\":\"Option A\",\"isCorrect\":true},{\"optionText\":\"Option B\",\"isCorrect\":false}]}";
+        JsonNode data = json.readTree(mvc.perform(post("/api/v1/student/contributions")
                 .with(as(student))
                 .contentType(MediaType.APPLICATION_JSON)
-                .content(tipReq))
+                .content(qReq))
                 .andExpect(status().isCreated())
                 .andReturn().getResponse().getContentAsString()).path("data");
 
         Long contribId = data.path("contributionId").asLong();
 
+        String updatedReq = "{\"courseId\":" + course.getCourseId() + ",\"moduleId\":" + oop.getModuleId()
+                + ",\"questionType\":\"SINGLE_CHOICE\",\"difficulty\":\"MEDIUM\",\"content\":\"Updated question content\","
+                + "\"options\":[{\"optionText\":\"Option A\",\"isCorrect\":true},{\"optionText\":\"Option B\",\"isCorrect\":false}]}";
+
         // Resubmit when status is PENDING -> should conflict 409 NOT_REJECTED
         mvc.perform(put("/api/v1/student/contributions/" + contribId + "/resubmit")
                 .with(as(student))
                 .contentType(MediaType.APPLICATION_JSON)
-                .content("{\"courseId\":" + course.getCourseId() + ",\"title\":\"Updated Tip\",\"content\":\"Updated Content\"}"))
+                .content(updatedReq))
                 .andExpect(status().isConflict());
 
         // Update status to REJECTED in db
@@ -258,23 +266,16 @@ class StudentContributionApiIntegrationTest {
         mvc.perform(put("/api/v1/student/contributions/" + contribId + "/resubmit")
                 .with(as(other))
                 .contentType(MediaType.APPLICATION_JSON)
-                .content("{\"courseId\":" + course.getCourseId() + ",\"title\":\"Updated Tip\",\"content\":\"Updated Content\"}"))
+                .content(updatedReq))
                 .andExpect(status().isForbidden());
 
         // Owner resubmit when REJECTED -> success 200, status PENDING, resubmissionCount incremented
         mvc.perform(put("/api/v1/student/contributions/" + contribId + "/resubmit")
                 .with(as(student))
                 .contentType(MediaType.APPLICATION_JSON)
-                .content("{\"courseId\":" + course.getCourseId() + ",\"title\":\"Updated Tip\",\"content\":\"Updated Content\"}"))
+                .content(updatedReq))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.data.status").value("PENDING"))
                 .andExpect(jsonPath("$.data.resubmissionCount").value(1));
-
-        // Verify tip does not appear in DI-07 tips list (which only shows approved tips)
-        mvc.perform(get("/api/v1/student/tips")
-                .param("courseId", course.getCourseId().toString())
-                .with(as(student)))
-                .andExpect(status().isOk())
-                .andExpect(jsonPath("$.data.totalElements").value(0));
     }
 }

@@ -15,7 +15,7 @@ import java.time.format.DateTimeFormatter;
 import java.util.List;
 
 /**
- * Helper dùng chung cho các quy tắc kiểm duyệt, kiểm tra khóa tài khoản và gửi thông báo cộng đồng.
+ * Shared helper for community moderation rules, account mute checks, and notifications.
  */
 @Component
 @RequiredArgsConstructor
@@ -23,7 +23,7 @@ public class CommunityHelperImpl implements CommunityHelper {
 
     private static final List<String> BLOCKED_KEYWORDS = List.of(
             "http://", "https://", "www.",
-            "casino", "cá độ", "lừa đảo", "bán tài khoản", "quảng cáo"
+            "casino", "gambling", "betting", "scam", "sell account", "advertisement"
     );
 
     private static final DateTimeFormatter DATE_FORMAT =
@@ -37,8 +37,8 @@ public class CommunityHelperImpl implements CommunityHelper {
         Instant mutedUntil = user.getCommunityMutedUntil();
         if (mutedUntil != null && mutedUntil.isAfter(Instant.now())) {
             String untilText = DATE_FORMAT.format(mutedUntil);
-            String reason = user.getCommunityMuteReason() != null ? user.getCommunityMuteReason() : "Vi phạm quy định cộng đồng";
-            throw new ForbiddenException("Tài khoản đang bị tạm khóa tương tác cộng đồng đến " + untilText + ". Lý do: " + reason);
+            String reason = user.getCommunityMuteReason() != null ? user.getCommunityMuteReason() : "Violation of community guidelines";
+            throw new ForbiddenException("Your account is temporarily muted from community interactions until " + untilText + ". Reason: " + reason);
         }
     }
 
