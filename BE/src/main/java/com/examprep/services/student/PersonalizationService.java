@@ -76,6 +76,7 @@ public class PersonalizationService {
     private final LearningStatsRepository statsRepository;
     private final StudentQuestionReviewRepository reviewRows;
     private final QuestionReviewRecorder reviewRecorder;
+    private final StudyPlanner planner;
     private final AiUsageLogRepository logs;
     private final ExamRepository exams;
     private final UserRepository users;
@@ -107,7 +108,8 @@ public class PersonalizationService {
                                   AiRecommendationCacheRepository caches, LearningStatsRepository statsRepository,
                                   AiUsageLogRepository logs, ExamRepository exams, UserRepository users, CourseRepository courses,
                                   AiQuotaService quota, AiClient aiClient, ObjectMapper json, PlatformTransactionManager transactionManager,
-                                  StudentQuestionReviewRepository reviewRows, QuestionReviewRecorder reviewRecorder) {
+                                  StudentQuestionReviewRepository reviewRows, QuestionReviewRecorder reviewRecorder,
+                                  StudyPlanner planner) {
         this.practice = practice;
         this.learning = learning;
         this.jobs = jobs;
@@ -115,6 +117,7 @@ public class PersonalizationService {
         this.statsRepository = statsRepository;
         this.reviewRows = reviewRows;
         this.reviewRecorder = reviewRecorder;
+        this.planner = planner;
         this.logs = logs;
         this.exams = exams;
         this.users = users;
@@ -626,6 +629,37 @@ public class PersonalizationService {
         };
         return new Mistake(pattern, frequency, clip(m.path("suggestion").asText(""), 500), List.copyOf(ids),
                 refTitle == null ? null : refType, refTitle == null ? null : refId, refTitle);
+    }
+
+    // ------------------------------------------------------------------ insights (no AI, free)
+
+    /** Where the student stands per module over the course's whole practice bank; computed on every call, no quota. */
+    public Insights insights(Long userId, Long courseId) {
+        if (courseId == null || courseId <= 0) throw new com.examprep.exceptions.BadRequestException("courseId is required.");
+        return readTx.execute(s -> {
+            practice.requireEnrolled(userId, courseId);
+            StudyPlanner.Snapshot snapshot = planner.snapshot(userId, courseId,
+                    practice.findCandidates(courseId, PracticeExamService.ALL_PRACTICE_TYPES, true, List.of(-1L), null));
+            LearningStats.Stats stats = learning.forStudent(userId, courseId, LearningStats.ALL_TIME);
+            Map<Long, String> trends = new HashMap<>();
+            stats.modules().forEach(m -> trends.put(m.categoryId(), m.trend()));
+            int bank = 0, answered = 0, correct = 0, stillWrong = 0;
+            List<ModuleInsight> modules = new ArrayList<>();
+            for (StudyPlanner.Profile p : snapshot.modules()) {
+                bank += p.bankSize();
+                answered += p.answered();
+                correct += p.correct();
+                stillWrong += p.stillWrong();
+                modules.add(new ModuleInsight(p.moduleId(), p.name(), p.bankSize(), p.answered(), p.correct(), p.accuracy(),
+                        p.coverage(), trends.getOrDefault(p.moduleId(), "STABLE"), p.stillWrong(), p.mastery(), p.priority()));
+            }
+            int accuracy = LearningStats.percent(correct, answered), coverage = LearningStats.percent(answered, bank);
+            return new Insights(courseId, stats.finishedAttempts(), (int) Math.round(0.5 * coverage + 0.5 * accuracy), accuracy,
+                    coverage, answered, bank, stillWrong, reviewRows.countStaleWrong(userId, courseId, Instant.now().minus(7, ChronoUnit.DAYS)),
+                    modules,
+                    stats.difficulties().stream().map(d -> new DifficultyBreakdown(d.difficulty(), d.accuracy(), d.questionCount(), d.trend())).toList(),
+                    stats.types().stream().map(t -> new TypeBreakdown(t.questionType(), t.accuracy(), t.trend())).toList());
+        });
     }
 
     // ------------------------------------------------------------------ AI-03/04 shared

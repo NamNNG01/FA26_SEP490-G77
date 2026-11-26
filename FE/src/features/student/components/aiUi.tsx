@@ -1,7 +1,7 @@
-import { Badge, type BadgeVariant } from '@/components/ui/Badge';
+import { Badge } from '@/components/ui/Badge';
 import { Alert } from '@/components/ui/Alert';
 import { Icon } from '@/assets/icons';
-import type { AiError, AiPriority, AiQuotaLeft, AiTrend } from '@/services/studentAi.service';
+import type { AiError, AiQuotaLeft, AiTrend } from '@/services/studentAi.service';
 
 /** Shared bits of the AI personalization screens (AI-01..04). */
 
@@ -18,17 +18,6 @@ export function TrendIcon({ trend, withLabel = false }: { trend: AiTrend | null 
       <span aria-hidden>{t.arrow}</span>
       {withLabel && <span className="font-medium">{t.label}</span>}
     </span>
-  );
-}
-
-const PRIORITY_VARIANT: Record<AiPriority, BadgeVariant> = { HIGH: 'danger', MEDIUM: 'warning', LOW: 'default' };
-
-export function PriorityBadge({ priority }: { priority: AiPriority | null | undefined }) {
-  if (!priority) return null;
-  return (
-    <Badge size="sm" variant={PRIORITY_VARIANT[priority] ?? 'default'}>
-      {priority.charAt(0) + priority.slice(1).toLowerCase()}
-    </Badge>
   );
 }
 

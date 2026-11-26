@@ -258,6 +258,68 @@ class PracticeExamApiIntegrationTest {
                 .andExpect(status().isConflict()).andExpect(jsonPath("$.data.code").value("ATTEMPT_NOT_SUBMITTED"));
     }
 
+    @Test void smartSplitsByWeakSpotsAndInsightsShowThem() throws Exception {
+        Question ioWrong = em.createQuery("select q from Question q where q.module = :m", Question.class).setParameter("m", io).getResultList().get(0);
+        em.persist(StudentQuestionReview.builder().student(student).question(ioWrong).status("WRONG_BOOKMARKED").bookmark(false)
+                .wrongCount(1).firstWrongAt(Instant.now()).lastPracticedAt(Instant.now()).build());
+        em.flush();
+        String body = "{\"courseId\":" + course.getCourseId() + ",\"questionCount\":10,\"durationMinutes\":30,\"allocation\":\"SMART\"}";
+        JsonNode plan = data(mvc.perform(post("/api/v1/student/practice-exams/plan").with(as(student))
+                .contentType(MediaType.APPLICATION_JSON).content(body)).andExpect(status().isOk()));
+        // IO has a notebook mistake so it ranks first and gives all 3 of its questions; OOP fills the rest.
+        JsonNode first = plan.path("modules").get(0), second = plan.path("modules").get(1);
+        assertEquals("IO", first.path("name").asText());
+        assertEquals(3, first.path("questionCount").asInt());
+        assertEquals(1, first.path("stillWrong").asInt());
+        assertEquals(7, second.path("questionCount").asInt());
+
+        JsonNode created = data(create(student, body).andExpect(status().isCreated()));
+        assertEquals("Personalized practice", created.path("title").asText());
+        List<Long> drawn = em.createQuery("select eq.question.questionId from ExamQuestion eq where eq.exam.examId = :e", Long.class)
+                .setParameter("e", created.path("examId").asLong()).getResultList();
+        assertEquals(10, drawn.size());
+        assertTrue(drawn.contains(ioWrong.getQuestionId()));
+
+        // One module only: every question comes from IO; more than IO holds is 422; General (0) has none here.
+        String focused = "{\"courseId\":" + course.getCourseId() + ",\"questionCount\":%d,\"durationMinutes\":30,\"allocation\":\"SMART\",\"focusModuleId\":%d}";
+        JsonNode ioOnly = data(create(student, focused.formatted(3, io.getModuleId())).andExpect(status().isCreated()));
+        assertEquals(List.of(io.getModuleId()), em.createQuery("select distinct eq.question.module.moduleId from ExamQuestion eq where eq.exam.examId = :e", Long.class)
+                .setParameter("e", ioOnly.path("examId").asLong()).getResultList());
+        create(student, focused.formatted(4, io.getModuleId())).andExpect(status().isUnprocessableEntity());
+        create(student, focused.formatted(1, 0)).andExpect(status().isUnprocessableEntity());
+
+        mvc.perform(get("/api/v1/student/ai/insights").param("courseId", course.getCourseId().toString()).with(as(student)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.stillWrong").value(1))
+                .andExpect(jsonPath("$.data.modules.length()").value(2))
+                .andExpect(jsonPath("$.data.modules[0].name").value("IO"))
+                .andExpect(jsonPath("$.data.modules[0].mastery").value("NOT_STARTED"));
+        mvc.perform(get("/api/v1/student/ai/insights").param("courseId", course.getCourseId().toString()).with(as(other)))
+                .andExpect(status().isForbidden());
+    }
+
+    @Test void modulePracticeAnswersCountAsSeen() throws Exception {
+        Question practised = em.createQuery("select q from Question q where q.module = :m order by q.questionId", Question.class)
+                .setParameter("m", io).getResultList().get(0);
+        em.persist(QuestionPracticeProgress.builder().user(student).course(course).module(io).question(practised)
+                .totalAttempts(1).gradedAttempts(1).correctAttempts(1).lastIsCorrect(true).lastAnsweredAt(Instant.now())
+                .updatedAt(Instant.now()).build());
+        em.flush();
+        JsonNode insights = data(mvc.perform(get("/api/v1/student/ai/insights").param("courseId", course.getCourseId().toString())
+                .with(as(student))).andExpect(status().isOk()));
+        JsonNode ioRow = null;
+        for (JsonNode m : insights.path("modules")) if ("IO".equals(m.path("name").asText())) ioRow = m;
+        assertNotNull(ioRow);
+        assertEquals(1, ioRow.path("answered").asInt());
+        assertEquals(100, ioRow.path("accuracy").asInt());
+        // 2 of IO's 3 questions: the two never seen come before the one already right in Module Practice.
+        JsonNode created = data(create(student, "{\"courseId\":" + course.getCourseId() + ",\"questionCount\":2,\"durationMinutes\":30,"
+                + "\"allocation\":\"SMART\",\"focusModuleId\":" + io.getModuleId() + "}").andExpect(status().isCreated()));
+        List<Long> drawn = em.createQuery("select eq.question.questionId from ExamQuestion eq where eq.exam.examId = :e", Long.class)
+                .setParameter("e", created.path("examId").asLong()).getResultList();
+        assertFalse(drawn.contains(practised.getQuestionId()));
+    }
+
     ResultActions create(User actor, String body) throws Exception {
         return mvc.perform(post("/api/v1/student/practice-exams").with(as(actor)).contentType(MediaType.APPLICATION_JSON).content(body));
     }

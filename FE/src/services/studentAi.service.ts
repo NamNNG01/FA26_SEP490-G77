@@ -8,6 +8,7 @@ import type { ApiResponse } from '@/types/api';
  *   GET  /api/v1/student/ai/smart-practice/{jobId}   (AI-02) — poll, Retry-After while PROCESSING
  *   GET  /api/v1/student/ai/recommendations          (AI-03) — sync, cached 1h
  *   POST /api/v1/student/ai/weakness-report          (AI-04) — sync, cached 6h
+ *   GET  /api/v1/student/ai/insights?courseId=       — per-module standing, no AI, free on every call
  *
  * "Category" in these bodies is a module of the course (a course has one category; modules are its topics).
  * Errors: 403 not enrolled, 422 INSUFFICIENT_DATA, 429 QUOTA_EXCEEDED — read them with getAiError().
@@ -109,6 +110,11 @@ export interface CommonMistake {
   pattern: string;
   frequency: number;
   suggestion: string;
+  questionIds?: number[];
+  /** Course resource the suggestion points to (checked to exist by the BE); all null when none fits. */
+  refType?: 'DECK' | 'EXAM' | 'MODULE' | null;
+  refId?: number | null;
+  refTitle?: string | null;
 }
 
 export interface CategoryBreakdown {
@@ -118,6 +124,7 @@ export interface CategoryBreakdown {
   correctCount: number;
   accuracy: number;
   trend: AiTrend;
+  enoughData?: boolean;
   commonMistakes: CommonMistake[];
 }
 
@@ -129,8 +136,58 @@ export interface WeaknessReport {
   summary: string;
   categoryBreakdown: CategoryBreakdown[];
   questionTypeBreakdown: { questionType: string; accuracy: number; trend: AiTrend }[];
+  difficultyBreakdown?: DifficultyBreakdown[];
+  notPracticedCategories?: { categoryId: number; name: string }[];
   actionPlan: string[];
   quota: AiQuotaLeft | null;
+}
+
+export interface DifficultyBreakdown {
+  difficulty: string;
+  accuracy: number;
+  questionCount: number;
+  trend: AiTrend;
+}
+
+// ------------------------------------------------------------- insights (no AI)
+
+export type Mastery = 'NOT_STARTED' | 'WEAK' | 'LEARNING' | 'STRONG' | 'MASTERED';
+
+/** One module over the course's practice bank; counts are distinct questions by their latest answer. */
+export interface ModuleInsight {
+  /** null = course questions outside any module ("General"). */
+  categoryId: number | null;
+  name: string;
+  bankSize: number;
+  answered: number;
+  correctCount: number;
+  accuracy: number;
+  /** Share of the bank answered at least once. */
+  coverage: number;
+  trend: AiTrend;
+  /** Mistake-notebook questions not fixed yet (2 right in a row fixes one). */
+  stillWrong: number;
+  mastery: Mastery;
+  /** 10..100 — higher = practise sooner; the weight a personalized practice exam splits by. */
+  priority: number;
+}
+
+export interface Insights {
+  courseId: number;
+  finishedAttempts: number;
+  /** Half coverage + half accuracy. */
+  readiness: number;
+  accuracy: number;
+  coverage: number;
+  answered: number;
+  bankSize: number;
+  stillWrong: number;
+  /** Still-wrong questions not practised for 7 days. */
+  staleWrong: number;
+  /** Highest priority first. */
+  modules: ModuleInsight[];
+  difficultyBreakdown: DifficultyBreakdown[];
+  questionTypeBreakdown: { questionType: string; accuracy: number; trend: AiTrend }[];
 }
 
 // ------------------------------------------------------------- errors
@@ -179,6 +236,11 @@ export const studentAiService = {
     const res = await apiClient.get<ApiResponse<Recommendations>>(`/student/ai/recommendations?courseId=${courseId}`, {
       timeout: AI_TIMEOUT_MS,
     });
+    return res.data.data;
+  },
+
+  async getInsights(courseId: number): Promise<Insights> {
+    const res = await apiClient.get<ApiResponse<Insights>>(`/student/ai/insights?courseId=${courseId}`);
     return res.data.data;
   },
 

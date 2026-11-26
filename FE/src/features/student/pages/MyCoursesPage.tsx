@@ -19,8 +19,6 @@ import { cacheGeneration, getCached, setCached } from '@/hooks/useCachedQuery';
 import { courseCacheKey } from '../components/courseProgress';
 import { CardGridSkeleton, CourseThumb, LoadError, PageTitle, STUDENT_PAGE_CLASS, formatDate } from '../components/studentUi';
 import { MaterialQuizModal } from '../components/MaterialQuizModal';
-import { SmartPracticeModal } from '../components/SmartPracticeModal';
-import { RecommendationsCard } from '../components/RecommendationsCard';
 
 const PAGE_SIZE = 12;
 /** MC-01 caps `size` at 100 and has no keyword filter, so the list is loaded once and searched client-side. */
@@ -39,8 +37,7 @@ function matchesSearch(course: MyCourse, term: string) {
  *  - search box:                 filters the enrolled courses only (title,
  *                                category, manager) — not the public catalog.
  *  - Material to Quiz Creator:   AI quiz generated from a file the student uploads (MaterialQuizModal, MQ-01..MQ-05).
- *  - Create Practice Exam:       opened from a recommendation only; its button lives on the course detail page.
- *  - Recommended for you:        AI-03 card for one picked course (called on demand).
+ *  - Weakness Analysis:          linked from each course card (personalized practice starts there).
  */
 export function MyCoursesPage() {
   const navigate = useNavigate();
@@ -56,8 +53,7 @@ export function MyCoursesPage() {
   // dashboard clock. A cached list is already re-read without a loader.
   useAutoRefresh(() => setReload(r => r + 1), true, DASHBOARD_REFRESH_MS);
   const [search, setSearch] = useState('');
-  const [quizModal, setQuizModal] = useState<'material' | 'smart' | null>(null);
-  const [smartCourseId, setSmartCourseId] = useState<number | null>(null);
+  const [quizModal, setQuizModal] = useState<'material' | null>(null);
 
   // Cached for this tab (useCachedQuery's store): back on My Courses, the list and its live percents
   // show at once, and are read again behind them.
@@ -120,11 +116,6 @@ export function MyCoursesPage() {
   const filtered = useMemo(() => (term ? courses.filter(c => matchesSearch(c, term)) : courses), [courses, term]);
   const pageItems = filtered.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE);
 
-  const openSmartPractice = (courseId: number | null = null) => {
-    setSmartCourseId(courseId);
-    setQuizModal('smart');
-  };
-
   const changeSearch = (value: string) => {
     setSearch(value);
     setPage(1);
@@ -152,8 +143,6 @@ export function MyCoursesPage() {
           </div>
         }
       />
-
-      {!loading && !error && courses.length > 0 && <RecommendationsCard courses={courses} onSmartPractice={openSmartPractice} />}
 
       {loading ? (
         <CardGridSkeleton />
@@ -195,7 +184,6 @@ export function MyCoursesPage() {
       )}
 
       <MaterialQuizModal open={quizModal === 'material'} onClose={() => setQuizModal(null)} courses={courses} />
-      <SmartPracticeModal open={quizModal === 'smart'} onClose={() => setQuizModal(null)} courses={courses} initialCourseId={smartCourseId} />
 
       {student && student.recentAttempts.length > 0 && (
         <RecentAttempts attempts={student.recentAttempts.slice(0, RECENT_ATTEMPTS)} onViewAll={() => navigate(ROUTES.studentExams)} />
@@ -273,7 +261,7 @@ function MyCourseCard({ course, onOpen }: { course: MyCourse; onOpen: () => void
         to={studentWeaknessReportPath(course.courseId)}
         className="flex items-center gap-1.5 border-t border-line px-4 py-2.5 text-xs font-medium text-primary hover:bg-surface-hover focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-primary"
       >
-        <Icon.BarChart className="w-3.5 h-3.5" /> View weakness report
+        <Icon.BarChart className="w-3.5 h-3.5" /> Weakness analysis
         <Icon.ChevronRight className="w-3.5 h-3.5 ml-auto" />
       </Link>
     </div>

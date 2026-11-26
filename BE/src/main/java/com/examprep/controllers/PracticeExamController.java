@@ -28,6 +28,13 @@ public class PracticeExamController {
         return ResponseEntity.status(HttpStatus.CREATED).body(ApiResponse.success(practice.create(user.getId(), request), "Practice exam created"));
     }
 
+    /** Preview of the SMART split for the same body PQ-01 takes; creates nothing. */
+    @PostMapping("/practice-exams/plan")
+    public ResponseEntity<ApiResponse<PracticeDtos.Plan>> plan(@AuthenticationPrincipal UserPrincipal user,
+            @Valid @RequestBody PracticeDtos.Create request) {
+        return ResponseEntity.ok(ApiResponse.success(practice.plan(user.getId(), request)));
+    }
+
     @GetMapping("/practice-exams")
     public ResponseEntity<ApiResponse<PageResponse<PracticeDtos.Item>>> list(@AuthenticationPrincipal UserPrincipal user,
             @RequestParam(defaultValue = "0") int page, @RequestParam(defaultValue = "10") int size) {

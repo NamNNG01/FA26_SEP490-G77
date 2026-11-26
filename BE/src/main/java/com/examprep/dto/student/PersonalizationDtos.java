@@ -80,4 +80,21 @@ public final class PersonalizationDtos {
                                  List<CategoryBreakdown> categoryBreakdown, List<TypeBreakdown> questionTypeBreakdown,
                                  List<DifficultyBreakdown> difficultyBreakdown, List<Topic> notPracticedCategories,
                                  List<String> actionPlan, StudentAiResponse.QuotaLeft quota) {}
+
+    // ------------------------------------------------------------- insights (no AI)
+
+    /**
+     * One module over the course's practice bank: answered/correctCount by latest answer, coverage = share of the bank
+     * answered, stillWrong = notebook questions not fixed yet, mastery NOT_STARTED / WEAK / LEARNING / STRONG / MASTERED,
+     * priority 5..100 (higher = practise it sooner; the same weight a SMART practice exam splits by).
+     */
+    @JsonInclude(JsonInclude.Include.ALWAYS)
+    public record ModuleInsight(Long categoryId, String name, int bankSize, int answered, int correctCount, int accuracy,
+                                int coverage, String trend, int stillWrong, String mastery, int priority) {}
+
+    /** readiness = half coverage + half accuracy; staleWrong = still-wrong questions not practised for 7 days. */
+    @JsonInclude(JsonInclude.Include.ALWAYS)
+    public record Insights(Long courseId, int finishedAttempts, int readiness, int accuracy, int coverage, int answered,
+                           int bankSize, int stillWrong, long staleWrong, List<ModuleInsight> modules,
+                           List<DifficultyBreakdown> difficultyBreakdown, List<TypeBreakdown> questionTypeBreakdown) {}
 }
