@@ -174,7 +174,7 @@ class StudentCourseApiIntegrationTest {
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.success").value(true))
                 .andExpect(jsonPath("$.data.content[0].courseId").value(publishedCourse.getCourseId()))
-                .andExpect(jsonPath("$.data.content[0].progress").value(0));
+                .andExpect(jsonPath("$.data.content[0].progress").value(25));
     }
 
     @Test
@@ -212,35 +212,76 @@ class StudentCourseApiIntegrationTest {
     }
 
     @Test
-    void batchedProgressMatchesDetailForGeneralModulesAndCompletedContent() {
+    void moduleProgressCountsPracticeAndExamCorrectQuestionsWithoutDoubleCountingOrFlashcards() {
         Module visible = em.createQuery("from Module m where m.course = :course", Module.class)
                 .setParameter("course", publishedCourse).getSingleResult();
         Module hidden = Module.builder().course(publishedCourse).title("Hidden").status("HIDDEN").orderIndex(2).build();
         em.persist(hidden);
-        for (Module scope : new Module[]{null, visible, hidden}) {
-            for (int i = 0; i < 2; i++) {
-                Question question = Question.builder().course(publishedCourse).module(scope)
-                        .questionType("SINGLE_CHOICE").content("Practice " + i).status("ACTIVE").build();
-                em.persist(question);
-                if (i == 0) em.persist(QuestionPracticeProgress.builder().course(publishedCourse).module(scope)
-                        .user(student).question(question).totalAttempts(1).gradedAttempts(1).correctAttempts(1).build());
-            }
-        }
+
+        // Visible module: 3 questions -> q0 right in Practice + Exam (counts once), q1 right in Exam only, q2 unanswered -> 2/3 = 67%
+        Question q0 = Question.builder().course(publishedCourse).module(visible)
+                .questionType("SINGLE_CHOICE").content("Q0").status("ACTIVE").build();
+        Question q1 = Question.builder().course(publishedCourse).module(visible)
+                .questionType("SINGLE_CHOICE").content("Q1").status("ACTIVE").build();
+        Question q2 = Question.builder().course(publishedCourse).module(visible)
+                .questionType("SINGLE_CHOICE").content("Q2").status("ACTIVE").build();
+        em.persist(q0);
+        em.persist(q1);
+        em.persist(q2);
+
+        // General pool (module = null): 2 questions, 1 right in Practice -> 1/2 = 50%
+        Question g0 = Question.builder().course(publishedCourse).module(null)
+                .questionType("SINGLE_CHOICE").content("G0").status("ACTIVE").build();
+        Question g1 = Question.builder().course(publishedCourse).module(null)
+                .questionType("SINGLE_CHOICE").content("G1").status("ACTIVE").build();
+        em.persist(g0);
+        em.persist(g1);
+
+        // Hidden module question should be excluded
+        Question h0 = Question.builder().course(publishedCourse).module(hidden)
+                .questionType("SINGLE_CHOICE").content("H0").status("ACTIVE").build();
+        em.persist(h0);
+
+        em.persist(QuestionPracticeProgress.builder().course(publishedCourse).module(visible)
+                .user(student).question(q0).totalAttempts(1).gradedAttempts(1).correctAttempts(1).build());
+        em.persist(QuestionPracticeProgress.builder().course(publishedCourse).module(null)
+                .user(student).question(g0).totalAttempts(1).gradedAttempts(1).correctAttempts(1).build());
+
         Exam exam = em.createQuery("from Exam e where e.course = :course", Exam.class)
                 .setParameter("course", publishedCourse).getSingleResult();
-        // Multiple submissions still count as one completed exam.
-        for (int i = 0; i < 2; i++) em.persist(ExamAttempt.builder().exam(exam).user(student)
+        ExamAttempt attempt = ExamAttempt.builder().exam(exam).user(student)
                 .status("COMPLETED").startTime(Instant.now()).deadlineAt(Instant.now().plusSeconds(60))
-                .submitTime(Instant.now()).totalScore(BigDecimal.TEN).build());
+                .submitTime(Instant.now()).totalScore(BigDecimal.TEN).build();
+        em.persist(attempt);
+        // q0 is right in both Practice and Exam -> must still only count once
+        em.persist(AttemptAnswer.builder().attempt(attempt).question(q0).isCorrect(true).build());
+        em.persist(AttemptAnswer.builder().attempt(attempt).question(q1).isCorrect(true).build());
+
+        // Flashcard progress should not affect module progress
         Flashcard card = em.createQuery("from Flashcard f where f.deck.course = :course", Flashcard.class)
                 .setParameter("course", publishedCourse).getSingleResult();
         em.persist(UserCardProgress.builder().user(student).card(card).isStarred(false).status("KNOWN").build());
         em.flush();
         em.clear();
-        int batch = progressService.liveProgressPercents(student.getUserId(), List.of(publishedCourse.getCourseId()))
-                .get(publishedCourse.getCourseId());
-        assertEquals(67, batch); // General: (50 + 100 + 100)/3 = 83; module: 50; course: 67.
-        assertEquals(progressService.liveProgressPercent(student.getUserId(), publishedCourse.getCourseId()), batch);
+
+        var dto = progressService.getCourseProgress(publishedCourse.getCourseId(), student.getUserId());
+        var visibleDto = dto.getModules().stream()
+                .filter(m -> visible.getModuleId().equals(m.getModuleId()))
+                .findFirst().orElseThrow();
+        assertEquals(67, visibleDto.getProgress());
+        assertEquals(2L, visibleDto.getQuestions().getDone());
+        assertEquals(3L, visibleDto.getQuestions().getTotal());
+        assertNull(visibleDto.getExams());
+        assertNull(visibleDto.getDecks());
+
+        var generalDto = dto.getModules().stream()
+                .filter(m -> m.getModuleId() == null)
+                .findFirst().orElseThrow();
+        assertEquals(50, generalDto.getProgress());
+        assertEquals(1L, generalDto.getQuestions().getDone());
+        assertEquals(2L, generalDto.getQuestions().getTotal());
+
+        assertTrue(dto.getModules().stream().noneMatch(m -> hidden.getModuleId().equals(m.getModuleId())));
     }
 
     @Test

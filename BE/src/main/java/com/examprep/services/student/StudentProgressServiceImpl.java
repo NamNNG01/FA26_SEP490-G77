@@ -1,13 +1,18 @@
 package com.examprep.services.student;
 
-import com.examprep.dto.IdCount;
 import com.examprep.dto.student.CourseProgressDto;
 import com.examprep.dto.student.StudentActivityDto;
 import com.examprep.entities.ExamAttempt;
+import com.examprep.entities.Module;
 import com.examprep.exceptions.BadRequestException;
 import com.examprep.exceptions.ForbiddenException;
 import com.examprep.exceptions.ResourceNotFoundException;
-import com.examprep.repositories.*;
+import com.examprep.repositories.CourseProgressSummaryRepository;
+import com.examprep.repositories.CourseProgressSummaryRepository.ModuleQuestionCount;
+import com.examprep.repositories.CourseRepository;
+import com.examprep.repositories.EnrollmentRepository;
+import com.examprep.repositories.ExamAttemptRepository;
+import com.examprep.repositories.ModuleRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
@@ -15,8 +20,6 @@ import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
-import java.math.BigDecimal;
-import java.math.RoundingMode;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
@@ -29,261 +32,80 @@ public class StudentProgressServiceImpl implements StudentProgressService {
 
     private final CourseRepository courseRepository;
     private final EnrollmentRepository enrollmentRepository;
-    private final ExamRepository examRepository;
-    private final DeckRepository deckRepository;
     private final ExamAttemptRepository examAttemptRepository;
     private final ModuleRepository moduleRepository;
     private final CourseProgressSummaryRepository summaryRepository;
 
-    private record Scope(Long courseId, Long moduleId) {}
-
     @Override
-    public Map<Long, Integer> liveProgressPercents(Long userId, List<Long> courseIds) {
-        if (courseIds.isEmpty()) return Map.of();
-        // Each scope has question, exam and deck [done, total] pairs. All five queries
-        // cover the whole page, independent of its number of courses or modules.
-        Map<Scope, long[]> scopes = new HashMap<>();
-        addSummary(scopes, summaryRepository.questionTotals(courseIds), 1);
-        addSummary(scopes, summaryRepository.questionCompletions(courseIds, userId), 0);
-        addSummary(scopes, summaryRepository.examTotals(courseIds), 3);
-        addSummary(scopes, summaryRepository.examCompletions(courseIds, userId), 2);
-        for (Object[] row : summaryRepository.deckStats(courseIds, userId)) {
-            long[] counts = scopes.computeIfAbsent(new Scope((Long) row[0], (Long) row[1]), k -> new long[6]);
-            counts[5]++;
-            if (number(row[2]) > 0 && number(row[3]) >= number(row[2])) counts[4]++;
-        }
-        Map<Long, List<Integer>> percentages = new HashMap<>();
-        scopes.forEach((scope, counts) -> {
-            double sum = 0;
-            int parts = 0;
-            for (int i = 0; i < counts.length; i += 2) {
-                if (counts[i + 1] > 0) {
-                    sum += Math.min(1.0, (double) counts[i] / counts[i + 1]);
-                    parts++;
-                }
-            }
-            if (parts > 0) {
-                int percent = Math.min(100, Math.max(0, (int) Math.round(sum * 100 / parts)));
-                percentages.computeIfAbsent(scope.courseId(), k -> new ArrayList<>()).add(percent);
-            }
-        });
-        Map<Long, Integer> result = new HashMap<>();
-        for (Long id : courseIds) {
-            List<Integer> values = percentages.getOrDefault(id, List.of());
-            result.put(id, values.isEmpty() ? -1 : (int) Math.round(
-                    values.stream().mapToInt(Integer::intValue).average().orElse(0)));
-        }
-        return result;
-    }
-
-    private static void addSummary(Map<Scope, long[]> scopes, List<Object[]> rows, int index) {
-        for (Object[] row : rows) {
-            scopes.computeIfAbsent(new Scope((Long) row[0], (Long) row[1]), k -> new long[6])[index] = number(row[2]);
-        }
-    }
-
-    private record DeckStat(Long deckId, long cardCount, long learnedCount) {}
-
-    @Override
-    @Transactional(readOnly = true)
     public CourseProgressDto getCourseProgress(Long courseId, Long userId) {
+        // Step 1: Verify the course exists and the student is enrolled
         if (!courseRepository.existsById(courseId)) {
             throw new ResourceNotFoundException("Course not found");
         }
-        boolean active = enrollmentRepository.existsByCourse_CourseIdAndUser_UserIdAndStatus(courseId, userId, "ACTIVE")
-                || enrollmentRepository.existsByCourse_CourseIdAndUser_UserIdAndStatus(courseId, userId, "COMPLETED");
-        if (!active) {
+        boolean isActive = enrollmentRepository.existsByCourse_CourseIdAndUser_UserIdAndStatus(courseId, userId, "ACTIVE");
+        boolean isCompleted = enrollmentRepository.existsByCourse_CourseIdAndUser_UserIdAndStatus(courseId, userId, "COMPLETED");
+        if (!isActive && !isCompleted) {
             throw new ForbiddenException("Student is not actively enrolled in this course");
         }
 
-        return computeCourseProgress(courseId, userId);
-    }
-
-    @Override
-    @Transactional(readOnly = true)
-    public int liveProgressPercent(Long userId, Long courseId) {
-        CourseProgressDto dto = computeCourseProgress(courseId, userId);
-        boolean hasAnyContent = dto.getQuestions().getTotal() > 0
-                || dto.getExams().getTotal() > 0
-                || dto.getDecks().getTotal() > 0;
-        return hasAnyContent ? dto.getProgress() : -1;
-    }
-
-    private CourseProgressDto computeCourseProgress(Long courseId, Long userId) {
-        // 1. Fetch modules
-        List<com.examprep.entities.Module> modules = moduleRepository.findVisibleModulesByCourseId(courseId);
-
-        // 2. Exam counts
-        Map<Long, Long> examsByModule = new HashMap<>();
-        examRepository.countPublishedExamsByModuleGroup(courseId).forEach(c -> examsByModule.put(c.id(), c.total()));
-        long totalExamsGeneral = examRepository.countPublishedExamsGeneral(courseId);
-
-        Map<Long, Long> completedExamsByModule = new HashMap<>();
-        examAttemptRepository.countCompletedExamsByModuleGroup(userId, courseId).forEach(c -> completedExamsByModule.put(c.id(), c.total()));
-        long completedExamsGeneral = examAttemptRepository.countCompletedExamsGeneral(userId, courseId);
-
-        Map<Long, Long> questionTotalsByModule = new HashMap<>();
-        long generalQuestionTotal = 0;
-        for (Object[] row : summaryRepository.questionTotalsByCourse(courseId)) {
-            Long moduleId = (Long) row[1];
-            long count = number(row[2]);
-            if (moduleId == null) generalQuestionTotal = count;
-            else questionTotalsByModule.put(moduleId, count);
-        }
-        Map<Long, Long> questionDoneByModule = new HashMap<>();
-        long generalQuestionDone = 0;
-        for (Object[] row : summaryRepository.questionCompletionsByCourse(courseId, userId)) {
-            Long moduleId = (Long) row[1];
-            long count = number(row[2]);
-            if (moduleId == null) generalQuestionDone = count;
-            else questionDoneByModule.put(moduleId, count);
+        // Step 2: Load total valid questions per module -> Map(moduleId -> count)
+        Map<Long, Long> totalByModule = new HashMap<>();
+        List<ModuleQuestionCount> totalList = summaryRepository.countTotalQuestionsByModule(courseId);
+        for (ModuleQuestionCount item : totalList) {
+            totalByModule.put(item.moduleId(), item.count());
         }
 
-        // 3. Deck stats
-        List<Object[]> deckRows = deckRepository.findCourseDeckStatsWithModule(courseId, userId);
-        Map<Long, List<DeckStat>> decksByModuleMap = new HashMap<>();
-        List<DeckStat> generalDecks = new ArrayList<>();
-        for (Object[] row : deckRows) {
-            Long deckId = (Long) row[0];
-            Long modId = (Long) row[1];
-            long cardCount = number(row[2]);
-            long learnedCount = number(row[3]);
-            DeckStat stat = new DeckStat(deckId, cardCount, learnedCount);
-            if (modId != null) {
-                decksByModuleMap.computeIfAbsent(modId, k -> new ArrayList<>()).add(stat);
-            } else {
-                generalDecks.add(stat);
-            }
+        // Step 3: Load correctly answered questions per module -> Map(moduleId -> count)
+        Map<Long, Long> correctByModule = new HashMap<>();
+        List<ModuleQuestionCount> correctList = summaryRepository.countCorrectQuestionsByModule(courseId, userId);
+        for (ModuleQuestionCount item : correctList) {
+            correctByModule.put(item.moduleId(), item.count());
         }
 
-        List<CourseProgressDto.ModuleProgressDto> moduleDtos = new ArrayList<>();
-        List<Integer> moduleProgressValues = new ArrayList<>();
+        // Step 4: Build progress for each visible module
+        List<CourseProgressDto.ModuleProgressDto> moduleProgressList = new ArrayList<>();
+        List<Module> modules = moduleRepository.findVisibleModulesByCourseId(courseId);
+        for (Module module : modules) {
+            Long moduleId = module.getModuleId();
+            long total = totalByModule.getOrDefault(moduleId, 0L);
+            long correct = correctByModule.getOrDefault(moduleId, 0L);
 
-        long totalCourseQuestionsDone = 0;
-        long totalCourseQuestionsTotal = 0;
-        long totalCourseExamsDone = 0;
-        long totalCourseExamsTotal = 0;
-        long totalCourseDecksDone = 0;
-        long totalCourseDecksTotal = 0;
-
-        // Process each module
-        for (com.examprep.entities.Module m : modules) {
-            Long modId = m.getModuleId();
-            String title = m.getTitle();
-
-            long qTotal = questionTotalsByModule.getOrDefault(modId, 0L);
-            long qDone = questionDoneByModule.getOrDefault(modId, 0L);
-
-            long eTotal = examsByModule.getOrDefault(modId, 0L);
-            long eDone = completedExamsByModule.getOrDefault(modId, 0L);
-
-            List<DeckStat> dList = decksByModuleMap.getOrDefault(modId, List.of());
-            long dTotal = dList.size();
-            long dDone = dList.stream().filter(d -> d.cardCount > 0 && d.learnedCount >= d.cardCount).count();
-
-            totalCourseQuestionsDone += qDone;
-            totalCourseQuestionsTotal += qTotal;
-            totalCourseExamsDone += eDone;
-            totalCourseExamsTotal += eTotal;
-            totalCourseDecksDone += dDone;
-            totalCourseDecksTotal += dTotal;
-
-            List<Double> parts = new ArrayList<>();
-            CourseProgressDto.ItemCount qItem = qTotal > 0 ? new CourseProgressDto.ItemCount(qDone, qTotal) : null;
-            if (qTotal > 0) parts.add(Math.min(1.0, (double) qDone / qTotal));
-
-            CourseProgressDto.ItemCount eItem = eTotal > 0 ? new CourseProgressDto.ItemCount(eDone, eTotal) : null;
-            if (eTotal > 0) parts.add(Math.min(1.0, (double) eDone / eTotal));
-
-            CourseProgressDto.ItemCount dItem = dTotal > 0 ? new CourseProgressDto.ItemCount(dDone, dTotal) : null;
-            if (dTotal > 0) parts.add(Math.min(1.0, (double) dDone / dTotal));
-
-            Integer modProgress = null;
-            if (!parts.isEmpty()) {
-                double sum = parts.stream().mapToDouble(Double::doubleValue).sum();
-                modProgress = (int) Math.round((sum * 100.0) / parts.size());
-                modProgress = Math.min(100, Math.max(0, modProgress));
-                moduleProgressValues.add(modProgress);
-            }
-
-            moduleDtos.add(new CourseProgressDto.ModuleProgressDto(
-                    modId, title, modProgress, qItem, eItem, dItem
-            ));
+            moduleProgressList.add(buildModuleProgress(moduleId, module.getTitle(), correct, total));
         }
 
-        // Process General pool (moduleId = null)
-        long gQTotal = generalQuestionTotal;
-        long gQDone = generalQuestionDone;
-
-        long gETotal = totalExamsGeneral;
-        long gEDone = completedExamsGeneral;
-
-        long gDTotal = generalDecks.size();
-        long gDDone = generalDecks.stream().filter(d -> d.cardCount > 0 && d.learnedCount >= d.cardCount).count();
-
-        totalCourseQuestionsDone += gQDone;
-        totalCourseQuestionsTotal += gQTotal;
-        totalCourseExamsDone += gEDone;
-        totalCourseExamsTotal += gETotal;
-        totalCourseDecksDone += gDDone;
-        totalCourseDecksTotal += gDTotal;
-
-        List<Double> gParts = new ArrayList<>();
-        CourseProgressDto.ItemCount gQItem = gQTotal > 0 ? new CourseProgressDto.ItemCount(gQDone, gQTotal) : null;
-        if (gQTotal > 0) gParts.add(Math.min(1.0, (double) gQDone / gQTotal));
-
-        CourseProgressDto.ItemCount gEItem = gETotal > 0 ? new CourseProgressDto.ItemCount(gEDone, gETotal) : null;
-        if (gETotal > 0) gParts.add(Math.min(1.0, (double) gEDone / gETotal));
-
-        CourseProgressDto.ItemCount gDItem = gDTotal > 0 ? new CourseProgressDto.ItemCount(gDDone, gDTotal) : null;
-        if (gDTotal > 0) gParts.add(Math.min(1.0, (double) gDDone / gDTotal));
-
-        if (!gParts.isEmpty()) {
-            double gSum = gParts.stream().mapToDouble(Double::doubleValue).sum();
-            int gProgress = (int) Math.round((gSum * 100.0) / gParts.size());
-            gProgress = Math.min(100, Math.max(0, gProgress));
-            moduleProgressValues.add(gProgress);
-
-            moduleDtos.add(new CourseProgressDto.ModuleProgressDto(
-                    null, "General", gProgress, gQItem, gEItem, gDItem
-            ));
+        // Step 5: Include the "General" pool (moduleId = null) if it has any questions
+        long generalTotal = totalByModule.getOrDefault(null, 0L);
+        long generalCorrect = correctByModule.getOrDefault(null, 0L);
+        if (generalTotal > 0) {
+            moduleProgressList.add(buildModuleProgress(null, "General", generalCorrect, generalTotal));
         }
 
-        int courseProgress = 0;
-        if (!moduleProgressValues.isEmpty()) {
-            double modSum = moduleProgressValues.stream().mapToInt(Integer::intValue).sum();
-            courseProgress = (int) Math.round(modSum / moduleProgressValues.size());
-            courseProgress = Math.min(100, Math.max(0, courseProgress));
-        }
-
-        Double avgScoreVal = examAttemptRepository.averageScoreByUserAndCourse(userId, courseId);
-        BigDecimal averageScore = avgScoreVal != null ? BigDecimal.valueOf(avgScoreVal).setScale(2, RoundingMode.HALF_UP) : null;
-
-        List<ExamAttempt> recentAttempts = examAttemptRepository.findRecentAttemptsByUserAndCourse(userId, courseId, PageRequest.of(0, 5));
-        List<CourseProgressDto.RecentAttemptItem> recentAttemptItems = recentAttempts.stream()
-                .map(a -> new CourseProgressDto.RecentAttemptItem(
-                        a.getAttemptId(),
-                        a.getExam().getTitle(),
-                        a.getTotalScore(),
-                        a.getExam().getMaxScore(),
-                        a.getSubmitTime()
-                ))
-                .toList();
-
+        // Step 6: Return per-module progress only (no overall course progress calculation)
         return CourseProgressDto.builder()
                 .courseId(courseId)
-                .progress(courseProgress)
-                .questions(new CourseProgressDto.ItemCount(totalCourseQuestionsDone, totalCourseQuestionsTotal))
-                .exams(new CourseProgressDto.ItemCount(totalCourseExamsDone, totalCourseExamsTotal))
-                .decks(new CourseProgressDto.ItemCount(totalCourseDecksDone, totalCourseDecksTotal))
-                .modules(moduleDtos)
-                .averageScore(averageScore)
-                .recentAttempts(recentAttemptItems)
-                .totalExams(totalCourseExamsTotal)
-                .completedExams(totalCourseExamsDone)
-                .totalDecks(totalCourseDecksTotal)
-                .learnedDecks(totalCourseDecksDone)
+                .modules(moduleProgressList)
+                .recentAttempts(List.of())
                 .build();
+    }
+
+    /** Builds the progress DTO for one module (or General when moduleId is null). */
+    private CourseProgressDto.ModuleProgressDto buildModuleProgress(
+            Long moduleId, String title, long correct, long total
+    ) {
+        if (total == 0) {
+            return new CourseProgressDto.ModuleProgressDto(moduleId, title, null, null, null, null);
+        }
+
+        int percent = (int) Math.round((correct * 100.0) / total);
+        if (percent > 100) {
+            percent = 100;
+        }
+        if (percent < 0) {
+            percent = 0;
+        }
+
+        CourseProgressDto.ItemCount questionCount = new CourseProgressDto.ItemCount(correct, total);
+        return new CourseProgressDto.ModuleProgressDto(moduleId, title, percent, questionCount, null, null);
     }
 
     @Override
@@ -312,9 +134,5 @@ public class StudentProgressServiceImpl implements StudentProgressService {
                     att.getSubmitTime()
             );
         });
-    }
-
-    private static long number(Object value) {
-        return value instanceof Number counted ? counted.longValue() : 0L;
     }
 }

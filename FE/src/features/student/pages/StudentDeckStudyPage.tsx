@@ -20,7 +20,6 @@ import {
   type ViewerView,
 } from '@/services/studentDeck.service';
 import { cacheGeneration, getCached, invalidateCached, setCached } from '@/hooks/useCachedQuery';
-import { studentProgressService } from '@/services/studentProgress.service';
 import { LoadError, STUDENT_PAGE_CLASS, formatDateTime } from '../components/studentUi';
 import type { DeckStudyState } from '../components/DeckCard';
 import { CardFace, ConfirmModal, DeckModeBadge, DeckStatusBadge, plural } from '../components/flashcards/flashcardUi';
@@ -103,16 +102,7 @@ function DeckPage() {
     setDeck(d => (d ? { ...d, starredCount: Math.max(0, (d.starredCount ?? 0) + delta) } : d)),
   );
 
-  // A course deck counts towards the course's progress once every card is learned: when that flips
-  // (learned in full, or reset), LP-01 stores the course's new percent. The first reading only records.
-  const progressCourseId = deck?.courseId ?? state?.courseId ?? null;
-  const deckComplete = progress ? progress.total > 0 && progress.learned >= progress.total : null;
-  const lastComplete = useRef<boolean | null>(null);
-  useEffect(() => {
-    if (deckComplete == null) return;
-    if (lastComplete.current != null && lastComplete.current !== deckComplete) studentProgressService.syncCourseProgress(progressCourseId);
-    lastComplete.current = deckComplete;
-  }, [deckComplete, progressCourseId]);
+
 
   useEffect(() => {
     let cancelled = false;

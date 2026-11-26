@@ -7,88 +7,69 @@ import org.springframework.data.repository.query.Param;
 
 import java.util.List;
 
-/** Scalar summaries for a page of courses; never load question bodies or attempt entities. */
+/** Scalar summaries for course/module question counts; never load question bodies or attempt entities. */
 public interface CourseProgressSummaryRepository extends JpaRepository<Course, Long> {
-    /** LP-01: question totals for one course, grouped by module; moduleId null is the General pool. */
+
+    /** Result of counting questions in one module (moduleId = null is the General pool). */
+    record ModuleQuestionCount(Long moduleId, long count) {}
+
+    /**
+     * Count total valid questions in each module of a course.
+     */
     @Query("""
-        SELECT COALESCE(m.course.courseId, q.course.courseId), m.moduleId, COUNT(q)
+        SELECT new com.examprep.repositories.CourseProgressSummaryRepository$ModuleQuestionCount(
+            m.moduleId,
+            COUNT(q)
+        )
         FROM Question q LEFT JOIN q.module m
         WHERE COALESCE(m.course.courseId, q.course.courseId) = :courseId
           AND (m IS NULL OR m.status <> 'HIDDEN')
-          AND q.deletedAt IS NULL AND q.status = 'ACTIVE'
-          AND q.approvalStatus = 'APPROVED' AND q.sourceDocumentId IS NULL
+          AND q.deletedAt IS NULL
+          AND q.status = 'ACTIVE'
+          AND q.approvalStatus = 'APPROVED'
+          AND q.sourceDocumentId IS NULL
           AND NOT (COALESCE(q.source, '') = 'AI' AND COALESCE(q.creatorRole, '') = 'STUDENT')
-        GROUP BY COALESCE(m.course.courseId, q.course.courseId), m.moduleId
+        GROUP BY m.moduleId
         """)
-    List<Object[]> questionTotalsByCourse(@Param("courseId") Long courseId);
+    List<ModuleQuestionCount> countTotalQuestionsByModule(@Param("courseId") Long courseId);
 
-    /** LP-01: ever-correct question counts for one course, grouped by module; moduleId null is General. */
+    /**
+     * Count valid questions a user has answered correctly at least once
+     * (either in Practice OR in a submitted/completed Exam) per module of a course.
+     */
     @Query("""
-        SELECT COALESCE(m.course.courseId, p.course.courseId), m.moduleId, COUNT(p)
-        FROM QuestionPracticeProgress p LEFT JOIN p.module m
-        WHERE p.user.userId = :userId AND p.correctAttempts > 0
-          AND COALESCE(m.course.courseId, p.course.courseId) = :courseId
-          AND (m IS NULL OR m.status <> 'HIDDEN')
-          AND p.question.deletedAt IS NULL AND p.question.status = 'ACTIVE'
-          AND p.question.approvalStatus = 'APPROVED' AND p.question.sourceDocumentId IS NULL
-          AND NOT (COALESCE(p.question.source, '') = 'AI' AND COALESCE(p.question.creatorRole, '') = 'STUDENT')
-        GROUP BY COALESCE(m.course.courseId, p.course.courseId), m.moduleId
-        """)
-    List<Object[]> questionCompletionsByCourse(@Param("courseId") Long courseId, @Param("userId") Long userId);
-
-    @Query("""
-        SELECT COALESCE(m.course.courseId, q.course.courseId), m.moduleId, COUNT(q)
+        SELECT new com.examprep.repositories.CourseProgressSummaryRepository$ModuleQuestionCount(
+            m.moduleId,
+            COUNT(q)
+        )
         FROM Question q LEFT JOIN q.module m
-        WHERE COALESCE(m.course.courseId, q.course.courseId) IN :ids
+        WHERE COALESCE(m.course.courseId, q.course.courseId) = :courseId
           AND (m IS NULL OR m.status <> 'HIDDEN')
-          AND q.deletedAt IS NULL AND q.status = 'ACTIVE'
-          AND q.approvalStatus = 'APPROVED' AND q.sourceDocumentId IS NULL
+          AND q.deletedAt IS NULL
+          AND q.status = 'ACTIVE'
+          AND q.approvalStatus = 'APPROVED'
+          AND q.sourceDocumentId IS NULL
           AND NOT (COALESCE(q.source, '') = 'AI' AND COALESCE(q.creatorRole, '') = 'STUDENT')
-        GROUP BY COALESCE(m.course.courseId, q.course.courseId), m.moduleId
+          AND (
+              EXISTS (
+                  SELECT 1 FROM QuestionPracticeProgress p
+                  WHERE p.question = q
+                    AND p.user.userId = :userId
+                    AND p.correctAttempts > 0
+              )
+              OR EXISTS (
+                  SELECT 1 FROM AttemptAnswer aa
+                  JOIN aa.attempt a
+                  WHERE aa.question = q
+                    AND a.user.userId = :userId
+                    AND a.status IN ('SUBMITTED', 'COMPLETED')
+                    AND aa.isCorrect = true
+              )
+          )
+        GROUP BY m.moduleId
         """)
-    List<Object[]> questionTotals(@Param("ids") List<Long> ids);
-
-    @Query("""
-        SELECT COALESCE(m.course.courseId, p.course.courseId), m.moduleId, COUNT(p)
-        FROM QuestionPracticeProgress p LEFT JOIN p.module m
-        WHERE p.user.userId = :userId AND p.correctAttempts > 0
-          AND COALESCE(m.course.courseId, p.course.courseId) IN :ids
-          AND (m IS NULL OR m.status <> 'HIDDEN')
-          AND p.question.deletedAt IS NULL AND p.question.status = 'ACTIVE'
-          AND p.question.approvalStatus = 'APPROVED' AND p.question.sourceDocumentId IS NULL
-          AND NOT (COALESCE(p.question.source, '') = 'AI' AND COALESCE(p.question.creatorRole, '') = 'STUDENT')
-        GROUP BY COALESCE(m.course.courseId, p.course.courseId), m.moduleId
-        """)
-    List<Object[]> questionCompletions(@Param("ids") List<Long> ids, @Param("userId") Long userId);
-
-    @Query("""
-        SELECT e.course.courseId, m.moduleId, COUNT(e)
-        FROM Exam e LEFT JOIN e.module m
-        WHERE e.course.courseId IN :ids AND e.status = 'PUBLISHED' AND e.mode = 'EXAM'
-          AND (m IS NULL OR m.status <> 'HIDDEN')
-        GROUP BY e.course.courseId, m.moduleId
-        """)
-    List<Object[]> examTotals(@Param("ids") List<Long> ids);
-
-    @Query("""
-        SELECT e.course.courseId, m.moduleId, COUNT(DISTINCT e.examId)
-        FROM ExamAttempt a JOIN a.exam e LEFT JOIN e.module m
-        WHERE a.user.userId = :userId AND e.course.courseId IN :ids
-          AND e.status = 'PUBLISHED' AND e.mode = 'EXAM'
-          AND a.status IN ('SUBMITTED', 'COMPLETED')
-          AND (m IS NULL OR m.status <> 'HIDDEN')
-        GROUP BY e.course.courseId, m.moduleId
-        """)
-    List<Object[]> examCompletions(@Param("ids") List<Long> ids, @Param("userId") Long userId);
-
-    @Query("""
-        SELECT d.course.courseId, m.moduleId,
-          (SELECT COUNT(f) FROM Flashcard f WHERE f.deck = d),
-          (SELECT COUNT(p) FROM UserCardProgress p JOIN p.card f
-             WHERE f.deck = d AND p.user.userId = :userId AND p.status = 'KNOWN')
-        FROM Deck d LEFT JOIN d.module m
-        WHERE d.course.courseId IN :ids AND (m IS NULL OR m.status <> 'HIDDEN')
-          AND (d.user.roleName <> 'STUDENT' OR d.user.userId = :userId OR d.visibility = 'PUBLIC')
-        """)
-    List<Object[]> deckStats(@Param("ids") List<Long> ids, @Param("userId") Long userId);
+    List<ModuleQuestionCount> countCorrectQuestionsByModule(
+            @Param("courseId") Long courseId,
+            @Param("userId") Long userId
+    );
 }

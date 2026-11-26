@@ -148,37 +148,15 @@ export function StudentCourseDetailPage() {
   );
 }
 
-/** The course's progress from LP-01 (the average of its modules). */
-function CourseProgressPanel({ progress }: { progress: LearningProgress | 'error' }) {
-  if (progress === 'error') {
-    return (
-      <section className="card p-4 sm:p-5" aria-label="Course progress">
-        <h2 className="font-semibold text-content">Your progress</h2>
-        <p className="mt-1 text-sm text-content-subtle">Progress could not be loaded.</p>
-      </section>
-    );
-  }
-
-  return (
-    <section className="card p-4 sm:p-5 space-y-4" aria-label="Course progress">
-      <div className="flex flex-wrap items-start justify-between gap-3">
-        <h2 className="font-semibold text-content">Your progress</h2>
-        <p className="text-xl font-bold text-primary">{progress.percent ?? 0}%</p>
-      </div>
-      <Progress value={progress.percent ?? 0} />
-    </section>
-  );
-}
-
 /**
  * The course content as a grid of module cards — counts and a Practice button each — plus a
- * "General" card, built the same way, for the content not filed under any module. The panel above
- * it and each card show progress from LP-01. MP-01 is read only for the module whose Practice
- * button is pressed, to open its practice modal (with the session in progress, if any).
+ * "General" card, built the same way, for the content not filed under any module. Each card shows
+ * progress from LP-01. MP-01 is read only for the module whose Practice button is pressed, to open
+ * its practice modal (with the session in progress, if any).
  */
 function ModuleGrid({ content }: { content: CourseDetailState }) {
   const navigate = useNavigate();
-  const { course, generalCounts, modules, hasGeneral, progress: overall, be, moduleProgress } = content;
+  const { course, generalCounts, modules, hasGeneral, be, moduleProgress } = content;
   const [practicing, setPracticing] = useState<{ scope: PracticeScope; title: string; overview: ModulePracticeOverview | null } | null>(null);
   // The card whose MP-01 is being read before its practice modal opens.
   const [opening, setOpening] = useState<string | null>(null);
@@ -209,8 +187,6 @@ function ModuleGrid({ content }: { content: CourseDetailState }) {
   }
 
   return (
-    <>
-    <CourseProgressPanel progress={overall} />
     <section className="space-y-3" aria-label="Course content">
       <h2 className="text-base font-semibold text-content">Modules</h2>
       <div className="grid grid-cols-[repeat(auto-fill,minmax(min(100%,280px),1fr))] gap-[clamp(1rem,2vw,1.25rem)]">
@@ -250,7 +226,6 @@ function ModuleGrid({ content }: { content: CourseDetailState }) {
         />
       )}
     </section>
-    </>
   );
 }
 

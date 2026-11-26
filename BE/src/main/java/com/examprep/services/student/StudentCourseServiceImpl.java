@@ -41,7 +41,6 @@ public class StudentCourseServiceImpl implements StudentCourseService {
     private final FlashcardRepository flashcardRepository;
     private final UserCardProgressRepository userCardProgressRepository;
     private final CategoryService categoryService;
-    private final StudentProgressService studentProgressService;
     private final CourseProgressSummaryRepository progressSummaryRepository;
 
     @Value("${app.read-cache.ttl-ms:5000}")
@@ -82,11 +81,10 @@ public class StudentCourseServiceImpl implements StudentCourseService {
                 .forEach(c -> decksByModule.put(c.id(), c.total()));
         Map<Long, Long> questionsByModule = new HashMap<>();
         long totalQuestionCount = 0L;
-        for (Object[] row : progressSummaryRepository.questionTotalsByCourse(courseId)) {
-            long count = ((Number) row[2]).longValue();
-            totalQuestionCount += count;
-            if (row[1] != null) {
-                questionsByModule.put(((Number) row[1]).longValue(), count);
+        for (CourseProgressSummaryRepository.ModuleQuestionCount item : progressSummaryRepository.countTotalQuestionsByModule(courseId)) {
+            totalQuestionCount += item.count();
+            if (item.moduleId() != null) {
+                questionsByModule.put(item.moduleId(), item.count());
             }
         }
         List<ModuleItemDto> moduleDtos = modules.stream()
@@ -135,15 +133,7 @@ public class StudentCourseServiceImpl implements StudentCourseService {
             throw new BadRequestException("Invalid enrollment status");
         }
         Pageable pageable = createPageable(page, size, "newest", "enrolledAt");
-        Page<MyCourseDto> courses = enrollmentRepository.findMyCourses(userId, status, pageable);
-        Map<Long, Integer> progress = studentProgressService.liveProgressPercents(userId,
-                courses.getContent().stream().map(MyCourseDto::courseId).toList());
-        return courses.map(course -> {
-            int percent = progress.getOrDefault(course.courseId(), -1);
-            return new MyCourseDto(course.courseId(), course.title(), course.slug(), course.thumbnailUrl(),
-                    course.price(), course.category(), course.manager(), course.enrolledAt(), course.status(),
-                    percent < 0 ? course.progress() : percent, course.publishedExamCount(), course.deckCount(), course.nextExam());
-        });
+        return enrollmentRepository.findMyCourses(userId, status, pageable);
     }
 
     @Override
