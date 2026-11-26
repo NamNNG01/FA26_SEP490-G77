@@ -39,6 +39,12 @@ public class StudentPersonalizationController {
         return ResponseEntity.ok(ApiResponse.success(personalization.recommendations(user.getId(), courseId)));
     }
 
+    /** Free per-module standing (no AI): what the weakness page shows before any AI report. */
+    @GetMapping("/insights")
+    public ResponseEntity<ApiResponse<Insights>> insights(@AuthenticationPrincipal UserPrincipal user, @RequestParam Long courseId) {
+        return ResponseEntity.ok(ApiResponse.success(personalization.insights(user.getId(), courseId)));
+    }
+
     @PostMapping("/weakness-report")
     public ResponseEntity<ApiResponse<WeaknessReport>> weaknessReport(@AuthenticationPrincipal UserPrincipal user,
             @Valid @RequestBody WeaknessRequest request) {

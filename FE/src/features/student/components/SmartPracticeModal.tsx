@@ -30,8 +30,11 @@ import {
   studentPracticeExamService,
   type PracticeDifficulty,
   type PracticeExamType,
+  type PracticePlan,
 } from '@/services/studentPracticeExam.service';
 import { AiErrorAlert, AiSparkle, accuracyTone } from './aiUi';
+import type { BadgeVariant } from '@/components/ui/Badge';
+import type { Mastery } from '@/services/studentAi.service';
 import { TakeModePicker } from './TakeModeModal';
 import type { TakeAs } from '../examModes';
 
@@ -46,6 +49,34 @@ const MODE_TABS: Record<SmartPracticeMode, string> = { AI: 'AI', RANDOM: 'Random
 const MODE_BY_TAB: Record<string, SmartPracticeMode> = { AI: 'AI', Random: 'RANDOM' };
 
 type Phase = 'form' | 'processing' | 'completed' | 'failed';
+
+/** Random: SMART lets the BE spread the questions over the modules by the student's weak spots; CUSTOM = picked here. */
+type Allocation = 'SMART' | 'CUSTOM';
+
+const ALLOCATIONS: { value: Allocation; title: string; description: string; icon: React.ReactNode }[] = [
+  {
+    value: 'SMART',
+    title: 'Personalized',
+    description: 'More questions from your weak modules, your open mistakes and questions you have not seen yet.',
+    icon: <Icon.Target className="w-5 h-5" />,
+  },
+  {
+    value: 'CUSTOM',
+    title: 'Choose modules',
+    description: 'Random questions; pick the modules and how many questions each gives.',
+    icon: <Icon.Shuffle className="w-5 h-5" />,
+  },
+];
+
+const MASTERY_LABEL: Record<Mastery, { label: string; variant: BadgeVariant }> = {
+  NOT_STARTED: { label: 'New', variant: 'default' },
+  WEAK: { label: 'Weak', variant: 'danger' },
+  LEARNING: { label: 'Learning', variant: 'warning' },
+  STRONG: { label: 'Strong', variant: 'info' },
+  MASTERED: { label: 'Mastered', variant: 'success' },
+};
+
+const PLAN_DEBOUNCE_MS = 400;
 
 const EXAM_TYPE_OPTIONS: { value: PracticeExamType; label: string }[] = [
   { value: 'MIXED', label: 'All types (Balanced)' },
@@ -117,6 +148,10 @@ export function SmartPracticeModal({
   const [modulesError, setModulesError] = useState<string | null>(null);
   const [loadingModules, setLoadingModules] = useState(false);
   const [randomError, setRandomError] = useState<string | null>(null);
+  const [allocation, setAllocation] = useState<Allocation>('SMART');
+  const [plan, setPlan] = useState<PracticePlan | null>(null);
+  const [planError, setPlanError] = useState<string | null>(null);
+  const [planLoading, setPlanLoading] = useState(false);
 
   const [phase, setPhase] = useState<Phase>('form');
   const [busy, setBusy] = useState(false);
@@ -155,6 +190,9 @@ export function SmartPracticeModal({
     setDifficulty('');
     setModuleIds([]);
     setModuleCounts({});
+    setAllocation('SMART');
+    setPlan(null);
+    setPlanError(null);
     setAiContext('');
     setTouched(false);
     setPhase('form');
@@ -224,8 +262,9 @@ export function SmartPracticeModal({
   };
 
   const limits = limitsOf(mode);
+  const smart = mode === 'RANDOM' && allocation === 'SMART';
   // Random with modules picked: the count is set per module and the total is their sum.
-  const perModule = mode === 'RANDOM' && moduleIds.length > 0;
+  const perModule = mode === 'RANDOM' && !smart && moduleIds.length > 0;
   const moduleCountErrors: Record<string, string | undefined> = {};
   for (const id of moduleIds) {
     const raw = moduleCounts[id] ?? '';
@@ -260,6 +299,40 @@ export function SmartPracticeModal({
           : `Enter ${limits.questions.min} – ${limits.questions.max} questions.`,
   };
   const invalid = Boolean(errors.title || errors.course || errors.count || errors.minutes);
+  const countInvalid = Boolean(errors.count);
+
+  // Personalized: preview how the BE would split the questions, again whenever the inputs settle.
+  useEffect(() => {
+    setPlan(null);
+    setPlanError(null);
+    if (!open || phase !== 'form' || !smart || !courseId || countInvalid) return;
+    let cancelled = false;
+    const timer = window.setTimeout(() => {
+      setPlanLoading(true);
+      studentPracticeExamService
+        .plan({
+          courseId: Number(courseId),
+          questionCount: countNum,
+          durationMinutes: limits.minutes.max,
+          examType,
+          difficulty: difficulty || undefined,
+          allocation: 'SMART',
+        })
+        .then(p => {
+          if (!cancelled) setPlan(p);
+        })
+        .catch(err => {
+          if (!cancelled) setPlanError(getPracticeError(err, 'Could not preview the question split.'));
+        })
+        .finally(() => {
+          if (!cancelled) setPlanLoading(false);
+        });
+    }, PLAN_DEBOUNCE_MS);
+    return () => {
+      cancelled = true;
+      window.clearTimeout(timer);
+    };
+  }, [open, phase, smart, courseId, countNum, countInvalid, examType, difficulty, limits.minutes.max]);
 
   const generateAi = async () => {
     setBusy(true);
@@ -292,13 +365,14 @@ export function SmartPracticeModal({
         questionCount: countNum,
         durationMinutes: minutesNum,
         examType,
-        categoryIds: moduleIds.length > 0 ? moduleIds.map(Number) : undefined,
+        categoryIds: !smart && moduleIds.length > 0 ? moduleIds.map(Number) : undefined,
         moduleQuestionCounts: perModule
           ? moduleIds.map(id => ({ categoryId: Number(id), questionCount: Number(moduleCounts[id]) }))
           : undefined,
         difficulty: difficulty || undefined,
         title: title.trim(),
         mode: takeAs,
+        allocation: smart ? 'SMART' : undefined,
       });
       onClose();
       navigate(studentTakeExamPath(created.examId, takeAs));
@@ -353,7 +427,7 @@ export function SmartPracticeModal({
     <Modal open={open} onClose={() => !busy && onClose()} title="Create Practice Exam" size="lg" footer={footer}
       description={phase === 'form' && (mode === 'AI'
         ? 'The AI looks at the questions you got wrong in a course and builds a practice exam focused on your weak modules (about 70 % weak, 20 % medium, 10 % strong). You need at least 5 finished exams in the course.'
-        : 'Random questions from the course question bank. Narrow them down by module and difficulty if you like. Practice exams do not count towards your course progress.')}
+        : 'Questions from the course question bank, personalized to your weak spots or from the modules you pick. Practice exams do not count towards your course progress.')}
       error={mode === 'RANDOM' ? randomError && <Alert type="error" message={randomError} /> : error && <AiErrorAlert error={error} />}>
       <div className="space-y-5">
         {phase === 'form' && (
@@ -450,6 +524,10 @@ export function SmartPracticeModal({
                         />
                       </div>
                     )}
+                    <div className="min-w-0 space-y-1.5 sm:col-span-2">
+                      <span className="block text-sm font-medium text-content-secondary">Questions from</span>
+                      <AllocationPicker value={allocation} onChange={setAllocation} />
+                    </div>
                     <Select
                       label="Exam Type"
                       options={EXAM_TYPE_OPTIONS}
@@ -462,6 +540,11 @@ export function SmartPracticeModal({
                       value={difficulty}
                       onChange={v => setDifficulty(v as '' | PracticeDifficulty)}
                     />
+                    {smart ? (
+                      <div className="min-w-0 sm:col-span-2">
+                        <PlanPreview plan={plan} loading={planLoading} error={planError} waiting={countInvalid} />
+                      </div>
+                    ) : (
                     <div className="min-w-0 space-y-1.5 sm:col-span-2">
                       <MultiSelect
                         label="Modules (optional)"
@@ -513,6 +596,7 @@ export function SmartPracticeModal({
                         </>
                       )}
                     </div>
+                    )}
                   </>
                 )}
               </div>
@@ -589,6 +673,87 @@ function CategoryList({ title, items, empty }: { title: string; items: CategoryA
           ))}
         </ul>
       )}
+    </div>
+  );
+}
+
+function AllocationPicker({ value, onChange }: { value: Allocation; onChange: (value: Allocation) => void }) {
+  return (
+    <div role="radiogroup" aria-label="Questions from" className="grid gap-2 sm:grid-cols-2">
+      {ALLOCATIONS.map(a => {
+        const selected = value === a.value;
+        return (
+          <button
+            key={a.value}
+            type="button"
+            role="radio"
+            aria-checked={selected}
+            onClick={() => onChange(a.value)}
+            className={`flex items-start gap-3 rounded-[12px] border px-3 py-3 text-left transition-colors focus-visible:outline-2 focus-visible:outline-primary ${
+              selected ? 'border-primary bg-primary-light' : 'border-line hover:bg-surface-hover'
+            }`}
+          >
+            <span className={`mt-0.5 flex-shrink-0 ${selected ? 'text-primary' : 'text-content-subtle'}`}>{a.icon}</span>
+            <span className="min-w-0">
+              <span className="block text-sm font-semibold text-content">{a.title}</span>
+              <span className="mt-0.5 block text-xs text-content-soft">{a.description}</span>
+            </span>
+          </button>
+        );
+      })}
+    </div>
+  );
+}
+
+/** The BE's SMART split for the current inputs: the modules that get questions, and why. */
+function PlanPreview({
+  plan,
+  loading,
+  error,
+  waiting,
+}: {
+  plan: PracticePlan | null;
+  loading: boolean;
+  error: string | null;
+  waiting: boolean;
+}) {
+  if (waiting) return <p className="text-xs text-content-subtle">Enter the number of questions to see how they are split over the modules.</p>;
+  if (error) return <p className="text-xs text-danger">{error}</p>;
+  if (!plan) {
+    return (
+      <p className="flex items-center gap-2 text-xs text-content-subtle" role="status">
+        {loading && <span className="w-3 h-3 border-2 border-current border-t-transparent rounded-full spinner" />}
+        Working out your split…
+      </p>
+    );
+  }
+  return (
+    <div className="space-y-1.5">
+      <p className="text-xs font-medium text-content-secondary">Your split</p>
+      <ul className="divide-y divide-line rounded-[10px] border border-line">
+        {plan.modules
+          .filter(m => m.questionCount > 0)
+          .map(m => (
+            <li key={m.categoryId ?? 'general'} className="flex items-center gap-3 px-3 py-2">
+              <span className="min-w-0 flex-1">
+                <span className="flex flex-wrap items-center gap-1.5">
+                  <span className="truncate text-sm text-content" title={m.name}>
+                    {m.name}
+                  </span>
+                  <Badge size="sm" variant={MASTERY_LABEL[m.mastery].variant}>
+                    {MASTERY_LABEL[m.mastery].label}
+                  </Badge>
+                </span>
+                <span className="block text-2xs text-content-subtle">
+                  {m.answered === 0 ? 'Not practised yet' : `${m.accuracy}% correct`}
+                  {m.stillWrong > 0 ? ` · ${m.stillWrong} mistake${m.stillWrong === 1 ? '' : 's'} to fix` : ''}
+                </span>
+              </span>
+              <span className="flex-shrink-0 text-sm font-semibold text-content">{m.questionCount}</span>
+            </li>
+          ))}
+      </ul>
+      <p className="text-2xs text-content-subtle">Inside each module your open mistakes come first, then questions you have not seen.</p>
     </div>
   );
 }

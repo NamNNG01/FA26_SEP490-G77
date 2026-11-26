@@ -2,6 +2,7 @@ import { api } from './api';
 import type { ApiResponse } from '@/types/api';
 import type { PageResponse } from './course.service';
 import type { AnswerResponse, AttemptQuestion, ResultQuestion } from './studentAttempt.service';
+import type { Mastery } from './studentAi.service';
 
 /**
  * StudentPracticeExamService — custom practice exams (Deadline1 §18, PracticeExamController).
@@ -37,6 +38,27 @@ export interface PracticeExamRequest {
   title?: string;
   /** How it is taken: EXAM is saved as PRACTICE_EXAM, PRACTICE as PRACTICE (BE default EXAM). */
   mode?: 'EXAM' | 'PRACTICE';
+  /** SMART: the BE spreads questionCount over the modules by the student's weak spots (module fields are ignored). */
+  allocation?: 'SMART' | 'CUSTOM';
+}
+
+/** One module of a SMART split (POST /student/practice-exams/plan); categoryId null = questions outside any module. */
+export interface PracticePlanItem {
+  categoryId: number | null;
+  name: string;
+  questionCount: number;
+  available: number;
+  mastery: Mastery;
+  accuracy: number;
+  answered: number;
+  stillWrong: number;
+  priority: number;
+}
+
+export interface PracticePlan {
+  questionCount: number;
+  /** Every module of the pool, highest priority first (questionCount may be 0). */
+  modules: PracticePlanItem[];
 }
 
 /** PQ-01 */
@@ -217,6 +239,11 @@ export const studentPracticeExamService = {
   /** PQ-01 */
   async create(body: PracticeExamRequest): Promise<PracticeExamCreated> {
     return api.post<ApiResponse<PracticeExamCreated>>('/student/practice-exams', body).then(r => r.data);
+  },
+
+  /** Preview of a SMART split for the same body as create; creates nothing. */
+  async plan(body: PracticeExamRequest): Promise<PracticePlan> {
+    return api.post<ApiResponse<PracticePlan>>('/student/practice-exams/plan', body).then(r => r.data);
   },
 
   /** PQ-02 */
