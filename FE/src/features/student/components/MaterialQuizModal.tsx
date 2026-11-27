@@ -60,7 +60,7 @@ function formatSize(bytes: number) {
 }
 
 /**
- * Material to Quiz Creator — upload a PDF / DOCX (MQ-01) or pick one uploaded before (MQ-02),
+ * AI Quiz Generator (Report-3 #24, was "Material to Quiz Creator") — upload a PDF / DOCX (MQ-01) or pick one uploaded before (MQ-02),
  * let the AI write the multiple-choice questions (MQ-03, polled with MQ-04), then start the quiz
  * (MQ-05) on the take-exam screen. Generated quizzes are listed in Exam History (MQ-06).
  * The modal cannot be closed while the file uploads or the quiz is being generated. A file uploaded before
@@ -444,7 +444,7 @@ export function MaterialQuizModal({
   const locked = busy || starting || phase === 'processing';
 
   return (
-    <Modal open={open} onClose={onClose} dismissible={!locked} title="Material to Quiz Creator" size="lg" footer={footer}
+    <Modal open={open} onClose={onClose} dismissible={!locked} title="AI Quiz Generator" size="lg" footer={footer}
       description={phase === 'form' && 'Upload your lecture notes or slides as PDF / DOCX and the AI writes multiple-choice questions from them. Longer files use more of your AI quota.'}
       error={(phase === 'form' || phase === 'completed') && error && <AiErrorAlert error={error} />}>
       <div className="space-y-5">

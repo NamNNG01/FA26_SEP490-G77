@@ -476,7 +476,7 @@ export const menuByRole: Record<string, MenuItem[]> = {
     },
     {
       id: "admin-subscriptions",
-      title: "Subscriptions",
+      title: "Pricing Plans",
       icon: <Icon.Package className="w-4 h-4" />,
       path: ROUTES.adminSubscriptions,
     },

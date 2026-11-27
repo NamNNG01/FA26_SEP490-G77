@@ -27,11 +27,11 @@ type ExamKind = 'EXAM' | 'PRACTICE' | 'PRACTICE_EXAM' | 'SMART_PRACTICE' | 'MATE
 const PRACTICE_ALIASES: readonly ExamKind[] = ['PRACTICE_EXAM', 'SMART_PRACTICE', 'MATERIAL_QUIZ'];
 
 const KIND_LABEL: Record<ExamKind, string> = {
-  EXAM: 'Course exam',
-  PRACTICE: 'Practice exam',
-  PRACTICE_EXAM: 'Practice exam',
-  SMART_PRACTICE: 'Practice exam',
-  MATERIAL_QUIZ: 'Practice exam',
+  EXAM: 'Simulation Exam',
+  PRACTICE: 'Practice Exam',
+  PRACTICE_EXAM: 'Practice Exam',
+  SMART_PRACTICE: 'Practice Exam',
+  MATERIAL_QUIZ: 'AI-Generated Quiz',
   CONTEST: 'Contest',
 };
 const KIND_BADGE: Record<ExamKind, BadgeVariant> = {
@@ -351,14 +351,14 @@ export function MyExamsPage() {
     <div className={`${STUDENT_PAGE_CLASS} space-y-[clamp(1.25rem,2.5vw,1.75rem)]`}>
       <PageTitle
         title="Exam History"
-        subtitle="Course exams, practice exams and quizzes from your materials — with your best score on each."
+        subtitle="Simulation exams, practice exams and AI-generated quizzes — with your best score on each."
         action={
           <div className="flex w-full flex-wrap items-center gap-2 sm:w-auto">
             <Button variant="outline" icon={<Icon.Zap className="w-4 h-4" />} onClick={() => setQuizModal('personal')}>
-              Create practice exam
+              Create Practice Exam
             </Button>
             <Button variant="outline" icon={<Icon.Brain className="w-4 h-4" />} onClick={() => setQuizModal('material')}>
-              Material to Quiz Creator
+              AI Quiz Generator
             </Button>
           </div>
         }

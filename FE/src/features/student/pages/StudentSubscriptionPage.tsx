@@ -90,7 +90,7 @@ export function StudentSubscriptionPage() {
 
   return (
     <div className={`${STUDENT_PAGE_CLASS} space-y-6`}>
-      <PageTitle title="Subscription" subtitle="Your study plan and the plans you can upgrade to." />
+      <PageTitle title="My Pricing Plan" subtitle="Your study plan and the plans you can upgrade to." />
 
       <CurrentPlanCard loaded={current.loaded} subscription={current.data} balance={balance} onRetryBalance={refreshBalance} />
 
