@@ -354,7 +354,7 @@ public class StudentAttemptServiceImpl implements StudentAttemptService {
                     row.getGradingError(),
                     rubricType ? criteria(row, key, rawMaxPoints) : null,
                     GRADING_AI_GRADED.equals(row.getGradingStatus()) ? overallFeedback(row) : null,
-                    explanation(live.get(display.questionId())),
+                    explanation(live.get(display.questionId()), row.getQuestionVersion()),
                     correctAnswer(display.questionType(), key),
                     deepExplanation(row)));
         }
@@ -579,7 +579,7 @@ public class StudentAttemptServiceImpl implements StudentAttemptService {
         if (correctAnswer == null && isChoice(questionType)) {
             correctAnswer = new AttemptResponses.CorrectAnswer(null, null, null);
         }
-        String explanation = hasManagerExplanation(row.getQuestion())
+        String explanation = hasManagerExplanation(row.getQuestion(), row.getQuestionVersion())
                 ? row.getQuestion().getAiExplanation()
                 : null;
         result = new AttemptResponses.CheckResult(true, grade.correct(), correctOptionIds, correctAnswer, explanation);
@@ -627,7 +627,7 @@ public class StudentAttemptServiceImpl implements StudentAttemptService {
         List<Long> correctOptionIds = isChoice(questionType) && key.correctOptionIds() != null
                 ? key.correctOptionIds()
                 : List.of();
-        String explanation = hasManagerExplanation(live)
+        String explanation = hasManagerExplanation(live, row.getQuestionVersion())
                 ? live.getAiExplanation()
                 : null;
         return new AttemptResponses.PracticeKey(correctOptionIds, correctAnswer(questionType, key), explanation);
@@ -960,20 +960,30 @@ public class StudentAttemptServiceImpl implements StudentAttemptService {
         return null;
     }
 
-    private boolean hasManagerExplanation(Question question) {
+    private boolean hasManagerExplanation(Question question, Integer attemptQuestionVersion) {
         if (question == null || question.getAiExplanation() == null || question.getAiExplanation().isBlank()) {
             return false;
         }
         String source = question.getAiExplanationSource();
-        return source == null || source.isBlank() || "MANAGER".equals(source);
+        if (!(source == null || source.isBlank() || "MANAGER".equals(source))) {
+            return false;
+        }
+        if (question.getAiExplanationVersion() == null) {
+            return true;
+        }
+        Integer effectiveAttemptVersion = attemptQuestionVersion != null
+                ? attemptQuestionVersion
+                : question.getScoringVersion();
+        return Objects.equals(question.getAiExplanationVersion(), question.getScoringVersion())
+                && Objects.equals(question.getScoringVersion(), effectiveAttemptVersion);
     }
 
     /**
      * Explanations on SA-05 are free manager-authored text only; AI-generated explanations go
      * through SE-01 so each student's quota is checked and charged on access.
      */
-    private AttemptResponses.Explanation explanation(Question question) {
-        if (!hasManagerExplanation(question)) {
+    private AttemptResponses.Explanation explanation(Question question, Integer attemptQuestionVersion) {
+        if (!hasManagerExplanation(question, attemptQuestionVersion)) {
             return null;
         }
         return new AttemptResponses.Explanation(question.getAiExplanation(), "MANAGER");

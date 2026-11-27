@@ -74,8 +74,8 @@ function outcomeOf(q: ResultQuestion): Outcome {
   return 'incorrect';
 }
 
-/** Essay / diagram answers get rubric feedback, not an explanation; CODE gets both. */
-const hasExplanation = (q: ResultQuestion) => q.questionType === 'CODE' || !RUBRIC_TYPES.has(q.questionType);
+/** Every question type supports explanations: basic (SE-01) when available, and Deep AI Explanation (SE-03). */
+const hasExplanation = (_q: ResultQuestion) => true;
 
 /** SE-01 takes at most 20 question ids per call. */
 const EXPLAIN_BATCH = 20;
@@ -127,6 +127,7 @@ interface ExplanationState {
   text: string | null;
   loading: boolean;
   error: string | null;
+  notApplicable?: boolean;
 }
 
 const sortResult = (res: AttemptResult): AttemptResult => ({
@@ -437,6 +438,7 @@ export function StudentExamResultPage() {
               chunk.map(id => {
                 const item = res.items.find(x => x.questionId === id);
                 if (item?.explanation) return [id, { text: item.explanation, loading: false, error: null }];
+                if (item?.source === 'NOT_APPLICABLE') return [id, { text: null, loading: false, error: null, notApplicable: true }];
                 const error = item?.reason
                   ? `No explanation available (${item.reason.replace(/_/g, ' ').toLowerCase()}).`
                   : 'No explanation available.';
@@ -1247,7 +1249,7 @@ function ExplanationBox({
       </button>
       {open && (
         <div id={panelId} className="px-3 pb-3">
-          {text || q.deepExplanation?.text ? (
+          {text || q.deepExplanation?.text || state?.notApplicable ? (
             onDeepExplain ? (
               <DeepAiExplanation
                 original={text}

@@ -3,8 +3,11 @@ package com.examprep.controllers.student;
 import com.examprep.entities.AiUsageLog;
 import com.examprep.entities.CodeQuestionConfig;
 import com.examprep.entities.CodeTestCase;
+import com.examprep.entities.QuestionPracticeAnswer;
+import com.examprep.entities.QuestionPracticeSessionQuestion;
 import com.examprep.entities.StudentQuestionReview;
 import com.examprep.security.UserPrincipal;
+import com.examprep.services.ModulePracticeGradingWorker;
 import com.examprep.services.PistonClient;
 import com.fasterxml.jackson.databind.JsonNode;
 import org.junit.jupiter.api.Test;
@@ -14,6 +17,7 @@ import java.time.Instant;
 import java.util.List;
 import java.util.Map;
 
+import static org.hamcrest.Matchers.containsString;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNull;
@@ -607,6 +611,132 @@ class ModulePracticeAiApiIntegrationTest extends ModulePracticeTestBase {
                 .andExpect(jsonPath("$.data.code").value("QUOTA_EXCEEDED"))
                 .andExpect(jsonPath("$.data.estimatedTokens").value(org.hamcrest.Matchers.greaterThan(0)))
                 .andExpect(jsonPath("$.data.availableTokens").value(0));
+    }
+
+    @Test
+    void mp09ServesPreAuthoredAndCachedRubricExplanationsWithoutRateLimitingFreeHits() throws Exception {
+        essay.setAiExplanation("Discuss roots, reachability, and GC pauses.");
+        essay.setAiExplanationSource("MANAGER");
+        essay.setAiExplanationVersion(essay.getScoringVersion());
+        diagram.setAiExplanation("Model Customer placing an Order.");
+        diagram.setAiExplanationSource("AI");
+        diagram.setAiExplanationVersion(diagram.getScoringVersion());
+        em.flush();
+
+        JsonNode session = sessionOf(student, moduleA.getModuleId());
+        long sessionId = session.path("sessionId").asLong();
+        long essaySqId = sessionQuestionIdOf(session, essay.getQuestionId());
+        long diagramSqId = sessionQuestionIdOf(session, diagram.getQuestionId());
+        answer(student, sessionId, essaySqId, "{\"response\":{\"text\":\"GC collects unreachable objects.\"}}");
+        answer(student, sessionId, diagramSqId, "{\"response\":{\"drawioXml\":" + quote(DIAGRAM_XML) + "}}");
+
+        JsonNode essayExp = data(explain(student, essay.getQuestionId(),
+                "{\"sessionId\":" + sessionId + ",\"sessionQuestionId\":" + essaySqId + "}")
+                .andExpect(status().isOk()));
+        assertEquals("MANAGER", essayExp.path("source").asText());
+        assertEquals(10_000L, essayExp.path("quota").path("totalRemaining").asLong());
+
+        JsonNode diagramExp = data(explain(student, diagram.getQuestionId(),
+                "{\"sessionId\":" + sessionId + ",\"sessionQuestionId\":" + diagramSqId + "}")
+                .andExpect(status().isOk()));
+        assertEquals("CACHED", diagramExp.path("source").asText());
+        assertEquals(10_000L, diagramExp.path("quota").path("totalRemaining").asLong());
+
+        // Free cache hits must not trip MP-09 rate limit (10/min).
+        for (int i = 0; i < 12; i++) {
+            explain(student, essay.getQuestionId(),
+                    "{\"sessionId\":" + sessionId + ",\"sessionQuestionId\":" + essaySqId + "}")
+                    .andExpect(status().isOk());
+        }
+        assertEquals(0, REQUESTS.size());
+    }
+
+    @Test
+    void mp09RejectsStaleVersionedManagerExplanation() throws Exception {
+        JsonNode session = sessionOf(student, moduleA.getModuleId());
+        long sessionId = session.path("sessionId").asLong();
+        long sqId = sessionQuestionIdOf(session, single.getQuestionId());
+        answer(student, sessionId, sqId, "{\"response\":{\"selectedOptionIds\":[" + singleRight.getOptionId() + "]}}");
+
+        single.setAiExplanation("Old v1 manager explanation.");
+        single.setAiExplanationSource("MANAGER");
+        single.setAiExplanationVersion(1);
+        single.setScoringVersion(2);
+        em.flush();
+
+        REPLIES.add(explanationReply("Regenerated after version bump."));
+        JsonNode res = data(explain(student, single.getQuestionId(),
+                "{\"sessionId\":" + sessionId + ",\"sessionQuestionId\":" + sqId + "}")
+                .andExpect(status().isOk()));
+        assertEquals("GENERATED", res.path("source").asText());
+        assertEquals("Regenerated after version bump.", res.path("explanation").asText());
+    }
+
+    @Test
+    void mp10NormalizesDiagramUsesSnapshotIncludesGradingResultAndCodeWorkerIncludesReference() throws Exception {
+        em.persist(CodeQuestionConfig.builder().questionId(code.getQuestionId()).allowedLanguages("[\"JAVA\"]")
+                .codeTemplate("class Main {}").timeLimitMs(2000).memoryLimitKb(262144)
+                .createdAt(Instant.now()).updatedAt(Instant.now()).build());
+        em.persist(CodeTestCase.builder().question(code).inputData("abc").expectedOutput("cba")
+                .hidden(false).orderIndex(0).createdAt(Instant.now()).build());
+        em.persist(CodeTestCase.builder().question(code).inputData("secret-in").expectedOutput("secret-out")
+                .hidden(true).orderIndex(1).createdAt(Instant.now()).build());
+        em.flush();
+
+        JsonNode session = sessionOf(student, moduleA.getModuleId());
+        long sessionId = session.path("sessionId").asLong();
+        long diagramSqId = sessionQuestionIdOf(session, diagram.getQuestionId());
+        long codeSqId = sessionQuestionIdOf(session, code.getQuestionId());
+
+        JsonNode ans = answer(student, sessionId, diagramSqId,
+                "{\"response\":{\"drawioXml\":" + quote(DIAGRAM_XML) + "}}");
+        long practiceAnswerId = ans.path("practiceAnswerId").asLong();
+
+        REPLIES.add(gradingReply("Correct actors and relation."));
+        assertTrue(gradingWorker.gradeNext());
+        REQUESTS.clear();
+
+        diagram.setEssayGradingRubric("{\"criteria\":[{\"name\":\"LIVE_CHANGED\",\"weight\":1}]}");
+        diagram.setAiExplanation("Stale explanation");
+        diagram.setAiExplanationSource("AI");
+        diagram.setAiExplanationVersion(0);
+        em.flush();
+
+        REPLIES.add(JSON.writeValueAsString(Map.of("explanation",
+                "Your diagram captures Customer -> Order accurately.")));
+        mvc.perform(post("/api/v1/student/practice/questions/" + diagram.getQuestionId() + "/deep-explanation")
+                        .with(user(UserPrincipal.create(student)))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"sessionId\":" + sessionId + ",\"sessionQuestionId\":" + diagramSqId
+                                + ",\"practiceAnswerId\":" + practiceAnswerId + "}"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.explanation").value(containsString("Customer -> Order")));
+
+        String req = REQUESTS.get(0);
+        assertTrue(req.contains("Customer"));
+        assertTrue(req.contains("places"));
+        assertFalse(req.contains("mxGeometry"));
+        assertTrue(req.contains("<student_answer>"));
+        assertTrue(req.contains("modelAnswer"));
+        assertTrue(req.contains("gradingResult"));
+        assertTrue(req.contains("Good work overall."));
+        assertFalse(req.contains("promptVersion"));
+        assertFalse(req.contains("LIVE_CHANGED"));
+        assertFalse(req.contains("Stale explanation"));
+
+        // Verify ModulePracticeGradingWorker.prepare includes language & public codeReference (no hidden cases).
+        QuestionPracticeSessionQuestion codeSq = em.find(QuestionPracticeSessionQuestion.class, codeSqId);
+        QuestionPracticeAnswer codeAns = QuestionPracticeAnswer.builder()
+                .sessionQuestion(codeSq)
+                .attemptNumber(1)
+                .response("{\"language\":\"JAVA\",\"text\":\"return new StringBuilder(s).reverse().toString();\"}")
+                .build();
+        ModulePracticeGradingWorker.Prepared prepared = gradingWorker.prepare(codeAns, codeSq);
+        assertNull(prepared.error());
+        assertTrue(prepared.prompt().contains("Language: JAVA"));
+        assertTrue(prepared.prompt().contains("codeReference"));
+        assertTrue(prepared.prompt().contains("abc"));
+        assertFalse(prepared.prompt().contains("secret-in"));
     }
 
     // ------------------------------------------------------------------ helpers
