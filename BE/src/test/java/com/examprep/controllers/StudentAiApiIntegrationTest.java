@@ -181,9 +181,9 @@ public class StudentAiApiIntegrationTest {
         explain(student, choice.getQuestionId()).andExpect(status().isOk())
                 .andExpect(jsonPath("$.data.items[0].source").value("CACHED"))
                 .andExpect(jsonPath("$.data.items[0].explanation").value(containsString("extends")))
-                .andExpect(jsonPath("$.data.quota.freeRemaining").value(org.hamcrest.Matchers.lessThan(10_000 - 230)));
+                .andExpect(jsonPath("$.data.quota.freeRemaining").value(10_000 - 230));
         assertEquals(1, REQUESTS.size());
-        assertEquals(2, countLogs());
+        assertEquals(1, countLogs());
     }
 
     @Test void cachedAiExplanationIsHiddenFromResultAndDeductsSecondStudentsTokensWhileManagerStaysFree() throws Exception {
@@ -224,18 +224,18 @@ public class StudentAiApiIntegrationTest {
                 .andExpect(jsonPath("$.data.questions[1].questionId").value(managed.getQuestionId()))
                 .andExpect(jsonPath("$.data.questions[1].explanation.source").value("MANAGER"));
 
-        // Student B requests SE-01: reuses DB explanation (no new Gemini request) AND deducts Student B's tokens.
+        // Student B requests SE-01: reuses DB explanation (no new Gemini request) and costs 0 tokens.
         explainRaw(other, otherAttempt.getAttemptId(), "{\"questionIds\":[" + choice.getQuestionId() + "]}")
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.data.items[0].source").value("CACHED"))
                 .andExpect(jsonPath("$.data.items[0].explanation").value("extends creates a subclass."))
-                .andExpect(jsonPath("$.data.quota.freeRemaining").value(org.hamcrest.Matchers.lessThan(10_000)));
+                .andExpect(jsonPath("$.data.quota.freeRemaining").value(10_000));
         assertEquals(1, REQUESTS.size(), "cached AI explanation must not call Gemini again");
         long otherLogs = em.createQuery("select count(l) from AiUsageLog l where l.user = :u and l.status = 'SUCCESS'", Long.class)
                 .setParameter("u", other).getSingleResult();
-        assertEquals(1L, otherLogs);
+        assertEquals(0L, otherLogs);
 
-        // Student C with 0 quota gets 402 on the cached AI explanation, while Manager explanation stays free.
+        // Student C with 0 quota still gets 200 on a cached AI explanation (free) and Manager explanation stays free.
         User broke = account(User.ROLE_STUDENT);
         em.persist(Enrollment.builder().course(course).user(broke).enrolledAt(Instant.now()).status(Enrollment.STATUS_ACTIVE).build());
         ExamAttempt brokeAttempt = ExamAttempt.builder().exam(exam).user(broke).startTime(Instant.now().minus(1, ChronoUnit.HOURS))
@@ -257,7 +257,9 @@ public class StudentAiApiIntegrationTest {
         em.flush();
 
         explainRaw(broke, brokeAttempt.getAttemptId(), "{\"questionIds\":[" + choice.getQuestionId() + "]}")
-                .andExpect(status().isPaymentRequired());
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.items[0].source").value("CACHED"))
+                .andExpect(jsonPath("$.data.items[0].explanation").value("extends creates a subclass."));
         explainRaw(broke, brokeAttempt.getAttemptId(), "{\"questionIds\":[" + managed.getQuestionId() + "]}")
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.data.items[0].source").value("MANAGER"));
@@ -550,6 +552,69 @@ public class StudentAiApiIntegrationTest {
                 .andExpect(jsonPath("$.data.free.monthlyLimit").value(0))
                 .andExpect(jsonPath("$.data.free.remaining").value(0))
                 .andExpect(jsonPath("$.data.expiredPlan").doesNotExist());
+    }
+
+    // ------------------------------------------------------------------ SE-03
+
+    @Test void deepExplanationAnalyzesStudentAnswerPersistsOnResultAndChargesOnce() throws Exception {
+        REPLIES.add(json.writeValueAsString(Map.of("explanation",
+                "You picked implements, which is for interfaces; extends creates a subclass.")));
+        String path = "/api/v1/student/attempts/" + attempt.getAttemptId()
+                + "/questions/" + choice.getQuestionId() + "/deep-explanation";
+
+        mvc.perform(post(path).with(user(UserPrincipal.create(student)))
+                        .contentType(MediaType.APPLICATION_JSON).content("{}"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.questionId").value(choice.getQuestionId()))
+                .andExpect(jsonPath("$.data.explanation").value(containsString("implements")))
+                .andExpect(jsonPath("$.data.tokensUsed").value(230))
+                .andExpect(jsonPath("$.data.remainingTokens").value(10_000 - 230));
+        assertEquals(1, REQUESTS.size());
+        assertTrue(REQUESTS.get(0).contains("implements"));
+        assertTrue(REQUESTS.get(0).contains("extends"));
+
+        // SA-05 includes the persisted deep explanation.
+        mvc.perform(get("/api/v1/student/attempts/" + attempt.getAttemptId() + "/result")
+                        .with(user(UserPrincipal.create(student))))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.questions[0].deepExplanation.text").value(containsString("implements")));
+
+        // Calling SE-03 again returns the saved text with tokensUsed = 0 and no new AI call.
+        mvc.perform(post(path).with(user(UserPrincipal.create(student)))
+                        .contentType(MediaType.APPLICATION_JSON).content("{}"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.explanation").value(containsString("implements")))
+                .andExpect(jsonPath("$.data.tokensUsed").value(0))
+                .andExpect(jsonPath("$.data.remainingTokens").value(10_000 - 230));
+        assertEquals(1, REQUESTS.size());
+        assertEquals(1, countLogs());
+    }
+
+    @Test void deepExplanationEnforcesStateOwnershipAnd429QuotaExceeded() throws Exception {
+        String path = "/api/v1/student/attempts/" + attempt.getAttemptId()
+                + "/questions/" + choice.getQuestionId() + "/deep-explanation";
+        mvc.perform(post(path).with(user(UserPrincipal.create(other)))
+                        .contentType(MediaType.APPLICATION_JSON).content("{}"))
+                .andExpect(status().isForbidden());
+        mvc.perform(post("/api/v1/student/attempts/" + attempt.getAttemptId() + "/questions/999999/deep-explanation")
+                        .with(user(UserPrincipal.create(student)))
+                        .contentType(MediaType.APPLICATION_JSON).content("{}"))
+                .andExpect(status().isNotFound());
+
+        spend("FREE", 20_000);
+        mvc.perform(post(path).with(user(UserPrincipal.create(student)))
+                        .contentType(MediaType.APPLICATION_JSON).content("{}"))
+                .andExpect(status().isTooManyRequests())
+                .andExpect(jsonPath("$.data.code").value("QUOTA_EXCEEDED"))
+                .andExpect(jsonPath("$.data.estimatedTokens").value(org.hamcrest.Matchers.greaterThan(0)))
+                .andExpect(jsonPath("$.data.availableTokens").value(0));
+
+        attempt.setStatus("IN_PROGRESS");
+        em.flush();
+        mvc.perform(post(path).with(user(UserPrincipal.create(student)))
+                        .contentType(MediaType.APPLICATION_JSON).content("{}"))
+                .andExpect(status().isConflict());
+        assertEquals(0, REQUESTS.size());
     }
 
     // ------------------------------------------------------------------ helpers

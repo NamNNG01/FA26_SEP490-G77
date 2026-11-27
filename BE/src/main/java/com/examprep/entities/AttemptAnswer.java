@@ -102,4 +102,7 @@ public class AttemptAnswer implements Serializable {
     @JdbcTypeCode(SqlTypes.JSON)
     @Column(name = "check_result", columnDefinition = "jsonb")
     private String checkResult;
+
+    @Column(name = "deep_explanation")
+    private String deepExplanation;
 }

@@ -4,12 +4,15 @@ import com.examprep.entities.AiUsageLog;
 import com.examprep.entities.CodeQuestionConfig;
 import com.examprep.entities.CodeTestCase;
 import com.examprep.entities.StudentQuestionReview;
+import com.examprep.security.UserPrincipal;
 import com.examprep.services.PistonClient;
 import com.fasterxml.jackson.databind.JsonNode;
 import org.junit.jupiter.api.Test;
+import org.springframework.http.MediaType;
 
 import java.time.Instant;
 import java.util.List;
+import java.util.Map;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
@@ -21,6 +24,8 @@ import static org.mockito.ArgumentMatchers.anyList;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.when;
 import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.user;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 /**
@@ -306,7 +311,7 @@ class ModulePracticeAiApiIntegrationTest extends ModulePracticeTestBase {
         assertEquals("AI", single.getAiExplanationSource());
         assertEquals(single.getScoringVersion(), single.getAiExplanationVersion());
 
-        // Student B practises the same question -> served from DB (no new provider call) AND Student B pays tokens.
+        // Student B practises the same question -> served from DB (no new provider call) and pays 0 tokens.
         enroll(otherStudent, course);
         em.flush();
         JsonNode sessionB = sessionOf(otherStudent, moduleA.getModuleId());
@@ -321,26 +326,22 @@ class ModulePracticeAiApiIntegrationTest extends ModulePracticeTestBase {
         assertEquals("CACHED", reused.path("source").asText());
         assertEquals("extends creates a subclass; implements is for interfaces.", reused.path("explanation").asText());
         assertEquals(1, REQUESTS.size(), "reused explanation must not call Gemini again");
-        assertTrue(reused.path("quota").path("totalRemaining").asLong() < 10_000L, "Student B's tokens must be deducted");
+        assertEquals(10_000L, reused.path("quota").path("totalRemaining").asLong(), "CACHED explanation must cost 0 tokens");
 
         List<AiUsageLog> logs = em.createQuery(
                         "SELECT l FROM AiUsageLog l WHERE l.purpose = 'EXPLANATION' ORDER BY l.logId",
                         AiUsageLog.class)
                 .getResultList();
-        assertEquals(2, logs.size(), "both generated and DB-cached AI explanations are logged");
+        assertEquals(1, logs.size(), "only the generated explanation is logged");
         assertEquals(student.getUserId(), logs.get(0).getUser().getUserId());
-        assertEquals(otherStudent.getUserId(), logs.get(1).getUser().getUserId());
-        assertEquals("db-cache", logs.get(1).getModel());
-        for (AiUsageLog log : logs) {
-            assertEquals("SUCCESS", log.getStatus());
-            assertEquals("FREE", log.getBillingSource());
-            assertEquals(1, log.getQuestionCount());
-            assertNull(log.getAttempt());
-        }
+        assertEquals("SUCCESS", logs.get(0).getStatus());
+        assertEquals("FREE", logs.get(0).getBillingSource());
+        assertEquals(1, logs.get(0).getQuestionCount());
+        assertNull(logs.get(0).getAttempt());
     }
 
     @Test
-    void aCurrentVersionAiExplanationOfTheBankIsReusedAndChargesTokens() throws Exception {
+    void aCurrentVersionAiExplanationOfTheBankIsReusedForFree() throws Exception {
         JsonNode session = sessionOf(student, moduleA.getModuleId());
         long sessionId = session.path("sessionId").asLong();
         long sessionQuestionId = sessionQuestionIdOf(session, single.getQuestionId());
@@ -358,19 +359,20 @@ class ModulePracticeAiApiIntegrationTest extends ModulePracticeTestBase {
         assertEquals("CACHED", cached.path("source").asText(), "a current-version explanation is reused");
         assertEquals("extends creates a subclass.", cached.path("explanation").asText());
         assertEquals(0, REQUESTS.size(), "a reused explanation does not call the AI provider");
-        assertEquals(1, count("SELECT COUNT(l) FROM AiUsageLog l WHERE l.purpose = 'EXPLANATION' AND l.status = 'SUCCESS'"));
-        assertTrue(cached.path("quota").path("totalRemaining").asLong() < 10_000L);
+        assertEquals(0, count("SELECT COUNT(l) FROM AiUsageLog l WHERE l.purpose = 'EXPLANATION'"));
+        assertEquals(10_000L, cached.path("quota").path("totalRemaining").asLong());
 
-        // Student with 0 quota gets 402 even when reusing a cached AI explanation.
+        // Student with 0 quota still gets 200 when reusing a cached AI explanation.
         consumeFreeQuota(brokeStudent);
         JsonNode brokeSession = sessionOf(brokeStudent, moduleA.getModuleId());
         long brokeSessionId = brokeSession.path("sessionId").asLong();
         long brokeSqId = sessionQuestionIdOf(brokeSession, single.getQuestionId());
         answer(brokeStudent, brokeSessionId, brokeSqId,
                 "{\"response\":{\"selectedOptionIds\":[" + singleRight.getOptionId() + "]}}");
-        explain(brokeStudent, single.getQuestionId(), "{\"sessionId\":" + brokeSessionId
+        JsonNode brokeCached = data(explain(brokeStudent, single.getQuestionId(), "{\"sessionId\":" + brokeSessionId
                 + ",\"sessionQuestionId\":" + brokeSqId + "}")
-                .andExpect(status().isPaymentRequired());
+                .andExpect(status().isOk()));
+        assertEquals("CACHED", brokeCached.path("source").asText());
         assertEquals(0, REQUESTS.size());
     }
 
@@ -548,6 +550,63 @@ class ModulePracticeAiApiIntegrationTest extends ModulePracticeTestBase {
         em.refresh(single);
         assertEquals("Because extends creates a subclass.", single.getAiExplanation());
         assertEquals("AI", single.getAiExplanationSource());
+    }
+
+    @Test
+    void deepExplanationAnalyzesPracticeAnswerCachesAndChecksQuota() throws Exception {
+        JsonNode session = sessionOf(student, moduleA.getModuleId());
+        long sessionId = session.path("sessionId").asLong();
+        long sessionQuestionId = sessionQuestionIdOf(session, single.getQuestionId());
+        JsonNode submitted = answer(student, sessionId, sessionQuestionId,
+                "{\"response\":{\"selectedOptionIds\":[" + singleWrong.getOptionId() + "]}}");
+        long practiceAnswerId = submitted.path("practiceAnswerId").asLong();
+
+        REPLIES.add(JSON.writeValueAsString(Map.of("explanation",
+                "You selected implements, which applies to interfaces; use extends for class inheritance.")));
+        String body = "{\"sessionId\":" + sessionId + ",\"sessionQuestionId\":" + sessionQuestionId
+                + ",\"practiceAnswerId\":" + practiceAnswerId + "}";
+
+        JsonNode first = data(mvc.perform(post("/api/v1/student/practice/questions/"
+                        + single.getQuestionId() + "/deep-explanation")
+                        .with(user(UserPrincipal.create(student)))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(body))
+                .andExpect(status().isOk()));
+        assertEquals(single.getQuestionId().longValue(), first.path("questionId").asLong());
+        assertTrue(first.path("explanation").asText().contains("implements"));
+        assertTrue(first.path("tokensUsed").asInt() > 0);
+        long remainingAfterFirst = first.path("remainingTokens").asLong();
+        assertTrue(remainingAfterFirst < 10_000L);
+        assertEquals(1, REQUESTS.size());
+        assertTrue(REQUESTS.get(0).contains("implements"));
+
+        // Second call for the same practiceAnswerId returns cached text with tokensUsed = 0.
+        JsonNode second = data(mvc.perform(post("/api/v1/student/practice/questions/"
+                        + single.getQuestionId() + "/deep-explanation")
+                        .with(user(UserPrincipal.create(student)))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(body))
+                .andExpect(status().isOk()));
+        assertEquals(first.path("explanation").asText(), second.path("explanation").asText());
+        assertEquals(0, second.path("tokensUsed").asInt());
+        assertEquals(remainingAfterFirst, second.path("remainingTokens").asLong());
+        assertEquals(1, REQUESTS.size());
+
+        // Exhausted quota returns 429 QUOTA_EXCEEDED with estimatedTokens & availableTokens.
+        consumeFreeQuota(brokeStudent);
+        JsonNode brokeSession = sessionOf(brokeStudent, moduleA.getModuleId());
+        long brokeSessionId = brokeSession.path("sessionId").asLong();
+        long brokeSqId = sessionQuestionIdOf(brokeSession, single.getQuestionId());
+        answer(brokeStudent, brokeSessionId, brokeSqId,
+                "{\"response\":{\"selectedOptionIds\":[" + singleWrong.getOptionId() + "]}}");
+        mvc.perform(post("/api/v1/student/practice/questions/" + single.getQuestionId() + "/deep-explanation")
+                        .with(user(UserPrincipal.create(brokeStudent)))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"sessionId\":" + brokeSessionId + ",\"sessionQuestionId\":" + brokeSqId + "}"))
+                .andExpect(status().isTooManyRequests())
+                .andExpect(jsonPath("$.data.code").value("QUOTA_EXCEEDED"))
+                .andExpect(jsonPath("$.data.estimatedTokens").value(org.hamcrest.Matchers.greaterThan(0)))
+                .andExpect(jsonPath("$.data.availableTokens").value(0));
     }
 
     // ------------------------------------------------------------------ helpers

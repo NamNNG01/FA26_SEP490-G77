@@ -6,7 +6,16 @@ import { Select } from '@/components/ui/Select';
 import { Spinner } from '@/components/ui/Spinner';
 import { useToast } from '@/components/ui/ToastHost';
 import { Icon } from '@/assets/icons';
-import { AI_CONTEXT_MAX, questionService, type QuestionAiGenerateRequest, type QuestionAiPreview, type QuestionDifficulty, type QuestionType } from '@/services/question.service';
+import {
+  AI_CONTEXT_MAX,
+  AI_MATERIAL_EXTENSIONS,
+  IMPORT_MAX_BYTES,
+  questionService,
+  type QuestionAiGenerateRequest,
+  type QuestionAiPreview,
+  type QuestionDifficulty,
+  type QuestionType,
+} from '@/services/question.service';
 import {
   AI_QUESTION_TYPE_OPTIONS,
   DIFFICULTY_OPTIONS,
@@ -74,6 +83,7 @@ interface Preview {
   draft: QuestionDraft;
   /** The request that produced it, narrowed to one question of its type — reused by "Regenerate". */
   request: QuestionAiGenerateRequest;
+  materialFile?: File | null;
   /** The backend found an active question with the same content in the course. */
   duplicate: boolean;
   accepted: boolean;
@@ -83,10 +93,11 @@ interface Preview {
   regenerateError?: string;
 }
 
-const toPreview = (p: QuestionAiPreview, request: QuestionAiGenerateRequest): Preview => ({
+const toPreview = (p: QuestionAiPreview, request: QuestionAiGenerateRequest, materialFile?: File | null): Preview => ({
   id: newKey('ai'),
   draft: fromAiDraft(p.question),
   request: { ...request, questionTypeCounts: { [p.question.questionType]: 1 }, difficultyCounts: { [p.question.difficulty ?? 'MEDIUM']: 1 } },
+  materialFile: materialFile ?? null,
   duplicate: p.hasHashConflict,
   accepted: false,
   // Opens as the full editor, so the manager reviews and fixes it without an extra click.
@@ -140,6 +151,8 @@ export const AiGeneratePanel = forwardRef<AiGeneratePanelHandle, {
   const typeOptions = allowedTypes ? AI_QUESTION_TYPE_OPTIONS.filter(o => allowedTypes.includes(o.value)) : AI_QUESTION_TYPE_OPTIONS;
   const [typeCounts, setTypeCounts] = useState<TypeCounts<QuestionType>>({ SINGLE_CHOICE: String(DEFAULT_COUNT) });
   const [context, setContext] = useState('');
+  const [materialFile, setMaterialFile] = useState<File | null>(null);
+  const materialInputRef = useRef<HTMLInputElement>(null);
   const [difficultyCounts, setDifficultyCounts] = useState<TypeCounts<QuestionDifficulty>>({ MEDIUM: String(DEFAULT_COUNT) });
   const [language, setLanguage] = useState<Language>('English');
   const [showErrors, setShowErrors] = useState(false);
@@ -194,8 +207,8 @@ export const AiGeneratePanel = forwardRef<AiGeneratePanelHandle, {
   }, [onlyLevel, total]);
 
   const hasPassage = Boolean(isGroupMode && groupPassage?.trim());
-  const contextOptional = hasPassage;
-  const contextError = showErrors && !contextOptional && !context.trim() ? 'Describe what the questions should be about.' : undefined;
+  const contextOptional = hasPassage || Boolean(materialFile);
+  const contextError = showErrors && !contextOptional && !context.trim() ? 'Describe what the questions should be about, or upload a study material.' : undefined;
   const typesError = !showErrors ? undefined
     : !counts.length ? 'Pick at least one question type.'
     : !countsValid ? `Enter a number from ${MIN_COUNT} to ${MAX_COUNT} for each type.`
@@ -234,9 +247,11 @@ export const AiGeneratePanel = forwardRef<AiGeneratePanelHandle, {
         ...(isGroupMode && groupPassage?.trim() ? { passageText: groupPassage.trim(), groupTitle: groupTitle?.trim() || undefined } : {}),
         language,
       };
-      const res = await questionService.generateAiQuestions(request, controller.signal);
+      const res = materialFile
+        ? await questionService.generateAiQuestionsFromMaterial(materialFile, request, controller.signal)
+        : await questionService.generateAiQuestions(request, controller.signal);
       if (controller.signal.aborted) return;
-      setPreviews(res.questions.map(q => toPreview(q, request)));
+      setPreviews(res.questions.map(q => toPreview(q, request, materialFile)));
       setIsDemo(Boolean(res.mock));
     } catch (err) {
       if (!controller.signal.aborted) setError(aiErrorMessage(err));
@@ -296,7 +311,9 @@ export const AiGeneratePanel = forwardRef<AiGeneratePanelHandle, {
     regenRef.current.set(p.id, controller);
     patchPreview(p.id, { regenerating: true, regenerateError: undefined });
     try {
-      const res = await questionService.generateAiQuestions(p.request, controller.signal);
+      const res = p.materialFile
+        ? await questionService.generateAiQuestionsFromMaterial(p.materialFile, p.request, controller.signal)
+        : await questionService.generateAiQuestions(p.request, controller.signal);
       if (controller.signal.aborted) return;
       const next = res.questions[0];
       if (next) patchPreview(p.id, { draft: fromAiDraft(next.question), duplicate: next.hasHashConflict, editing: true, edited: false, regenerating: false });
@@ -346,6 +363,70 @@ export const AiGeneratePanel = forwardRef<AiGeneratePanelHandle, {
             </div>
           </div>
         )}
+
+        <div className="flex flex-col gap-1.5">
+          <div className="flex items-center justify-between gap-2">
+            <label className="text-sm font-medium text-content-secondary">
+              Study material <span className="font-normal text-content-subtle">(optional, PDF / DOCX / TXT)</span>
+            </label>
+          </div>
+          <input
+            ref={materialInputRef}
+            type="file"
+            accept={AI_MATERIAL_EXTENSIONS.join(',')}
+            className="hidden"
+            onChange={e => {
+              const file = e.target.files?.[0] ?? null;
+              e.target.value = '';
+              if (!file) return;
+              const ext = file.name.slice(file.name.lastIndexOf('.')).toLowerCase();
+              if (!(AI_MATERIAL_EXTENSIONS as readonly string[]).includes(ext)) {
+                toast.error('Upload a PDF, DOCX, or TXT file.', { title: 'Unsupported file' });
+                return;
+              }
+              if (file.size > IMPORT_MAX_BYTES) {
+                toast.error('The material must not exceed 10 MB.', { title: 'File too large' });
+                return;
+              }
+              setMaterialFile(file);
+            }}
+          />
+          {materialFile ? (
+            <div className="flex items-center justify-between gap-2 px-3 py-2 rounded-[10px] border border-brand-600/30 bg-brand-600/5 text-sm">
+              <div className="flex items-center gap-2 min-w-0">
+                <Icon.FileText className="w-4 h-4 text-brand-ink flex-shrink-0" />
+                <span className="truncate font-medium text-content">{materialFile.name}</span>
+                <span className="text-xs text-content-subtle flex-shrink-0">
+                  ({Math.max(1, Math.round(materialFile.size / 1024))} KB)
+                </span>
+              </div>
+              <button
+                type="button"
+                onClick={() => setMaterialFile(null)}
+                disabled={generating}
+                className="p-1 rounded-[6px] text-content-subtle hover:bg-accent hover:text-content-secondary"
+                aria-label="Remove material"
+              >
+                <Icon.X className="w-4 h-4" />
+              </button>
+            </div>
+          ) : (
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              icon={<Icon.Upload className="w-4 h-4" />}
+              disabled={generating || disabled}
+              onClick={() => materialInputRef.current?.click()}
+              className="self-start"
+            >
+              Upload material (PDF, DOCX, TXT)
+            </Button>
+          )}
+          <p className="text-2xs text-content-subtle">
+            AI reads up to the first 30,000 characters (max 10 MB) and drafts questions from it.
+          </p>
+        </div>
 
         <div className="flex flex-col gap-1.5">
           <div className="flex items-center justify-between gap-2">

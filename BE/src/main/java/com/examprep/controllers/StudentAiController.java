@@ -12,7 +12,9 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.*;
 
-/** SE-01, SE-02, SQ-01 (student-exam-full-spec.md section 8). */
+import java.util.Map;
+
+/** SE-01, SE-02, SE-03, SQ-01 (student-exam-full-spec.md section 8). */
 @RestController
 @RequestMapping("/api/v1/student")
 @RequiredArgsConstructor
@@ -23,6 +25,13 @@ public class StudentAiController {
     public ResponseEntity<ApiResponse<StudentAiResponse.ExplanationBatch>> explain(@AuthenticationPrincipal UserPrincipal user,
             @PathVariable Long attemptId, @Valid @RequestBody StudentAiRequests.ExplanationBatch request) {
         return ResponseEntity.ok(ApiResponse.success(service.explain(user, attemptId, request)));
+    }
+
+    @PostMapping("/attempts/{attemptId}/questions/{questionId}/deep-explanation")
+    public ResponseEntity<ApiResponse<StudentAiResponse.DeepExplanation>> deepExplain(@AuthenticationPrincipal UserPrincipal user,
+            @PathVariable Long attemptId, @PathVariable Long questionId,
+            @RequestBody(required = false) Map<String, Object> body) {
+        return ResponseEntity.ok(ApiResponse.success(service.deepExplain(user, attemptId, questionId)));
     }
 
     @PostMapping("/attempts/{attemptId}/grading")

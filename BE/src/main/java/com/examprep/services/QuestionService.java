@@ -11,9 +11,17 @@ import org.springframework.web.multipart.MultipartFile;
 import java.util.List;
 
 public interface QuestionService {
+    default Page<QuestionListItemDto> getQuestions(Long courseId, Long moduleId, Long groupId, String groupType, String questionType, List<String> questionTypes,
+                                                   String difficulty, String status, String approvalStatus, String creatorRole,
+                                                   String source, Long createdBy, String search,
+                                                   Pageable pageable, User currentUser) {
+        return getQuestions(courseId, moduleId, groupId, groupType, questionType, questionTypes, difficulty, status,
+                approvalStatus, creatorRole, source, createdBy, search, null, pageable, currentUser);
+    }
+
     Page<QuestionListItemDto> getQuestions(Long courseId, Long moduleId, Long groupId, String groupType, String questionType, List<String> questionTypes,
                                           String difficulty, String status, String approvalStatus, String creatorRole,
-                                          String source, Long createdBy, String search,
+                                          String source, Long createdBy, String search, List<Long> ids,
                                           Pageable pageable, User currentUser);
 
 

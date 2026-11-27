@@ -2,6 +2,7 @@ package com.examprep.controllers;
 
 import com.examprep.dto.ApiResponse;
 import com.examprep.dto.PageResponse;
+import com.examprep.dto.StudentAiResponse;
 import com.examprep.dto.practice.ModulePracticeRequests;
 import com.examprep.dto.practice.ModulePracticeResponses;
 import com.examprep.security.UserPrincipal;
@@ -197,6 +198,20 @@ public class StudentModulePracticeController {
             @Valid @RequestBody ModulePracticeRequests.Explanation body) {
         return ResponseEntity.ok(ApiResponse.success(
                 ai.explain(currentUser.getId(), questionId, body)));
+    }
+
+    // ------------------------------------------------------------------ MP-10
+
+    @PostMapping("/practice/questions/{questionId}/deep-explanation")
+    @Operation(summary = "MP-10: Deep AI explanation of a practiced question",
+            description = "Analyzes the student's submitted answer and explains in depth. "
+                    + "Spends AI tokens on first generation and caches per practiceAnswerId.")
+    public ResponseEntity<ApiResponse<StudentAiResponse.DeepExplanation>> deepExplain(
+            @AuthenticationPrincipal UserPrincipal currentUser,
+            @PathVariable Long questionId,
+            @Valid @RequestBody ModulePracticeRequests.Explanation body) {
+        return ResponseEntity.ok(ApiResponse.success(
+                ai.deepExplain(currentUser.getId(), questionId, body)));
     }
 
     // ------------------------------------------------------------------ MP-11

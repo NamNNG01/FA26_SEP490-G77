@@ -355,7 +355,8 @@ public class StudentAttemptServiceImpl implements StudentAttemptService {
                     rubricType ? criteria(row, key, rawMaxPoints) : null,
                     GRADING_AI_GRADED.equals(row.getGradingStatus()) ? overallFeedback(row) : null,
                     explanation(live.get(display.questionId())),
-                    correctAnswer(display.questionType(), key)));
+                    correctAnswer(display.questionType(), key),
+                    deepExplanation(row)));
         }
 
         return new AttemptResponses.Result(
@@ -976,6 +977,14 @@ public class StudentAttemptServiceImpl implements StudentAttemptService {
             return null;
         }
         return new AttemptResponses.Explanation(question.getAiExplanation(), "MANAGER");
+    }
+
+    private AttemptResponses.DeepExplanation deepExplanation(AttemptAnswer answer) {
+        String text = answer.getDeepExplanation();
+        if (text == null || text.isBlank()) {
+            return null;
+        }
+        return new AttemptResponses.DeepExplanation(text);
     }
 
     private Map<Long, BigDecimal> weightSums(List<Object[]> rows) {

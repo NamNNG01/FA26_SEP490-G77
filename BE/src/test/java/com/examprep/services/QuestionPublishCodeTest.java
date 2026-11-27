@@ -82,7 +82,8 @@ class QuestionPublishCodeTest {
 
     private Question codeQuestion(User author) {
         Question question = Question.builder().createdBy(author).questionType("CODE")
-                .difficulty("MEDIUM").content("Print the number read from stdin").status("INACTIVE")
+                .difficulty("MEDIUM").content("Print the number read from stdin")
+                .aiExplanation("Read the integer from stdin and print it directly.").status("INACTIVE")
                 .approvalStatus("APPROVED").build();
         em.persist(question);
         return question;

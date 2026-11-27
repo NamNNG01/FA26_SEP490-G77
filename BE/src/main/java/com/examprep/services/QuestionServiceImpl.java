@@ -2,6 +2,7 @@ package com.examprep.services;
 
 import com.examprep.ai.AiClient;
 import com.examprep.dto.QuestionGroupResponse;
+import com.examprep.dto.ResponseCode;
 import com.examprep.dto.question.*;
 import com.examprep.entities.*;
 import com.examprep.entities.Module;
@@ -58,12 +59,11 @@ public class QuestionServiceImpl implements QuestionService {
     private final ObjectMapper objectMapper;
     private final CodeQuestionConfigRepository codeQuestionConfigRepository;
     private final CodeTestCaseRepository codeTestCaseRepository;
+    private final ManagerExplanationService managerExplanationService;
 
     @Override
     @Transactional(readOnly = true)
-
-
-    public Page<QuestionListItemDto> getQuestions(Long courseId, Long moduleId, Long groupId, String groupType, String questionType, List<String> questionTypes, String difficulty, String status, String approvalStatus, String creatorRole, String source, Long createdBy, String search, Pageable pageable, User currentUser) {
+    public Page<QuestionListItemDto> getQuestions(Long courseId, Long moduleId, Long groupId, String groupType, String questionType, List<String> questionTypes, String difficulty, String status, String approvalStatus, String creatorRole, String source, Long createdBy, String search, List<Long> ids, Pageable pageable, User currentUser) {
         if (!User.ROLE_COURSE_MANAGER.equals(currentUser.getRoleName())) {
             throw new ForbiddenException("Only course managers can access the question bank");
         }
@@ -93,6 +93,11 @@ public class QuestionServiceImpl implements QuestionService {
             }
         }
 
+        List<Long> cleanIds = ids == null ? null : ids.stream().filter(id -> id != null && id > 0).distinct().toList();
+        if (ids != null && !ids.isEmpty() && cleanIds.isEmpty()) {
+            return Page.empty(pageable);
+        }
+
         Specification<Question> spec = (root, query, cb) -> {
             var predicate = cb.isNull(root.get("deletedAt"));
             predicate = cb.and(predicate, cb.isNull(root.get("sourceDocumentId")));
@@ -103,6 +108,7 @@ public class QuestionServiceImpl implements QuestionService {
 
                 predicate = cb.and(predicate, root.get("course").get("courseId").in(managedCourseIds));
 
+            if (cleanIds != null && !cleanIds.isEmpty()) predicate = cb.and(predicate, root.get("questionId").in(cleanIds));
             if (courseId != null) predicate = cb.and(predicate, cb.equal(root.get("course").get("courseId"), courseId));
             if (moduleId != null) predicate = cb.and(predicate, cb.equal(root.get("module").get("moduleId"), moduleId));
             if (groupId != null) predicate = cb.and(predicate, cb.equal(root.get("group").get("groupId"), groupId));
@@ -140,24 +146,29 @@ public class QuestionServiceImpl implements QuestionService {
         };
 
         Page<Question> page = questionRepository.findAll(spec, pageable);
+        Map<Long, String> explanationStatuses = managerExplanationService.resolveExplanationStatuses(page.getContent());
 
-
-
-        return page.map(q -> QuestionListItemDto.builder()
-                .questionId(q.getQuestionId()).content(q.getContent())
-                .courseId(q.getCourse() != null ? q.getCourse().getCourseId() : null)
-                .courseName(q.getCourse() != null ? q.getCourse().getTitle() : null)
-                .moduleId(q.getModule() != null ? q.getModule().getModuleId() : null)
-                .moduleName(q.getModule() != null ? q.getModule().getTitle() : null)
-                .groupId(q.getGroup() != null ? q.getGroup().getGroupId() : null)
-                .groupTitle(q.getGroup() != null ? q.getGroup().getTitle() : null)
-                .groupQuestionType(q.getGroup() != null ? q.getGroup().getQuestionType() : null)
-                .questionType(q.getQuestionType()).difficulty(q.getDifficulty())
-                .status(q.getStatus()).approvalStatus(q.getApprovalStatus())
-                .creatorRole(q.getCreatorRole()).source(q.getSource())
-                .createdBy(q.getCreatedBy() != null ? q.getCreatedBy().getUserId() : null)
-                .scoringVersion(q.getScoringVersion()).lockVersion(q.getLockVersion())
-                .updatedAt(q.getUpdatedAt()).build());
+        return page.map(q -> {
+            boolean hasExplanation = q.getAiExplanation() != null && !q.getAiExplanation().isBlank();
+            return QuestionListItemDto.builder()
+                    .questionId(q.getQuestionId()).content(q.getContent())
+                    .courseId(q.getCourse() != null ? q.getCourse().getCourseId() : null)
+                    .courseName(q.getCourse() != null ? q.getCourse().getTitle() : null)
+                    .moduleId(q.getModule() != null ? q.getModule().getModuleId() : null)
+                    .moduleName(q.getModule() != null ? q.getModule().getTitle() : null)
+                    .groupId(q.getGroup() != null ? q.getGroup().getGroupId() : null)
+                    .groupTitle(q.getGroup() != null ? q.getGroup().getTitle() : null)
+                    .groupQuestionType(q.getGroup() != null ? q.getGroup().getQuestionType() : null)
+                    .questionType(q.getQuestionType()).difficulty(q.getDifficulty())
+                    .status(q.getStatus()).approvalStatus(q.getApprovalStatus())
+                    .creatorRole(q.getCreatorRole()).source(q.getSource())
+                    .createdBy(q.getCreatedBy() != null ? q.getCreatedBy().getUserId() : null)
+                    .scoringVersion(q.getScoringVersion()).lockVersion(q.getLockVersion())
+                    .updatedAt(q.getUpdatedAt())
+                    .hasExplanation(hasExplanation)
+                    .explanationStatus(explanationStatuses.getOrDefault(q.getQuestionId(), ManagerExplanationService.STATUS_NONE))
+                    .build();
+        });
     }
 
 
@@ -365,7 +376,10 @@ public class QuestionServiceImpl implements QuestionService {
                 q = questionRepository.save(q);
             }
 
-            results.add(mapToDetailDto(q, qOptions));
+            String statusStr = (q.getAiExplanation() != null && !q.getAiExplanation().isBlank())
+                    ? ManagerExplanationService.STATUS_READY
+                    : ManagerExplanationService.STATUS_NONE;
+            results.add(mapToDetailDto(q, qOptions, codeConfigOf(q), testCasesOf(q), statusStr));
         }
 
         return results;
@@ -854,6 +868,10 @@ public class QuestionServiceImpl implements QuestionService {
             if (!"APPROVED".equals(q.getApprovalStatus())) {
                 throw new BadRequestException("Cannot activate question that is not approved");
             }
+            if (q.getAiExplanation() == null || q.getAiExplanation().isBlank()
+                    || managerExplanationService.findPendingQuestionIds(List.of(q.getQuestionId())).contains(q.getQuestionId())) {
+                throw new BadRequestException(ResponseCode.VALIDATION_ERROR, "Explanation is required to publish");
+            }
             options = answerOptionRepository.findByQuestion_QuestionId(q.getQuestionId());
             QuestionPayload payload = QuestionPayload.fromEntity(q, options, objectMapper);
             // CODE settings are stored in separate tables; load them so activation validates the real data.
@@ -945,6 +963,10 @@ public class QuestionServiceImpl implements QuestionService {
             }
         }
 
+        Set<Long> pendingExplanationIds = "ACTIVE".equals(newStatus)
+                ? managerExplanationService.findPendingQuestionIds(uniqueIds)
+                : Set.of();
+
         List<Question> uniqueQuestions = new ArrayList<>(uniqueIds.size());
         for (Long id : uniqueIds) {
             Question q = byId.get(id);
@@ -953,6 +975,10 @@ public class QuestionServiceImpl implements QuestionService {
             if ("INACTIVE".equals(currentStatus) && "ACTIVE".equals(newStatus)) {
                 if (!"APPROVED".equals(q.getApprovalStatus())) {
                     throw new BadRequestException("Cannot activate question that is not approved");
+                }
+                if (q.getAiExplanation() == null || q.getAiExplanation().isBlank()
+                        || pendingExplanationIds.contains(id)) {
+                    throw new BadRequestException(ResponseCode.VALIDATION_ERROR, "Explanation is required to publish");
                 }
                 List<AnswerOption> options = optionsByQId.getOrDefault(id, List.of());
                 QuestionPayload payload = QuestionPayload.fromEntity(q, options, objectMapper);
@@ -978,6 +1004,7 @@ public class QuestionServiceImpl implements QuestionService {
         questionRepository.saveAll(uniqueQuestions);
         questionRepository.flush();
 
+        Map<Long, String> explanationStatuses = managerExplanationService.resolveExplanationStatuses(uniqueQuestions);
         List<QuestionDetailDto> results = new ArrayList<>(req.getQuestionIds().size());
         for (Long id : req.getQuestionIds()) {
             Question q = byId.get(id);
@@ -986,7 +1013,8 @@ public class QuestionServiceImpl implements QuestionService {
             List<TestCaseDto> testCases = "CODE".equals(q.getQuestionType())
                     ? testCasesByQId.getOrDefault(id, List.of())
                     : null;
-            results.add(mapToDetailDto(q, options, codeConfig, testCases));
+            results.add(mapToDetailDto(q, options, codeConfig, testCases,
+                    explanationStatuses.getOrDefault(id, ManagerExplanationService.STATUS_NONE)));
         }
         return results;
     }
@@ -1299,14 +1327,24 @@ public class QuestionServiceImpl implements QuestionService {
     }
 
     private QuestionDetailDto mapToDetailDto(Question q, List<AnswerOption> options) {
-        return mapToDetailDto(q, options, codeConfigOf(q), testCasesOf(q));
+        return mapToDetailDto(q, options, codeConfigOf(q), testCasesOf(q), null);
     }
 
     private QuestionDetailDto mapToDetailDto(
             Question q, List<AnswerOption> options, CodeConfigDto codeConfig, List<TestCaseDto> testCases) {
+        return mapToDetailDto(q, options, codeConfig, testCases, null);
+    }
+
+    private QuestionDetailDto mapToDetailDto(
+            Question q, List<AnswerOption> options, CodeConfigDto codeConfig, List<TestCaseDto> testCases,
+            String precomputedExplanationStatus) {
         Object metadataObj = parseJson(q.getQuestionMetadata());
         Object answerKeyObj = parseJson(q.getAnswerKey());
         Object rubricObj = parseJson(q.getEssayGradingRubric());
+        String explanationStatus = precomputedExplanationStatus != null
+                ? precomputedExplanationStatus
+                : managerExplanationService.resolveExplanationStatuses(List.of(q))
+                        .getOrDefault(q.getQuestionId(), ManagerExplanationService.STATUS_NONE);
 
         boolean isOrdering = "ORDERING".equals(q.getQuestionType());
         List<AnswerOptionDto> optDtos = options.stream().map(o -> AnswerOptionDto.builder()
@@ -1333,6 +1371,7 @@ public class QuestionServiceImpl implements QuestionService {
                 .scoringVersion(q.getScoringVersion())
                 .lockVersion(q.getLockVersion())
                 .aiExplanation(q.getAiExplanation())
+                .explanationStatus(explanationStatus)
                 .status(q.getStatus())
                 .approvalStatus(q.getApprovalStatus())
                 .essayGradingRubric(rubricObj)

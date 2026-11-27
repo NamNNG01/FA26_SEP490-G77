@@ -173,7 +173,16 @@ export function QuestionFormPage({ mode }: { mode: 'create' | 'edit' }) {
         setModuleId(detail.moduleId != null ? String(detail.moduleId) : '');
         setStatus(detail.status);
         setSavedHasExplanation(!explanationMissing(detail.aiExplanation));
-        if (detail.explanationStatus === 'PENDING') setPendingExplanations(new Set([detail.questionId]));
+        if (detail.explanationStatus === 'PENDING') {
+          setPendingExplanations(new Set([detail.questionId]));
+          setFailedExplanations(new Set());
+        } else if (detail.explanationStatus === 'FAILED') {
+          setPendingExplanations(new Set());
+          setFailedExplanations(new Set([detail.questionId]));
+        } else {
+          setPendingExplanations(new Set());
+          setFailedExplanations(new Set());
+        }
         setDirty(false);
       })
       .catch(err => {
@@ -1310,7 +1319,13 @@ export function QuestionFormPage({ mode }: { mode: 'create' | 'edit' }) {
                     allowedTypes={allowedTypes}
                     kindError={submitted ? kindError(q) : undefined}
                     onRequestExplanation={requested => requestExplanation(i, requested)}
-                    explanationStatus={q.questionId != null && pendingExplanations.has(q.questionId) ? 'PENDING' : undefined}
+                    explanationStatus={
+                      q.questionId != null && pendingExplanations.has(q.questionId)
+                        ? 'PENDING'
+                        : q.questionId != null && failedExplanations.has(q.questionId)
+                          ? 'FAILED'
+                          : undefined
+                    }
                   />
                 </div>
               ))}

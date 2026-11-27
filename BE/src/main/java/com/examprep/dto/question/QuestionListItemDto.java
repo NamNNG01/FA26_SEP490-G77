@@ -32,4 +32,6 @@ public class QuestionListItemDto {
     private Long lockVersion;
     private long optionCount;
     private Instant updatedAt;
+    private boolean hasExplanation;
+    private String explanationStatus;
 }

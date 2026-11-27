@@ -143,7 +143,32 @@ public final class AttemptResponses {
             List<Criterion> criteria,
             String overallFeedback,
             Explanation explanation,
-            CorrectAnswer correctAnswer) {}
+            CorrectAnswer correctAnswer,
+            DeepExplanation deepExplanation) {
+        public ResultQuestion(
+                Long questionId,
+                Integer orderIndex,
+                String questionType,
+                String content,
+                List<Option> options,
+                JsonNode yourResponse,
+                Boolean isCorrect,
+                BigDecimal maxPoints,
+                BigDecimal scoreEarned,
+                BigDecimal weight,
+                String gradingStatus,
+                String gradingError,
+                List<Criterion> criteria,
+                String overallFeedback,
+                Explanation explanation,
+                CorrectAnswer correctAnswer) {
+            this(questionId, orderIndex, questionType, content, options, yourResponse, isCorrect,
+                    maxPoints, scoreEarned, weight, gradingStatus, gradingError, criteria,
+                    overallFeedback, explanation, correctAnswer, null);
+        }
+    }
+
+    public record DeepExplanation(String text) {}
 
     /**
      * The key of the question types whose options carry no {@code isCorrectAnswer} flag; only

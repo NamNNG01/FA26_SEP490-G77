@@ -57,6 +57,69 @@ public final class AnswerText {
         return String.join("\n", parts);
     }
 
+    /** Student's submitted response in words, formatted from the display snapshot and response JSON. */
+    public static String studentAnswer(String type, JsonNode display, JsonNode response) {
+        if (response == null || response.isNull() || response.isMissingNode() || response.isEmpty()) {
+            return "No answer submitted";
+        }
+        Map<Long, String> options = new HashMap<>();
+        for (JsonNode option : display.path("options")) {
+            options.put(option.path("optionId").asLong(), option.path("optionText").asText());
+        }
+        List<String> parts = new ArrayList<>();
+        if (CHOICE_TYPES.contains(type)) {
+            response.path("selectedOptionIds").forEach(id -> {
+                long optId = id.asLong();
+                parts.add(options.getOrDefault(optId, String.valueOf(optId)));
+            });
+            return parts.isEmpty() ? "No answer submitted" : String.join("; ", parts);
+        }
+        switch (type) {
+            case "ORDERING" -> {
+                response.path("orderedOptionIds").forEach(id -> {
+                    long optId = id.asLong();
+                    parts.add(options.getOrDefault(optId, String.valueOf(optId)));
+                });
+                return parts.isEmpty() ? "No answer submitted" : String.join(" -> ", parts);
+            }
+            case "MATCHING" -> {
+                response.path("matches").forEach(m ->
+                        parts.add(m.path("left").asText() + " -> " + m.path("right").asText()));
+                return parts.isEmpty() ? "No answer submitted" : String.join("\n", parts);
+            }
+            case "FILL_BLANK" -> {
+                JsonNode blanks = response.path("blanks");
+                if (blanks.isObject()) {
+                    blanks.fields().forEachRemaining(entry ->
+                            parts.add("Blank " + entry.getKey() + ": " + entry.getValue().asText("")));
+                }
+                return parts.isEmpty() ? "No answer submitted" : String.join("\n", parts);
+            }
+            case "CODE" -> {
+                String lang = response.path("language").asText("").strip();
+                String text = response.path("text").asText("").strip();
+                if (text.isEmpty()) return "No answer submitted";
+                return lang.isEmpty() ? text : "Language: " + lang + "\n" + text;
+            }
+            case "ESSAY" -> {
+                String text = response.path("text").asText("").strip();
+                return text.isEmpty() ? "No answer submitted" : text;
+            }
+            case "DIAGRAM", "DIAGRAM_ESSAY" -> {
+                String text = response.path("text").asText("").strip();
+                String xml = response.path("drawioXml").asText("").strip();
+                if (!text.isEmpty()) parts.add(text);
+                if (!xml.isEmpty()) {
+                    parts.add("Diagram XML: " + (xml.length() <= 4000 ? xml : xml.substring(0, 4000)));
+                }
+                return parts.isEmpty() ? "No answer submitted" : String.join("\n", parts);
+            }
+            default -> {
+                return response.toString();
+            }
+        }
+    }
+
     /** A fixture on one prompt line: the model reads the layout, so an embedded newline is escaped. */
     private static String oneLine(String value) {
         if (value == null) return "";

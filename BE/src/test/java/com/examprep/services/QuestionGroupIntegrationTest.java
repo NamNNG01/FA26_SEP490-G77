@@ -546,6 +546,7 @@ class QuestionGroupIntegrationTest {
                 .questionType("SINGLE_CHOICE")
                 .difficulty("MEDIUM")
                 .content("Atomic group Q1")
+                .explanation("Sample explanation")
                 .options(List.of(
                         AnswerOptionDto.builder().optionText("Yes").isCorrect(true).orderIndex(0).build(),
                         AnswerOptionDto.builder().optionText("No").isCorrect(false).orderIndex(1).build()))
@@ -556,6 +557,7 @@ class QuestionGroupIntegrationTest {
                 .questionType("SINGLE_CHOICE")
                 .difficulty("EASY")
                 .content("Atomic group Q2")
+                .explanation("Sample explanation")
                 .options(List.of(
                         AnswerOptionDto.builder().optionText("True").isCorrect(true).orderIndex(0).build(),
                         AnswerOptionDto.builder().optionText("False").isCorrect(false).orderIndex(1).build()))

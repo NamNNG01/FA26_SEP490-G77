@@ -32,6 +32,16 @@ public final class StudentAiResponse {
     /** 402 payload of SE-02. */
     public record GradingQuotaExceeded(long requiredTokens, long availableTokens, QuotaLeft quota) { }
 
+    // SE-03 / MP-10
+    public record DeepExplanation(Long questionId, String explanation, Integer tokensUsed, Long remainingTokens) { }
+
+    /** 429 payload of SE-03 / MP-10. */
+    public record DeepQuotaExceeded(String code, long estimatedTokens, long availableTokens) {
+        public DeepQuotaExceeded(long estimatedTokens, long availableTokens) {
+            this("QUOTA_EXCEEDED", estimatedTokens, availableTokens);
+        }
+    }
+
     // SQ-01
     public record Quota(String timezone, Free free, Plan plan, ExpiredPlan expiredPlan, long reservedPending) { }
 

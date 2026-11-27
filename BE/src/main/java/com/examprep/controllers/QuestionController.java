@@ -8,6 +8,7 @@ import com.examprep.exceptions.BadRequestException;
 import com.examprep.exceptions.ResourceNotFoundException;
 import com.examprep.repositories.UserRepository;
 import com.examprep.security.UserPrincipal;
+import com.examprep.services.ManagerExplanationService;
 import com.examprep.services.QuestionImportService;
 import com.examprep.services.QuestionService;
 import io.swagger.v3.oas.annotations.Operation;
@@ -39,6 +40,7 @@ public class QuestionController {
 
     private final QuestionService questionService;
     private final QuestionImportService questionImportService;
+    private final ManagerExplanationService managerExplanationService;
     private final UserRepository userRepository;
 
     private User resolveUser(UserPrincipal principal) {
@@ -64,6 +66,7 @@ public class QuestionController {
             @RequestParam(required = false) String source,
             @RequestParam(required = false) Long createdBy,
             @RequestParam(required = false) String search,
+            @RequestParam(required = false) List<Long> ids,
             @RequestParam(defaultValue = "0") int page,
             @RequestParam(defaultValue = "20") int size,
             @AuthenticationPrincipal UserPrincipal currentUser) {
@@ -71,8 +74,19 @@ public class QuestionController {
         Pageable pageable = PageRequest.of(page, size, Sort.by(Sort.Direction.DESC, "updatedAt"));
         Page<QuestionListItemDto> result = questionService.getQuestions(
                 courseId, moduleId, groupId, groupType, questionType, questionTypes, difficulty, status, approvalStatus,
-                creatorRole, source, createdBy, search, pageable, user);
+                creatorRole, source, createdBy, search, ids, pageable, user);
         return ResponseEntity.ok(ApiResponse.success(result, "Questions retrieved successfully"));
+    }
+
+    @PostMapping("/ai/explanations")
+    @Operation(summary = "AI-04: Queue background AI explanation generation for saved questions")
+    public ResponseEntity<ApiResponse<QuestionAiExplanationResponse>> queueAiExplanations(
+            @Valid @RequestBody QuestionAiExplanationRequest request,
+            @AuthenticationPrincipal UserPrincipal currentUser) {
+        User user = resolveUser(currentUser);
+        QuestionAiExplanationResponse response = managerExplanationService.queueExplanations(request, user);
+        return ResponseEntity.status(HttpStatus.ACCEPTED)
+                .body(ApiResponse.success(response, "AI explanation generation queued"));
     }
 
 

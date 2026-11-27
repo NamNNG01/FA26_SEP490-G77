@@ -29,6 +29,7 @@ public class QuestionDetailDto {
     private Integer scoringVersion;
     private Long lockVersion;
     private String aiExplanation;
+    private String explanationStatus;
     private String status;
     private String approvalStatus;
     private Object essayGradingRubric;
