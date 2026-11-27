@@ -100,6 +100,10 @@ public class SecurityConfig {
                         // Shared media upload for authenticated students, course managers, and admins
                         .requestMatchers(HttpMethod.POST, "/api/v1/uploads")
                         .hasAnyRole(User.ROLE_STUDENT, User.ROLE_COURSE_MANAGER, User.ROLE_ADMIN)
+                        // NT-01..03 read the caller's own inbox (by user id): course managers get theirs too
+                        // (e.g. background AI explanation results), so it is opened before the student-only rule.
+                        .requestMatchers("/api/v1/student/notifications", "/api/v1/student/notifications/**")
+                        .hasAnyRole(User.ROLE_STUDENT, User.ROLE_COURSE_MANAGER)
                         .requestMatchers("/api/v1/student/**").hasRole(User.ROLE_STUDENT)
                         // Each dashboard prefix and everything under it: the reports live on sub-paths
                         // (…/admin/report, …/course-manager/summary|courses|exams).
