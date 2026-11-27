@@ -11,6 +11,7 @@ import { getApiErrorMessage } from '@/utils/apiError';
 import { useToast } from '@/components/ui/ToastHost';
 import { studentProgressService } from '@/services/studentProgress.service';
 import { RUBRIC_TYPES, type AnswerResponse } from '@/services/studentAttempt.service';
+import { studentCodeExamService, type CodeLanguageInfo, type CodeQuestion } from '@/services/studentCodeExam.service';
 import { INSTANT_CHECK_TYPES } from '@/services/studentPracticeExam.service';
 import {
   AWAITING_GRADE,
@@ -31,6 +32,7 @@ import { PracticeVerdict, SCORE_ONLY_TYPES, summaryOutcome } from './PracticeVer
 import { GroupPassageSplit } from './GroupPassageSplit';
 import { ReportQuestionIssueButton } from './ReportQuestionIssueDialog';
 import { EssayQuestionPrompt } from './EssayQuestionPrompt';
+import { CodeQuestionWorkspace } from './code/CodeQuestionWorkspace';
 
 /** A rubric attempt still being graded by AI is asked about again this often. */
 const POLL_MS = 4000;
@@ -89,6 +91,7 @@ export function ModulePracticeRunner({ sessionId }: { sessionId: string }) {
   const [confirmFinish, setConfirmFinish] = useState(false);
   const [finishing, setFinishing] = useState(false);
   const [actionError, setActionError] = useState<string | null>(null);
+  const [codeLanguages, setCodeLanguages] = useState<CodeLanguageInfo[]>([]);
   /** When the current question was shown, for timeSpentSeconds. */
   const shownAtRef = useRef(Date.now());
 
@@ -135,6 +138,21 @@ export function ModulePracticeRunner({ sessionId }: { sessionId: string }) {
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [sessionId, reload]);
+
+  const hasCodeQuestions = Boolean(session?.questions.some(q => q.questionType === 'CODE'));
+  useEffect(() => {
+    if (!hasCodeQuestions) return;
+    let cancelled = false;
+    studentCodeExamService
+      .getLanguages()
+      .then(langs => {
+        if (!cancelled) setCodeLanguages(langs);
+      })
+      .catch(() => {});
+    return () => {
+      cancelled = true;
+    };
+  }, [hasCodeQuestions]);
 
   const questions = session?.questions ?? [];
   const summary: SessionQuestionSummary | undefined = questions[current];
@@ -499,7 +517,21 @@ export function ModulePracticeRunner({ sessionId }: { sessionId: string }) {
 
   const isLastOfPart = current === partEnd - 1;
   const isRubric = RUBRIC_TYPES.has(summary.questionType);
+  const isCode = summary.questionType === 'CODE';
   const question = view ? toAttemptQuestion(view) : null;
+  const codeMeta: CodeQuestion | null =
+    isCode && view?.code
+      ? {
+          questionId: view.questionId,
+          orderIndex: view.orderIndex,
+          content: view.content,
+          languages: view.code.languages,
+          codeTemplate: view.code.codeTemplate,
+          sampleInput: view.code.sampleInput,
+          sampleOutput: view.code.sampleOutput,
+          functionMode: view.code.functionMode,
+        }
+      : null;
   const isSkipped = latest == null && skipped.has(summary.sessionQuestionId);
   // One answer per question: once sent — or skipped — it is shown read-only.
   const editing = latest == null && !isSkipped;
@@ -512,6 +544,7 @@ export function ModulePracticeRunner({ sessionId }: { sessionId: string }) {
   /** Writing an essay: question on top, the answer box filling the rest of the column (md+). Once
    *  sent, grading and the verdict take the space, so the normal stacked layout comes back. */
   const fillEssay = editing && summary.questionType === 'ESSAY';
+  const fillCode = editing && isCode;
   const value = editing ? (drafts[summary.sessionQuestionId] ?? null) : (latest?.response ?? null);
   const progress = question ? checkProgress(question, value) : null;
   const answerVerdict = verdictOf(summary.questionType, latest);
@@ -630,10 +663,14 @@ export function ModulePracticeRunner({ sessionId }: { sessionId: string }) {
             below; the top keeps its gutter. Beside a passage the question takes its whole column. */}
         <GroupPassageSplit
           group={view?.group}
-          narrow
-          mainClassName={`${isRubric ? 'p-[30px]' : 'p-[clamp(1rem,2.5vw,1.5rem)]'} ${hasPassage ? '' : 'md:px-[15%] md:pb-[15vh]'}`}
+          narrow={!isCode}
+          mainClassName={
+            isCode
+              ? 'p-[clamp(0.75rem,1.5vw,1.25rem)]'
+              : `${isRubric ? 'p-[30px]' : 'p-[clamp(1rem,2.5vw,1.5rem)]'} ${hasPassage ? '' : 'md:px-[15%] md:pb-[15vh]'}`
+          }
         >
-          <div className={fillEssay ? 'w-full flex flex-col gap-3 md:h-full' : isRubric ? 'w-full space-y-3' : 'w-full space-y-5'}>
+          <div className={fillEssay || fillCode ? 'w-full flex flex-col gap-3 md:h-full' : isCode ? 'w-full space-y-3' : isRubric ? 'w-full space-y-3' : 'w-full space-y-5'}>
             <div className="flex flex-wrap items-center gap-2">
               <h2 className="text-sm font-semibold text-content uppercase tracking-wide">Question {current + 1}</h2>
               <Badge variant="info">{QUESTION_TYPE_LABEL[summary.questionType] ?? summary.questionType}</Badge>
@@ -681,49 +718,72 @@ export function ModulePracticeRunner({ sessionId }: { sessionId: string }) {
               )
             ) : (
               <>
-                {fillEssay ? (
-                  <EssayQuestionPrompt key={summary.sessionQuestionId} content={view.content}>
-                    {questionMedia.map(m => (
-                      <img key={m.mediaId} src={m.url} alt={m.altText ?? ''} className="mt-3 max-h-72 rounded-[8px] border border-line" />
-                    ))}
-                  </EssayQuestionPrompt>
+                {isCode ? (
+                  <>
+                    {isSkipped && (
+                      <p className="flex items-center gap-2 rounded-[10px] bg-surface-muted px-3 py-2.5 text-sm text-content-soft">
+                        <Icon.Info className="w-4 h-4 flex-shrink-0" /> You skipped this question — it is left blank.
+                      </p>
+                    )}
+                    <div className={fillCode ? 'min-h-[480px] md:min-h-0 md:flex-1 md:flex md:flex-col' : 'h-[520px] flex flex-col'}>
+                      <CodeQuestionWorkspace
+                        key={summary.sessionQuestionId}
+                        question={question}
+                        meta={codeMeta}
+                        languages={codeLanguages}
+                        value={value}
+                        onChange={changeAnswer}
+                        readOnly={!editing || busy}
+                      />
+                    </div>
+                  </>
                 ) : (
-                  <div className={`card ${isRubric ? 'px-3 py-2 max-h-[18vh] overflow-y-auto' : 'p-[clamp(1rem,2.5vw,1.5rem)]'}`}>
-                    <QuestionText
-                      content={view.content}
-                      className={`text-content font-medium ${isRubric ? 'text-sm leading-normal' : 'text-lg leading-relaxed'}`}
-                    />
-                    {questionMedia.map(m => (
-                      <img key={m.mediaId} src={m.url} alt={m.altText ?? ''} className="mt-3 max-h-72 rounded-[8px] border border-line" />
-                    ))}
-                  </div>
-                )}
+                  <>
+                    {fillEssay ? (
+                      <EssayQuestionPrompt key={summary.sessionQuestionId} content={view.content}>
+                        {questionMedia.map(m => (
+                          <img key={m.mediaId} src={m.url} alt={m.altText ?? ''} className="mt-3 max-h-72 rounded-[8px] border border-line" />
+                        ))}
+                      </EssayQuestionPrompt>
+                    ) : (
+                      <div className={`card ${isRubric ? 'px-3 py-2 max-h-[18vh] overflow-y-auto' : 'p-[clamp(1rem,2.5vw,1.5rem)]'}`}>
+                        <QuestionText
+                          content={view.content}
+                          className={`text-content font-medium ${isRubric ? 'text-sm leading-normal' : 'text-lg leading-relaxed'}`}
+                        />
+                        {questionMedia.map(m => (
+                          <img key={m.mediaId} src={m.url} alt={m.altText ?? ''} className="mt-3 max-h-72 rounded-[8px] border border-line" />
+                        ))}
+                      </div>
+                    )}
 
-                {isSkipped && (
-                  <p className="flex items-center gap-2 rounded-[10px] bg-surface-muted px-3 py-2.5 text-sm text-content-soft">
-                    <Icon.Info className="w-4 h-4 flex-shrink-0" /> You skipped this question — it is left blank.
-                  </p>
-                )}
+                    {isSkipped && (
+                      <p className="flex items-center gap-2 rounded-[10px] bg-surface-muted px-3 py-2.5 text-sm text-content-soft">
+                        <Icon.Info className="w-4 h-4 flex-shrink-0" /> You skipped this question — it is left blank.
+                      </p>
+                    )}
 
-                {/* A submitted answer is shown read-only: a revealed input locks itself (its "Show the
-                    correct order" stays clickable), any other one is disabled by the fieldset. */}
-                <fieldset
-                  disabled={(!editing && !reveal) || busy}
-                  className={fillEssay ? 'min-w-0 md:flex-1 md:min-h-0 md:flex md:flex-col' : 'min-w-0'}
-                >
-                  <QuestionAnswerInput
-                    key={summary.sessionQuestionId}
-                    question={question}
-                    value={value}
-                    onChange={changeAnswer}
-                    roomy={isRubric || summary.questionType === 'CODE'}
-                    fill={fillEssay}
-                    readOnly={!editing}
-                    practice
-                    verdict={answerVerdict}
-                    reveal={reveal}
-                  />
-                </fieldset>
+                    {/* A submitted answer is shown read-only: a revealed input locks itself (its "Show the
+                        correct order" stays clickable), any other one is disabled by the fieldset. */}
+                    <fieldset
+                      disabled={(!editing && !reveal) || busy}
+                      className={fillEssay ? 'min-w-0 md:flex-1 md:min-h-0 md:flex md:flex-col' : 'min-w-0'}
+                    >
+                      <QuestionAnswerInput
+                        key={summary.sessionQuestionId}
+                        question={question}
+                        value={value}
+                        onChange={changeAnswer}
+                        roomy={isRubric}
+                        fill={fillEssay}
+                        readOnly={!editing}
+                        practice
+                        verdict={answerVerdict}
+                        reveal={reveal}
+                      />
+                    </fieldset>
+                  </>
+                )}
 
                 {/* No key to check against: MP-05's verdict is waited for, where it will appear. */}
                 {busy && editing && (

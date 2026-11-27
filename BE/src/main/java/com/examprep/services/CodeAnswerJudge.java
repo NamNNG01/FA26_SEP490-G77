@@ -74,7 +74,7 @@ public class CodeAnswerJudge {
                 .collect(Collectors.groupingBy(fixture -> fixture.getQuestion().getQuestionId()));
     }
 
-    String language(CodeQuestionConfig config) {
+    public String language(CodeQuestionConfig config) {
         if (config == null) {
             return PistonClient.JAVA;
         }

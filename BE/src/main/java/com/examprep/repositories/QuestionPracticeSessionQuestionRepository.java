@@ -52,6 +52,13 @@ public interface QuestionPracticeSessionQuestionRepository
     Optional<QuestionPracticeSessionQuestion> findBySession_SessionIdAndQuestion_QuestionId(Long sessionId,
                                                                                             Long questionId);
 
+    /** CD-04: true when the student has an IN_PROGRESS practice session containing this question. */
+    @Query("SELECT COUNT(sq) > 0 FROM QuestionPracticeSessionQuestion sq "
+            + "WHERE sq.question.questionId = :questionId "
+            + "AND sq.session.user.userId = :userId "
+            + "AND sq.session.status = 'IN_PROGRESS'")
+    boolean existsInActiveSession(@Param("questionId") Long questionId, @Param("userId") Long userId);
+
     /** MP-03: how many questions of the paper have been answered at least once. */
     @Query("SELECT COUNT(sq) FROM QuestionPracticeSessionQuestion sq "
             + "WHERE sq.session.sessionId = :sessionId AND sq.attemptCount > 0")

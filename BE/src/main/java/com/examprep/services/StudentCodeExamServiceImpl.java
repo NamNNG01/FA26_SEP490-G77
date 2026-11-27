@@ -25,6 +25,7 @@ import com.examprep.repositories.EnrollmentRepository;
 import com.examprep.repositories.ExamAttemptRepository;
 import com.examprep.repositories.ExamQuestionRepository;
 import com.examprep.repositories.ExamRepository;
+import com.examprep.repositories.QuestionPracticeSessionQuestionRepository;
 import com.examprep.repositories.QuestionRepository;
 import com.examprep.util.attempt.AttemptScoring;
 import com.examprep.util.attempt.CodeDriver;
@@ -75,6 +76,7 @@ public class StudentCodeExamServiceImpl implements StudentCodeExamService {
     private final CodeTestCaseRepository fixtures;
     private final ExamAttemptRepository attempts;
     private final AttemptAnswerRepository answers;
+    private final QuestionPracticeSessionQuestionRepository practiceSessionQuestions;
     private final CodeSubmissionRepository submissions;
     private final PistonClient piston;
     private final AttemptPaperFactory paperFactory;
@@ -153,8 +155,10 @@ public class StudentCodeExamServiceImpl implements StudentCodeExamService {
     @Override
     public CodeExamResponses.RunResult run(Long userId, CodeExamRequests.Run request) {
         CodeSource.requireAllowedSize(request.sourceCode());
-        if (answers.findRunnableAttempts(request.questionId(), userId).stream()
-                .noneMatch(attempt -> !autoSubmitter.isExpired(attempt, Instant.now()))) {
+        boolean inExam = answers.findRunnableAttempts(request.questionId(), userId).stream()
+                .anyMatch(attempt -> !autoSubmitter.isExpired(attempt, Instant.now()));
+        boolean inPractice = practiceSessionQuestions.existsInActiveSession(request.questionId(), userId);
+        if (!inExam && !inPractice) {
             throw new ResourceNotFoundException("Question not found");
         }
         Question question = questions.findDeliverableById(request.questionId())

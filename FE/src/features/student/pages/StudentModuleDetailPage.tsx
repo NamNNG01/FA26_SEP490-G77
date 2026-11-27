@@ -414,6 +414,11 @@ function ModuleContent({
             >
               {active ? 'Continue practice' : 'Practice'}
             </Button>
+            {active && (
+              <Button variant="outline" onClick={() => setPracticing(true)}>
+                Change mode
+              </Button>
+            )}
             {practice && practice.totalAttempts > 0 && (
               <span className="ml-auto">
                 <ResetPracticeButton scope={scope} moduleTitle={title} onReset={() => setRefresh(r => r + 1)} />

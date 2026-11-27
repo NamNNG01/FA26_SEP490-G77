@@ -116,6 +116,7 @@ export function PublicCourseDetailPage() {
   const price = formatPrice(course.price);
   const isFree = !Number(course.price ?? 0);
   const enrollment = course.enrollment;
+  const isEnrolled = Boolean(enrollment?.isEnrolled || enrollment?.status === 'COMPLETED');
   const isStudent = user?.role === Role.STUDENT;
 
   /**
@@ -243,7 +244,14 @@ export function PublicCourseDetailPage() {
           {/* Action sidebar — 30 % */}
           <aside className="min-w-0">
             <div className="card sticky top-6 p-5">
-              <p className={`text-xl font-bold ${price === 'Free' ? 'text-success' : 'text-brand-ink'}`}>{price}</p>
+              {isEnrolled ? (
+                <p className="inline-flex items-center gap-1.5 text-base font-semibold text-success">
+                  <Icon.CheckCircle className="h-5 w-5" />
+                  Enrolled
+                </p>
+              ) : (
+                <p className={`text-xl font-bold ${price === 'Free' ? 'text-success' : 'text-brand-ink'}`}>{price}</p>
+              )}
 
               <div className="mt-4 space-y-2">
                 {!isAuthenticated ? (

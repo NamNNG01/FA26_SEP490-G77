@@ -155,6 +155,7 @@ function ExamAttemptScreen() {
   const [justChecked, setJustChecked] = useState<number | null>(null);
   /** CD-03 per CODE question, and the CD-06 languages. Empty when the paper has no CODE question or they failed to load. */
   const [codeMeta, setCodeMeta] = useState<Map<number, CodeQuestion>>(() => new Map());
+  const [codeMetaLoading, setCodeMetaLoading] = useState(false);
   const [codeLanguages, setCodeLanguages] = useState<CodeLanguageInfo[]>([]);
   /** CD-05 failed on a manual submit: the confirm button becomes "Submit anyway". */
   const [codeGradeFailed, setCodeGradeFailed] = useState(false);
@@ -239,11 +240,16 @@ function ExamAttemptScreen() {
   useEffect(() => {
     if (sessionExamId == null || !hasCode) return;
     let cancelled = false;
-    Promise.allSettled([studentCodeExamService.getQuestions(sessionExamId), studentCodeExamService.getLanguages()]).then(([qs, langs]) => {
-      if (cancelled) return;
-      if (qs.status === 'fulfilled') setCodeMeta(new Map((qs.value?.questions ?? []).map(c => [c.questionId, c])));
-      if (langs.status === 'fulfilled') setCodeLanguages(langs.value);
-    });
+    setCodeMetaLoading(true);
+    Promise.allSettled([studentCodeExamService.getQuestions(sessionExamId), studentCodeExamService.getLanguages()])
+      .then(([qs, langs]) => {
+        if (cancelled) return;
+        if (qs.status === 'fulfilled') setCodeMeta(new Map((qs.value?.questions ?? []).map(c => [c.questionId, c])));
+        if (langs.status === 'fulfilled') setCodeLanguages(langs.value);
+      })
+      .finally(() => {
+        if (!cancelled) setCodeMetaLoading(false);
+      });
     return () => {
       cancelled = true;
     };
@@ -871,7 +877,7 @@ function ExamAttemptScreen() {
                   </div>
 
                   {itemIsCode ? (
-                    <div className={isMultiGroupPage ? 'min-h-[420px]' : 'md:min-h-0 md:flex-1'}>
+                    <div className={isMultiGroupPage ? 'h-[540px] flex flex-col' : 'min-h-[480px] md:min-h-0 md:flex-1 md:flex md:flex-col'}>
                       <CodeQuestionWorkspace
                         key={itemQ.questionId}
                         question={itemQ}
@@ -879,6 +885,7 @@ function ExamAttemptScreen() {
                         languages={codeLanguages}
                         value={answers[itemQ.questionId] ?? null}
                         onChange={resp => changeAnswerFor(itemQ, item.questionIndex, resp)}
+                        loadingMeta={codeMetaLoading}
                       />
                     </div>
                   ) : (

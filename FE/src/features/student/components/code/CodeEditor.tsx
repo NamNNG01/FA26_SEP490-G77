@@ -15,11 +15,13 @@ export default function CodeEditor({
   value,
   onChange,
   onRun,
+  readOnly = false,
 }: {
   language: CodeLanguage;
   value: string;
   onChange: (value: string) => void;
   onRun: () => void;
+  readOnly?: boolean;
 }) {
   const { resolved } = useTheme();
   // The command is bound once on mount; the ref keeps it calling the latest onRun.
@@ -47,6 +49,7 @@ export default function CodeEditor({
         fontSize: 14,
         tabSize: 4,
         scrollBeyondLastLine: false,
+        readOnly,
         fontFamily: "'JetBrains Mono', 'Fira Code', Consolas, monospace",
       }}
     />

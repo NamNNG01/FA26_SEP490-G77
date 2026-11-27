@@ -56,7 +56,14 @@ export function CourseCatalogCard({ course }: { course: StudentCourseCard }) {
 
       <div className="mt-auto pt-4">
         <div className="flex items-center justify-between gap-3 border-t border-line-soft pt-3">
-          <span className={`text-sm font-semibold ${price === 'Free' ? 'text-success' : 'text-brand-ink'}`}>{price}</span>
+          {course.isEnrolled ? (
+            <span className="inline-flex items-center gap-1.5 text-sm font-semibold text-success">
+              <Icon.CheckCircle className="h-4 w-4" />
+              Enrolled
+            </span>
+          ) : (
+            <span className={`text-sm font-semibold ${price === 'Free' ? 'text-success' : 'text-brand-ink'}`}>{price}</span>
+          )}
           <button
             type="button"
             onClick={() => navigate(href)}

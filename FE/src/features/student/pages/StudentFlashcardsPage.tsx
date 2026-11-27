@@ -31,16 +31,24 @@ const toDeckView = deckViewFromListItem;
 
 const SECTION_MINE = 'mine';
 const SECTION_BOOKMARKED = 'bookmarked';
+const SECTION_COURSES = 'courses';
 const SECTION_COMMUNITY = 'community';
-const courseSection = (courseId: number) => `course:${courseId}`;
 /** Which tab is active, kept per browser (falls back to "My decks"). */
 const ACTIVE_TAB_KEY = 'student:flashcards:tab';
 
-function readActiveTab(): string {
+function parseStoredTab(raw: string | null): { tab: string; courseId?: string } {
+  if (!raw) return { tab: SECTION_MINE };
+  if (raw.startsWith('course:')) {
+    return { tab: SECTION_COURSES, courseId: raw.slice('course:'.length) };
+  }
+  return { tab: raw };
+}
+
+function readActiveTab(): { tab: string; courseId?: string } {
   try {
-    return window.localStorage.getItem(ACTIVE_TAB_KEY) || SECTION_MINE;
+    return parseStoredTab(window.localStorage.getItem(ACTIVE_TAB_KEY));
   } catch {
-    return SECTION_MINE;
+    return { tab: SECTION_MINE };
   }
 }
 
@@ -163,11 +171,17 @@ export function StudentFlashcardsPage() {
   const [mode, setMode] = useState<DeckMode | ''>('');
   const [creating, setCreating] = useState(false);
   const [generating, setGenerating] = useState(false);
-  const [activeTab, setActiveTab] = useState<string>(() => {
+  const [{ tab: activeTab, courseId: initialCourseId }, setTabState] = useState<{ tab: string; courseId?: string }>(() => {
     const tab = params.get('tab');
-    if (tab === SECTION_MINE || tab === SECTION_BOOKMARKED || tab === SECTION_COMMUNITY) return tab;
+    if (tab === SECTION_MINE || tab === SECTION_BOOKMARKED || tab === SECTION_COURSES || tab === SECTION_COMMUNITY) {
+      return { tab };
+    }
+    if (tab?.startsWith('course:')) {
+      return parseStoredTab(tab);
+    }
     return readActiveTab();
   });
+  const [selectedCourseId, setSelectedCourseId] = useState<string>(() => initialCourseId || 'all');
 
   useEffect(() => {
     let cancelled = false;
@@ -187,7 +201,7 @@ export function StudentFlashcardsPage() {
   }, [reload]);
 
   const selectTab = (key: string) => {
-    setActiveTab(key);
+    setTabState(prev => ({ ...prev, tab: key }));
     writeActiveTab(key);
   };
 
@@ -276,23 +290,24 @@ export function StudentFlashcardsPage() {
         </div>
       ) : (
         (() => {
+          const courseDeckTotal = courses.reduce((sum, g) => sum + (g.error ? 0 : g.decks.length), 0);
           const tabs: { key: string; label: string; icon: React.ReactNode; count: number | null }[] = [
             { key: SECTION_MINE, label: 'My decks', icon: <Icon.Layers className="w-4 h-4" />, count: data.mine == null ? null : mine.length },
             ...(data.bookmarks != null
               ? [{ key: SECTION_BOOKMARKED, label: 'Bookmarked', icon: <Icon.Bookmark className="w-4 h-4" />, count: bookmarks.length }]
               : []),
-            ...courses.map(g => ({
-              key: courseSection(g.courseId),
-              label: g.courseTitle,
-              icon: <Icon.BookOpen className="w-4 h-4" />,
-              count: g.error ? null : g.decks.length,
-            })),
+            ...(courses.length > 0
+              ? [{ key: SECTION_COURSES, label: 'Courses', icon: <Icon.BookOpen className="w-4 h-4" />, count: courseDeckTotal }]
+              : []),
             ...(data.community != null
               ? [{ key: SECTION_COMMUNITY, label: 'Community Decks', icon: <Icon.Users className="w-4 h-4" />, count: community.length }]
               : []),
           ];
           const currentTab = tabs.some(t => t.key === activeTab) ? activeTab : (tabs[0]?.key ?? SECTION_MINE);
-          const activeCourse = courses.find(g => courseSection(g.courseId) === currentTab);
+          const effectiveCourseId =
+            selectedCourseId !== 'all' && courses.some(g => String(g.courseId) === selectedCourseId) ? selectedCourseId : 'all';
+          const visibleCourses =
+            effectiveCourseId === 'all' ? courses : courses.filter(g => String(g.courseId) === effectiveCourseId);
 
           return (
             <div className="space-y-4">
@@ -376,33 +391,57 @@ export function StudentFlashcardsPage() {
                   )
                 )}
 
-                {activeCourse && (
-                  <div className="space-y-3">
-                    <div className="flex items-center justify-between gap-2">
-                      <span className="text-sm text-content-soft">{activeCourse.courseTitle}</span>
-                      <button
-                        type="button"
-                        onClick={() => navigate(studentCoursePath(activeCourse.courseId))}
-                        className="text-xs font-medium text-brand-ink hover:underline"
-                      >
-                        Open course →
-                      </button>
-                    </div>
-                    {activeCourse.error ? (
-                      <p className="text-sm text-content-soft">{activeCourse.error}</p>
-                    ) : (
-                      <div className={GRID}>
-                        {activeCourse.decks.map(d => (
-                          <FlashDeckCard
-                            key={d.deckId}
-                            deck={{ ...d, reviewStatus: null }}
-                            onOpen={() => openDeck(d, false)}
-                            bookmarked={bookmarkedIds?.has(d.deckId)}
-                            onToggleBookmark={bookmarkedIds ? () => void toggleBookmark(d) : undefined}
-                          />
-                        ))}
+                {currentTab === SECTION_COURSES && (
+                  <div className="space-y-5">
+                    {courses.length > 1 && (
+                      <div className="flex flex-wrap items-center justify-between gap-3">
+                        <span className="text-sm text-content-soft">
+                          {visibleCourses.length} of {courses.length} courses
+                        </span>
+                        <Select
+                          aria-label="Filter by course"
+                          className="sm:w-72"
+                          value={effectiveCourseId}
+                          onChange={setSelectedCourseId}
+                          options={[
+                            { value: 'all', label: `All courses (${courses.length})` },
+                            ...courses.map(g => ({
+                              value: String(g.courseId),
+                              label: `${g.courseTitle}${g.error ? '' : ` (${g.decks.length})`}`,
+                            })),
+                          ]}
+                        />
                       </div>
                     )}
+                    {visibleCourses.map(courseGroup => (
+                      <div key={courseGroup.courseId} className="space-y-3">
+                        <div className="flex items-center justify-between gap-2">
+                          <span className="text-sm font-medium text-content-soft">{courseGroup.courseTitle}</span>
+                          <button
+                            type="button"
+                            onClick={() => navigate(studentCoursePath(courseGroup.courseId))}
+                            className="text-xs font-medium text-brand-ink hover:underline"
+                          >
+                            Open course →
+                          </button>
+                        </div>
+                        {courseGroup.error ? (
+                          <p className="text-sm text-content-soft">{courseGroup.error}</p>
+                        ) : (
+                          <div className={GRID}>
+                            {courseGroup.decks.map(d => (
+                              <FlashDeckCard
+                                key={d.deckId}
+                                deck={{ ...d, reviewStatus: null }}
+                                onOpen={() => openDeck(d, false)}
+                                bookmarked={bookmarkedIds?.has(d.deckId)}
+                                onToggleBookmark={bookmarkedIds ? () => void toggleBookmark(d) : undefined}
+                              />
+                            ))}
+                          </div>
+                        )}
+                      </div>
+                    ))}
                   </div>
                 )}
 

@@ -832,6 +832,78 @@ public class StudentCodeExamApiIntegrationTest {
                 .andExpect(status().isBadRequest());
     }
 
+    @Test
+    void practiceSessionExposesCodeMetadataAndAllowsRunningSampleCode() throws Exception {
+        com.examprep.entities.Module module = com.examprep.entities.Module.builder()
+                .course(course)
+                .title("Code Practice")
+                .orderIndex(1)
+                .status(com.examprep.entities.Module.STATUS_VISIBLE)
+                .build();
+        em.persist(module);
+
+        Question practiceCode = Question.builder()
+                .course(course)
+                .module(module)
+                .createdBy(manager)
+                .questionType("CODE")
+                .difficulty("EASY")
+                .content("Echo input")
+                .status("ACTIVE")
+                .approvalStatus("APPROVED")
+                .build();
+        em.persist(practiceCode);
+        fixture(practiceCode, "hello", "hello\n", false, 1);
+        fixture(practiceCode, "secret", "secret\n", true, 2);
+        String driver = "# STUDENT CODE START\ndef echo(s):\n    return s\n# STUDENT CODE END\nprint(echo(input()))\n";
+        Instant now = Instant.now();
+        em.persist(CodeQuestionConfig.builder()
+                .questionId(practiceCode.getQuestionId())
+                .allowedLanguages("[\"PYTHON\"]")
+                .codeTemplate(driver)
+                .timeLimitMs(2_000)
+                .memoryLimitKb(131_072)
+                .createdAt(now)
+                .updatedAt(now)
+                .build());
+        em.flush();
+
+        // Starting a Module Practice session does NOT create an ExamAttempt.
+        JsonNode session = data(call(student, post("/api/v1/student/modules/" + module.getModuleId() + "/practice/sessions")
+                .contentType(MediaType.APPLICATION_JSON).content("{}"))
+                .andExpect(status().isCreated()));
+        long sessionId = session.path("sessionId").asLong();
+        long sessionQuestionId = session.path("questions").get(0).path("sessionQuestionId").asLong();
+
+        // Both MP-04 single and MP-04 batch include CODE config & non-hidden sample fixture only.
+        JsonNode single = data(call(student, get("/api/v1/student/practice/sessions/" + sessionId + "/questions/" + sessionQuestionId))
+                .andExpect(status().isOk()));
+        assertEquals("PYTHON", single.path("code").path("languages").get(0).asText());
+        assertEquals("def echo(s):\n    return s\n", single.path("code").path("codeTemplate").asText());
+        assertEquals("hello", single.path("code").path("sampleInput").asText());
+        assertEquals("hello\n", single.path("code").path("sampleOutput").asText());
+        assertTrue(single.path("code").path("functionMode").asBoolean());
+
+        JsonNode batch = data(call(student, get("/api/v1/student/practice/sessions/" + sessionId + "/questions?ids=" + sessionQuestionId))
+                .andExpect(status().isOk()));
+        assertEquals("hello", batch.get(0).path("code").path("sampleInput").asText());
+        assertEquals("def echo(s):\n    return s\n", batch.get(0).path("code").path("codeTemplate").asText());
+        assertTrue(batch.get(0).path("code").path("functionMode").asBoolean());
+
+        // CD-04 run works for the practice student, and refuses another student without an active session.
+        String studentCode = "def echo(s):\n    return s\n";
+        when(piston.run(eq("PYTHON"), eq(driver), eq("hello"), eq(2_000), eq(131_072)))
+                .thenReturn(new PistonClient.RunOutcome("COMPLETED", "hello\n", null, 50));
+        runCode(practiceCode, "PYTHON", studentCode)
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.status").value("COMPLETED"))
+                .andExpect(jsonPath("$.data.stdout").value("hello\n"));
+        call(other, post("/api/v1/student/code-exams/run").contentType(MediaType.APPLICATION_JSON)
+                .content(json.writeValueAsString(Map.of("questionId", practiceCode.getQuestionId(),
+                        "language", "PYTHON", "sourceCode", studentCode))))
+                .andExpect(status().isNotFound());
+    }
+
     // =================================================================================
     // helpers
     // =================================================================================

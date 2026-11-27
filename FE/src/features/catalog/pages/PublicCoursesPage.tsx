@@ -170,7 +170,14 @@ function CatalogCourseCard({ course, onOpen }: { course: StudentCourseItem; onOp
         <h3 className="mt-2 text-lg font-semibold leading-snug text-content [overflow-wrap:anywhere]">{course.title}</h3>
         <p className="mt-1 text-sm text-content-soft">{course.manager?.fullName ? `Created by ${course.manager.fullName}` : 'Build a little more knowledge every day.'}</p>
         <div className="mt-auto flex items-center justify-between gap-3 pt-5">
-          <span className={`text-sm font-semibold ${course.price === 0 ? 'text-success' : 'text-content'}`}>{price}</span>
+          {course.isEnrolled ? (
+            <span className="inline-flex items-center gap-1.5 text-sm font-semibold text-success">
+              <Icon.CheckCircle className="h-4 w-4" />
+              Enrolled
+            </span>
+          ) : (
+            <span className={`text-sm font-semibold ${course.price === 0 ? 'text-success' : 'text-content'}`}>{price}</span>
+          )}
           <button type="button" onClick={onOpen} className="inline-flex h-10 items-center gap-1.5 rounded-xl bg-brand-600 px-4 text-sm font-semibold text-white transition hover:bg-brand-700">Explore course<Icon.ChevronRight className="h-4 w-4" /></button>
         </div>
       </div>

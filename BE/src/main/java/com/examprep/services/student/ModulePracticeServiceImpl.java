@@ -5,6 +5,8 @@ import com.examprep.dto.attempt.Snapshots;
 import com.examprep.dto.practice.ModulePracticeRequests;
 import com.examprep.dto.practice.ModulePracticeResponses;
 import com.examprep.entities.AnswerOption;
+import com.examprep.entities.CodeQuestionConfig;
+import com.examprep.entities.CodeTestCase;
 import com.examprep.entities.Question;
 import com.examprep.entities.QuestionPracticeProgress;
 import com.examprep.entities.QuestionPracticeSession;
@@ -13,6 +15,8 @@ import com.examprep.entities.QuestionMedia;
 import com.examprep.entities.User;
 import com.examprep.exceptions.BaseException;
 import com.examprep.exceptions.ResourceNotFoundException;
+import com.examprep.repositories.CodeQuestionConfigRepository;
+import com.examprep.repositories.CodeTestCaseRepository;
 import com.examprep.repositories.QuestionMediaRepository;
 import com.examprep.repositories.QuestionPracticeAnswerRepository;
 import com.examprep.repositories.QuestionPracticeProgressRepository;
@@ -87,6 +91,8 @@ public class ModulePracticeServiceImpl implements ModulePracticeService {
     private final UserRepository users;
     private final AttemptPaperFactory paperFactory;
     private final PlatformTransactionManager transactionManager;
+    private final CodeQuestionConfigRepository codeConfigs;
+    private final CodeTestCaseRepository codeFixtures;
 
     // ------------------------------------------------------------------ MP-01
 
@@ -476,20 +482,45 @@ public class ModulePracticeServiceImpl implements ModulePracticeService {
         }
 
         List<Long> questionIds = new ArrayList<>(paper.size());
+        List<Long> codeQuestionIds = new ArrayList<>();
         for (QuestionPracticeSessionQuestion row : paper) {
-            questionIds.add(row.getQuestion().getQuestionId());
+            Long qId = row.getQuestion().getQuestionId();
+            questionIds.add(qId);
+            if ("CODE".equals(row.getQuestion().getQuestionType())) {
+                codeQuestionIds.add(qId);
+            }
         }
         Set<Long> bookmarked = new HashSet<>(
                 reviewRepository.findBookmarkedQuestionIdsIn(userId, questionIds));
+        java.util.Map<Long, CodeQuestionConfig> codeConfigMap = new java.util.HashMap<>();
+        java.util.Map<Long, List<CodeTestCase>> codeSampleMap = new java.util.HashMap<>();
+        if (!codeQuestionIds.isEmpty()) {
+            for (CodeQuestionConfig cfg : codeConfigs.findAllById(codeQuestionIds)) {
+                codeConfigMap.put(cfg.getQuestionId(), cfg);
+            }
+            for (CodeTestCase tc : codeFixtures.findByQuestionIds(codeQuestionIds)) {
+                if (Boolean.FALSE.equals(tc.getHidden())) {
+                    codeSampleMap.computeIfAbsent(tc.getQuestion().getQuestionId(), k -> new ArrayList<>()).add(tc);
+                }
+            }
+        }
 
         List<ModulePracticeResponses.QuestionView> views = new ArrayList<>(paper.size());
         for (QuestionPracticeSessionQuestion row : paper) {
+            ModulePracticeResponses.CodeView codeView = null;
+            if ("CODE".equals(row.getQuestion().getQuestionType())) {
+                Long qId = row.getQuestion().getQuestionId();
+                codeView = support.codeViewOf(
+                        codeConfigMap.get(qId),
+                        codeSampleMap.getOrDefault(qId, List.of()));
+            }
             views.add(support.questionViewOf(
                     row,
                     session.getQuestionCount(),
                     session.getAnsweredCount(),
                     attemptsByQuestion.getOrDefault(row.getSessionQuestionId(), List.of()),
-                    bookmarked.contains(row.getQuestion().getQuestionId())));
+                    bookmarked.contains(row.getQuestion().getQuestionId()),
+                    codeView));
         }
         return views;
     }

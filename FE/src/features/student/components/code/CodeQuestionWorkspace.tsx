@@ -44,9 +44,15 @@ function storedQuestionWidth(): number {
  * first. A question stored with none falls back to the language saved with the answer. Never a
  * guess: '' while CD-03 has not loaded, so code is not run or graded in the wrong language.
  */
-function questionLanguage(meta: CodeQuestion | null, saved: string | undefined): CodeLanguage {
-  if (!meta) return '';
-  return meta.languages?.[0] ?? saved ?? '';
+function questionLanguage(
+  meta: CodeQuestion | null,
+  saved: string | undefined,
+  loadingMeta: boolean,
+  languages: CodeLanguageInfo[],
+): CodeLanguage {
+  if (meta) return meta.languages?.[0] ?? saved ?? languages[0]?.id ?? 'JAVA';
+  if (loadingMeta) return '';
+  return saved || languages[0]?.id || 'JAVA';
 }
 
 function storedTerminalHeight(): number {
@@ -69,7 +75,8 @@ export function currentCodeAnswer(
 ): CodeSubmitAnswer | null {
   const text = response?.text;
   if (!text?.trim()) return null;
-  return { questionId, language: questionLanguage(meta, response?.language), sourceCode: text };
+  const lang = meta ? (meta.languages?.[0] ?? response?.language ?? '') : (response?.language ?? '');
+  return { questionId, language: lang, sourceCode: text };
 }
 
 /**
@@ -84,17 +91,21 @@ export function CodeQuestionWorkspace({
   languages,
   value,
   onChange,
+  loadingMeta = false,
+  readOnly = false,
 }: {
   question: AttemptQuestion;
   meta: CodeQuestion | null;
   languages: CodeLanguageInfo[];
   value: AnswerResponse | null;
   onChange: (response: AnswerResponse) => void;
+  loadingMeta?: boolean;
+  readOnly?: boolean;
 }) {
-  const language = questionLanguage(meta, value?.language);
+  const language = questionLanguage(meta, value?.language, loadingMeta, languages);
   const languageName = languages.find(l => l.id === language)?.name ?? language;
   /** CD-03 loaded but the question has no language: nothing to run or grade in. */
-  const noLanguage = meta != null && language === '';
+  const noLanguage = !loadingMeta && language === '';
 
   // Code the student typed; until then the editor shows the template, which is not an answer.
   // In function mode that is only their function: the BE puts the hidden driver around it.
@@ -275,10 +286,10 @@ export function CodeQuestionWorkspace({
             function — don&apos;t read the input or print the result yourself.
           </p>
         )}
-        <div className="min-h-0 flex-1">
+        <div className="min-h-[260px] flex-1">
           <Suspense fallback={<Skeleton className="h-full w-full" />}>
             {language ? (
-              <CodeEditor key={language} language={language} value={source} onChange={changeSource} onRun={() => void run()} />
+              <CodeEditor key={language} language={language} value={source} onChange={changeSource} onRun={() => void run()} readOnly={readOnly} />
             ) : (
               <Skeleton className="h-full w-full" />
             )}

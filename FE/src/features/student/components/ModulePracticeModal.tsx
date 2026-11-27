@@ -8,6 +8,7 @@ import { getApiErrorMessage } from '@/utils/apiError';
 import { studentModulePracticePath } from '@/app/routes';
 import {
   DEFAULT_PRACTICE_SIZE,
+  PRACTICE_MODE_LABEL,
   PRACTICE_SIZES,
   modulePracticeService,
   type ModulePracticeOverview,
@@ -105,6 +106,8 @@ export function ModulePracticeModal({
   const [size, setSize] = useState<number | null>(DEFAULT_PRACTICE_SIZE);
   const [difficulty, setDifficulty] = useState<PracticeDifficulty | null>(null);
   const [questionTypes, setQuestionTypes] = useState<QuestionType[]>([]);
+  const [switchMode, setSwitchMode] = useState(false);
+  const [completedSessionId, setCompletedSessionId] = useState<number | null>(null);
   const [starting, setStarting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const scopeKey = 'moduleId' in scope ? `module-${scope.moduleId}` : `general-${scope.courseId}`;
@@ -115,6 +118,8 @@ export function ModulePracticeModal({
     setSize(DEFAULT_PRACTICE_SIZE);
     setDifficulty(null);
     setQuestionTypes([]);
+    setSwitchMode(false);
+    setCompletedSessionId(null);
     setError(null);
   }, [open, scopeKey]);
 
@@ -124,12 +129,26 @@ export function ModulePracticeModal({
   const noMistakes = overview != null && overview.questionsNeedingReview === 0;
   const noQuestions = overview != null && overview.totalQuestions === 0;
   const active = overview?.activeSession?.status === 'IN_PROGRESS' ? overview.activeSession : null;
+  const choosingNewMode = !active || switchMode;
 
   async function start() {
     setStarting(true);
     setError(null);
     try {
-      const sessionId = active ? active.sessionId : (await modulePracticeService.startSession(scope, { questionCount: mode === 'TARGET' ? size : null, mode, difficulty, questionTypes })).sessionId;
+      if (active && !switchMode) {
+        navigate(studentModulePracticePath(active.sessionId));
+        return;
+      }
+      if (active && switchMode && completedSessionId !== active.sessionId) {
+        await modulePracticeService.complete(active.sessionId);
+        setCompletedSessionId(active.sessionId);
+      }
+      const { sessionId } = await modulePracticeService.startSession(scope, {
+        questionCount: mode === 'TARGET' ? size : null,
+        mode,
+        difficulty,
+        questionTypes,
+      });
       navigate(studentModulePracticePath(sessionId));
     } catch (err) {
       setError(getApiErrorMessage(err, 'Could not start the practice session.'));
@@ -150,7 +169,7 @@ export function ModulePracticeModal({
             Cancel
           </Button>
           <Button loading={starting} disabled={starting || noQuestions} icon={<Icon.Play className="w-4 h-4" />} onClick={start}>
-            {active ? 'Continue session' : 'Start practice'}
+            {active && !switchMode ? 'Continue session' : active && switchMode ? 'End & start new' : 'Start practice'}
           </Button>
         </>
       }
@@ -158,15 +177,25 @@ export function ModulePracticeModal({
       <div className="space-y-5">
         {noQuestions && <Alert type="info" message="This module has no practice questions yet." />}
         {active && (
-          <Alert
-            type="info"
-            title="Session in progress"
-            message={`You have answered ${active.answeredCount} of ${active.questionCount} questions. Continue it, or finish it to start a new one.`}
-          />
+          <div className="space-y-2">
+            <Alert
+              type="info"
+              title={`Session in progress · ${PRACTICE_MODE_LABEL[active.mode] ?? active.mode}`}
+              message={
+                switchMode
+                  ? `Starting a new mode will complete your current session (${active.answeredCount} of ${active.questionCount} answered).`
+                  : `You have answered ${active.answeredCount} of ${active.questionCount} questions. Continue it, or switch to another practice mode.`
+              }
+            />
+            <div className="flex justify-end">
+              <Button size="sm" variant="ghost" disabled={starting} onClick={() => setSwitchMode(s => !s)}>
+                {switchMode ? 'Keep current session' : 'Change practice mode'}
+              </Button>
+            </div>
+          </div>
         )}
 
-        {/* MP-02 hands back the open session whatever the mode and size, so nothing to pick then. */}
-        {!active && (
+        {choosingNewMode && (
           <>
             <div role="radiogroup" aria-label="Practice mode" className="rounded-[12px] border border-line divide-y divide-line overflow-hidden">
               {MODES.map(m => {

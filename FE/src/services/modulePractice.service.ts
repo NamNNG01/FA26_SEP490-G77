@@ -172,6 +172,14 @@ export interface PracticeQuestionView {
   latestScore: number | null;
   gradingStatus: PracticeGradingStatus;
   attempts: PracticeAttempt[];
+  /** CODE only: allowed language, student template, and first public sample I/O. */
+  code?: {
+    languages: string[];
+    codeTemplate: string | null;
+    sampleInput: string | null;
+    sampleOutput: string | null;
+    functionMode?: boolean;
+  } | null;
 }
 
 export interface PracticeCorrectAnswer {

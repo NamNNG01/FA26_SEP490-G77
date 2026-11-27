@@ -2,6 +2,8 @@ package com.examprep.services.student;
 
 import com.examprep.dto.attempt.Snapshots;
 import com.examprep.dto.practice.ModulePracticeResponses;
+import com.examprep.entities.CodeQuestionConfig;
+import com.examprep.entities.CodeTestCase;
 import com.examprep.entities.Course;
 import com.examprep.entities.Enrollment;
 import com.examprep.entities.Module;
@@ -12,6 +14,8 @@ import com.examprep.entities.QuestionPracticeSession;
 import com.examprep.entities.QuestionPracticeSessionQuestion;
 import com.examprep.exceptions.ForbiddenException;
 import com.examprep.exceptions.ResourceNotFoundException;
+import com.examprep.repositories.CodeQuestionConfigRepository;
+import com.examprep.repositories.CodeTestCaseRepository;
 import com.examprep.repositories.CourseRepository;
 import com.examprep.repositories.EnrollmentRepository;
 import com.examprep.repositories.ModuleRepository;
@@ -21,7 +25,9 @@ import com.examprep.repositories.QuestionPracticeProgressRepository;
 import com.examprep.repositories.QuestionPracticeSessionQuestionRepository;
 import com.examprep.repositories.QuestionRepository;
 import com.examprep.services.AttemptPaperFactory;
+import com.examprep.services.CodeAnswerJudge;
 import com.examprep.util.attempt.AttemptGrader;
+import com.examprep.util.attempt.CodeDriver;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ArrayNode;
@@ -61,6 +67,9 @@ public class ModulePracticeSupport {
     private final QuestionPracticeAnswerRepository answers;
     private final QuestionPracticeProgressRepository progress;
     private final QuestionMediaRepository media;
+    private final CodeQuestionConfigRepository codeConfigs;
+    private final CodeTestCaseRepository codeFixtures;
+    private final CodeAnswerJudge codeJudge;
     private final AttemptPaperFactory paperFactory;
     private final ObjectMapper objectMapper;
 
@@ -502,6 +511,25 @@ public class ModulePracticeSupport {
                                                                List<QuestionPracticeAnswer> attempts,
                                                                boolean isBookmarked) {
         Snapshots.DisplayQuestion display = displayOf(sessionQuestion);
+        String type = display != null ? display.questionType() : sessionQuestion.getQuestion().getQuestionType();
+        ModulePracticeResponses.CodeView codeView = null;
+        if ("CODE".equals(type)) {
+            Long qId = sessionQuestion.getQuestion().getQuestionId();
+            CodeQuestionConfig cfg = codeConfigs.findById(qId).orElse(null);
+            List<CodeTestCase> samples = codeFixtures
+                    .findByQuestionQuestionIdAndHiddenOrderByOrderIndexAscTestCaseIdAsc(qId, false);
+            codeView = codeViewOf(cfg, samples);
+        }
+        return questionViewOf(sessionQuestion, questionsTotal, questionsAnswered, attempts, isBookmarked, codeView);
+    }
+
+    public ModulePracticeResponses.QuestionView questionViewOf(QuestionPracticeSessionQuestion sessionQuestion,
+                                                               int questionsTotal,
+                                                               int questionsAnswered,
+                                                               List<QuestionPracticeAnswer> attempts,
+                                                               boolean isBookmarked,
+                                                               ModulePracticeResponses.CodeView codeView) {
+        Snapshots.DisplayQuestion display = displayOf(sessionQuestion);
         List<ModulePracticeResponses.OptionView> options = null;
         ModulePracticeResponses.MatchingView matching = null;
         ModulePracticeResponses.AnswerSpaceView answerSpace = null;
@@ -551,7 +579,21 @@ public class ModulePracticeSupport {
                 sessionQuestion.getLatestIsCorrect(),
                 sessionQuestion.getLatestScore(),
                 sessionQuestion.getGradingStatus(),
-                submitted);
+                submitted,
+                codeView);
+    }
+
+    public ModulePracticeResponses.CodeView codeViewOf(CodeQuestionConfig cfg, List<CodeTestCase> fixtures) {
+        CodeTestCase sample = fixtures == null ? null : fixtures.stream()
+                .filter(f -> !Boolean.TRUE.equals(f.getHidden()))
+                .findFirst()
+                .orElse(null);
+        return new ModulePracticeResponses.CodeView(
+                List.of(codeJudge.language(cfg)),
+                cfg == null ? null : CodeDriver.studentTemplate(cfg.getCodeTemplate()),
+                sample == null ? null : sample.getInputData(),
+                sample == null ? null : sample.getExpectedOutput(),
+                cfg != null && CodeDriver.hasDriver(cfg.getCodeTemplate()));
     }
 
     /**

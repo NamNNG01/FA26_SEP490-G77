@@ -81,7 +81,7 @@ export function GroupPassageSplit({
     window.addEventListener('pointerup', stop);
   };
 
-  if (!passage) return <main className={`flex-1 overflow-y-auto ${mainClassName}`}>{children}</main>;
+  if (!passage) return <main className={`flex-1 min-h-0 overflow-y-auto ${mainClassName}`}>{children}</main>;
 
   return (
     <div

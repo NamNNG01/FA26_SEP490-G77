@@ -129,7 +129,43 @@ public final class ModulePracticeResponses {
             Boolean latestIsCorrect,
             BigDecimal latestScore,
             String gradingStatus,
-            List<SubmittedAnswer> attempts) {
+            List<SubmittedAnswer> attempts,
+            CodeView code) {
+        public QuestionView(
+                Long sessionId,
+                Long sessionQuestionId,
+                Long questionId,
+                int orderIndex,
+                int questionsTotal,
+                int questionsAnswered,
+                String questionType,
+                String content,
+                List<OptionView> options,
+                MatchingView matching,
+                AnswerSpaceView answerSpace,
+                List<MediaView> media,
+                GroupView group,
+                CorrectAnswerView correctAnswer,
+                boolean isBookmarked,
+                int attemptCount,
+                Boolean latestIsCorrect,
+                BigDecimal latestScore,
+                String gradingStatus,
+                List<SubmittedAnswer> attempts) {
+            this(sessionId, sessionQuestionId, questionId, orderIndex, questionsTotal, questionsAnswered,
+                    questionType, content, options, matching, answerSpace, media, group, correctAnswer,
+                    isBookmarked, attemptCount, latestIsCorrect, latestScore, gradingStatus, attempts, null);
+        }
+    }
+
+    /** CODE only: allowed language, student template, and first public sample I/O (no hidden cases). */
+    @JsonInclude(JsonInclude.Include.ALWAYS)
+    public record CodeView(
+            List<String> languages,
+            String codeTemplate,
+            String sampleInput,
+            String sampleOutput,
+            boolean functionMode) {
     }
 
     /** An option as the student saw it when the session started: id and text only. */
