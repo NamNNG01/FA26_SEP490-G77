@@ -17,6 +17,7 @@ const SECTIONS = [
   { id: 'security', label: 'Authentication & Security', icon: <Icon.Shield className="w-4 h-4" /> },
   { id: 'exam', label: 'Exam Defaults', icon: <Icon.ClipboardList className="w-4 h-4" /> },
   { id: 'question', label: 'Question Settings', icon: <Icon.FileText className="w-4 h-4" /> },
+  { id: 'ai', label: 'AI Quota', icon: <Icon.Zap className="w-4 h-4" /> },
   { id: 'upload', label: 'File Upload', icon: <Icon.Upload className="w-4 h-4" /> },
   { id: 'maintenance', label: 'Maintenance', icon: <Icon.Database className="w-4 h-4" /> },
 ] as const;
@@ -81,6 +82,9 @@ const INITIAL = {
     aiHints: true,
     duplicateDetection: true,
   },
+  ai: {
+    managerMonthlyTokenLimit: '1000000',
+  },
   upload: {
     pdfSize: '20',
     imageSize: '5',
@@ -101,6 +105,7 @@ const clone = (s: Settings): Settings => ({
   security: { ...s.security },
   exam: { ...s.exam },
   question: { ...s.question },
+  ai: { ...s.ai },
   upload: { ...s.upload },
   maintenance: { ...s.maintenance },
 });
@@ -159,6 +164,12 @@ export function SystemSettingsPage() {
 
   /** Save now writes to the server: the success banner appears only after the write lands. */
   const handleSave = async () => {
+    const rawLimit = String(settings.ai.managerMonthlyTokenLimit ?? '').trim();
+    if (!/^\d+$/.test(rawLimit)) {
+      setSection('ai');
+      setSaveError('Manager monthly AI token limit must be a non-negative whole number.');
+      return;
+    }
     setSaving(true);
     setSaveError(null);
     try {
@@ -176,13 +187,15 @@ export function SystemSettingsPage() {
     <div className="p-8 space-y-5">
       <div>
         <h2 className="text-xl font-bold text-content">System Settings</h2>
-        <p className="text-sm text-content-soft mt-1">Configure platform behavior, security, and maintenance options.</p>
+        <p className="text-sm text-content-soft mt-1">Configure platform behavior, security, AI quotas, and maintenance options.</p>
       </div>
 
-      <Alert
-        type="info"
-        message="These settings are saved as configuration metadata in the database and are not yet enforced by backend runtime checks."
-      />
+      {section !== 'ai' && (
+        <Alert
+          type="info"
+          message="These settings are saved as configuration metadata in the database and are not yet enforced by backend runtime checks (except AI Quota)."
+        />
+      )}
 
       <div className="grid grid-cols-1 lg:grid-cols-4 gap-6 items-start">
         {/* Left (25%): settings navigation */}
@@ -293,6 +306,34 @@ export function SystemSettingsPage() {
               <ToggleRow label="Require Explanation" desc="Content managers must add an answer explanation" checked={settings.question.requireExplanation} onChange={v => set('question', { requireExplanation: v })} />
               <ToggleRow label="Enable AI Hint Generation" desc="Students can request AI hints during quizzes" checked={settings.question.aiHints} onChange={v => set('question', { aiHints: v })} />
               <ToggleRow label="Duplicate Question Detection" desc="Warn when a new question closely matches an existing one" checked={settings.question.duplicateDetection} onChange={v => set('question', { duplicateDetection: v })} />
+            </div>
+          )}
+
+          {/* ── AI Quota ── */}
+          {section === 'ai' && (
+            <div className="card p-6 space-y-4">
+              <div className="flex items-center justify-between gap-2 flex-wrap">
+                <h4 className="text-lg font-semibold text-content">AI Quota</h4>
+                <Badge variant="success">Enforced at runtime</Badge>
+              </div>
+              <Alert
+                type="info"
+                message="Global monthly token limit for Content Manager AI explanation generation (AI-04). Resets on the 1st of each month (Asia/Ho_Chi_Minh). You can set per-manager overrides on individual user profiles."
+              />
+              <Input
+                label="Default Monthly AI Token Limit (per Manager)"
+                type="number"
+                min={0}
+                step={1000}
+                value={String(settings.ai.managerMonthlyTokenLimit ?? '')}
+                onChange={e => set('ai', { managerMonthlyTokenLimit: e.target.value })}
+                suffix="tokens / month"
+                hint={
+                  /^\d+$/.test(String(settings.ai.managerMonthlyTokenLimit ?? '').trim())
+                    ? `Current limit: ${Number(settings.ai.managerMonthlyTokenLimit).toLocaleString()} tokens/month (Default: 1,000,000)`
+                    : 'Enter a non-negative whole number (Default: 1,000,000)'
+                }
+              />
             </div>
           )}
 

@@ -367,6 +367,42 @@ class AdminUserApiIntegrationTest {
     }
 
     @Test
+    void managerAiQuotaOverrideCanBeSetClearedAndReadBack() throws Exception {
+        // Non-admins cannot update manager AI quota; students cannot hold a manager override.
+        call(manager, put(BASE + "/" + manager.getUserId() + "/manager-ai-quota")
+                .contentType(MediaType.APPLICATION_JSON).content("{\"monthlyTokenLimit\":2500000}"))
+                .andExpect(status().isForbidden());
+        call(admin, put(BASE + "/" + student.getUserId() + "/manager-ai-quota")
+                .contentType(MediaType.APPLICATION_JSON).content("{\"monthlyTokenLimit\":2500000}"))
+                .andExpect(status().isBadRequest());
+
+        // Set per-manager override.
+        call(admin, put(BASE + "/" + manager.getUserId() + "/manager-ai-quota")
+                .contentType(MediaType.APPLICATION_JSON).content("{\"monthlyTokenLimit\":2500000}"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.globalDefaultLimit").value(1_000_000))
+                .andExpect(jsonPath("$.data.overrideLimit").value(2_500_000))
+                .andExpect(jsonPath("$.data.effectiveLimit").value(2_500_000))
+                .andExpect(jsonPath("$.data.remainingTokens").value(2_500_000));
+
+        call(admin, get(BASE + "/" + manager.getUserId()))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.managerAiQuota.overrideLimit").value(2_500_000))
+                .andExpect(jsonPath("$.data.managerAiQuota.effectiveLimit").value(2_500_000));
+
+        call(admin, get(BASE).param("role", User.ROLE_COURSE_MANAGER).param("search", manager.getEmail()))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.content[0].managerMonthlyAiTokenLimit").value(2_500_000));
+
+        // Clear override -> inherits global default again.
+        call(admin, put(BASE + "/" + manager.getUserId() + "/manager-ai-quota")
+                .contentType(MediaType.APPLICATION_JSON).content("{\"monthlyTokenLimit\":null}"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.overrideLimit").doesNotExist())
+                .andExpect(jsonPath("$.data.effectiveLimit").value(1_000_000));
+    }
+
+    @Test
     void loginRecordsLastLoginAtAndFailureLeavesItUnset() throws Exception {
         User target = User.builder().email(UUID.randomUUID() + "@example.com").fullName("Login User")
                 .passwordHash(encoder.encode("Secret123!")).roleName(User.ROLE_STUDENT).build();

@@ -81,9 +81,9 @@ export function PracticeExplanation({
           </Badge>
         )}
       </div>
-      {text ? (
+      {text || result.source === 'NOT_APPLICABLE' ? (
         <DeepAiExplanation
-          original={text}
+          original={text ?? null}
           request={() => modulePracticeService.deepExplain(questionId, { sessionId, sessionQuestionId, practiceAnswerId })}
           resetKey={`${sessionQuestionId}-${practiceAnswerId ?? 'latest'}`}
         />

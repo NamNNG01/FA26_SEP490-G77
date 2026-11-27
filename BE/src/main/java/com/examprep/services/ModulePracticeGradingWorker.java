@@ -401,6 +401,10 @@ public class ModulePracticeGradingWorker {
                 if (CodeSource.tooLarge(student)) {
                     return tooLarge(criteria, maxPoints, TEXT_TOO_LONG);
                 }
+                String lang = response.path("language").asText("").strip();
+                if (!lang.isEmpty()) {
+                    student = "Language: " + lang + "\n" + student;
+                }
             } else if (student.length() > MAX_ESSAY_CHARS) {
                 return tooLarge(criteria, maxPoints, TEXT_TOO_LONG);
             }
@@ -409,6 +413,9 @@ public class ModulePracticeGradingWorker {
         ObjectNode prompt = json.createObjectNode();
         prompt.put("questionType", type);
         prompt.put("question", display.path("content").asText(sessionQuestion.getQuestion().getContent()));
+        if ("CODE".equals(type)) {
+            prompt.put("codeReference", support.codeReference(sessionQuestion.getQuestion().getQuestionId()));
+        }
         prompt.put("maxPoints", maxPoints.setScale(2, RoundingMode.HALF_UP));
         ArrayNode rubric = prompt.putArray("criteria");
         for (Criterion criterion : criteria) {

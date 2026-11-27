@@ -472,8 +472,8 @@ function PracticeQuestionCard({
               </div>
             )}
           </div>
-          {/* Essay / diagram get rubric feedback only; CODE is also explained (MP-09). */}
-          {q.questionType === 'CODE' && graded && (
+          {/* Rubric questions show pre-authored/AI-04 explanations when available, and Deep AI Explanation (MP-10). */}
+          {graded && (
             <div className="mt-4">
               <PracticeExplanation
                 questionId={q.questionId}

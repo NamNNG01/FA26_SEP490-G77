@@ -75,6 +75,9 @@ public class User implements Serializable {
     @Column(name = "community_mute_reason", length = 500)
     private String communityMuteReason;
 
+    @Column(name = "manager_monthly_ai_token_limit")
+    private Long managerMonthlyAiTokenLimit;
+
     @CreatedDate
     @Column(name = "created_at", nullable = false, updatable = false)
     private Instant createdAt;

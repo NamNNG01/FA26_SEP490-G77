@@ -15,9 +15,28 @@ export function activeSubscription(subscription: AdminUserSubscription | null | 
 
 /**
  * The user's plan: its name and end date for a student with an active paid plan, "Free" for any
- * other student, and a dash for staff accounts, which have no subscription.
+ * other student, custom/default AI token quota for Content Managers, and a dash for Admins.
  */
-export function SubscriptionCell({ role, subscription }: { role: AdminUserRole; subscription?: AdminUserSubscription | null }) {
+export function SubscriptionCell({
+  role,
+  subscription,
+  managerMonthlyAiTokenLimit,
+}: {
+  role: AdminUserRole;
+  subscription?: AdminUserSubscription | null;
+  managerMonthlyAiTokenLimit?: number | null;
+}) {
+  if (role === 'COURSE_MANAGER') {
+    if (managerMonthlyAiTokenLimit != null) {
+      return (
+        <div className="min-w-0">
+          <Badge variant="info">Custom AI quota</Badge>
+          <p className="text-2xs text-content-subtle mt-0.5 truncate">{managerMonthlyAiTokenLimit.toLocaleString()} tok/mo</p>
+        </div>
+      );
+    }
+    return <span className="text-xs text-content-subtle">Default AI quota</span>;
+  }
   if (role !== 'STUDENT') return <span className="text-content-faint">—</span>;
   const active = activeSubscription(subscription);
   if (!active) return <Badge variant="default">Free</Badge>;

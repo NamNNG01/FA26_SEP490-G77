@@ -1,7 +1,9 @@
 package com.examprep.util.attempt;
 
+import com.examprep.util.diagram.DrawioNormalizer;
 import com.fasterxml.jackson.databind.JsonNode;
 
+import java.nio.charset.StandardCharsets;
 import java.util.*;
 
 /**
@@ -10,6 +12,11 @@ import java.util.*;
  */
 public final class AnswerText {
     public static final Set<String> CHOICE_TYPES = Set.of("SINGLE_CHOICE", "MULTIPLE_CHOICE", "TRUE_FALSE");
+    public static final int MAX_STUDENT_ANSWER_CHARS = 10_000;
+    public static final int MAX_DIAGRAM_BYTES = 500 * 1024;
+    public static final int MAX_DIAGRAM_ELEMENTS = 150;
+    private static final int MAX_MODEL_ANSWER_CHARS = 4_000;
+    private static final int MAX_RUBRIC_CHARS = 2_000;
 
     private AnswerText() {}
 
@@ -108,16 +115,105 @@ public final class AnswerText {
             case "DIAGRAM", "DIAGRAM_ESSAY" -> {
                 String text = response.path("text").asText("").strip();
                 String xml = response.path("drawioXml").asText("").strip();
-                if (!text.isEmpty()) parts.add(text);
-                if (!xml.isEmpty()) {
-                    parts.add("Diagram XML: " + (xml.length() <= 4000 ? xml : xml.substring(0, 4000)));
+                if (xml.isEmpty() && text.isEmpty()) return "No answer submitted";
+                String diagramDesc = normalizeDiagram(xml);
+                if ("DIAGRAM_ESSAY".equals(type)) {
+                    return clipStudentAnswer("Diagram Submission:\n" + diagramDesc
+                            + "\n\nEssay Explanation:\n" + (text.isEmpty() ? "(no text submitted)" : text));
                 }
-                return parts.isEmpty() ? "No answer submitted" : String.join("\n", parts);
+                return clipStudentAnswer(text.isEmpty() ? diagramDesc : diagramDesc + "\n" + text);
             }
             default -> {
-                return response.toString();
+                return clipStudentAnswer(response.toString());
             }
         }
+    }
+
+    /** Wraps a student's answer in {@code <student_answer>} tags and strips any injected closing/opening tags. */
+    public static String fenceStudentAnswer(String raw) {
+        String sanitized = (raw == null ? "" : raw).replaceAll("(?i)</?\\s*student_answer\\s*>", "");
+        return "<student_answer>\n" + sanitized + "\n</student_answer>";
+    }
+
+    /**
+     * Resolves the rubric reference for Deep Explanation: prefers the attempt/session frozen {@code keySnapshot}
+     * rubric, falling back to the live question rubric only when the question version still matches.
+     */
+    public static String rubricReference(JsonNode keySnapshot, String fallbackLiveRubric, boolean sameVersion) {
+        if (keySnapshot != null) {
+            JsonNode rubric = keySnapshot.path("rubric");
+            if (rubric.path("criteria").isArray() && !rubric.path("criteria").isEmpty()) {
+                return clip(rubric.toString(), MAX_RUBRIC_CHARS);
+            }
+        }
+        if (sameVersion && fallbackLiveRubric != null && !fallbackLiveRubric.isBlank()) {
+            return clip(fallbackLiveRubric, MAX_RUBRIC_CHARS);
+        }
+        return "Graded against rubric";
+    }
+
+    /** Extracts a normalized diagram and/or sample essay model answer from {@code keySnapshot}, or {@code null}. */
+    public static String rubricModelAnswer(String type, JsonNode keySnapshot) {
+        if (keySnapshot == null || keySnapshot.isNull() || keySnapshot.isMissingNode()) {
+            return null;
+        }
+        String diagram = null;
+        if ("DIAGRAM".equals(type) || "DIAGRAM_ESSAY".equals(type)) {
+            String xml = keySnapshot.path("drawioXml").asText("").strip();
+            if (!xml.isBlank() && xml.getBytes(StandardCharsets.UTF_8).length <= MAX_DIAGRAM_BYTES) {
+                try {
+                    diagram = DrawioNormalizer.normalize(xml).text();
+                } catch (IllegalArgumentException ignored) {
+                    diagram = null;
+                }
+            }
+        }
+        String sampleText = null;
+        if ("ESSAY".equals(type) || "DIAGRAM_ESSAY".equals(type)) {
+            String rawSample = keySnapshot.path("sampleAnswer").asText("").strip();
+            if (!rawSample.isBlank()) {
+                sampleText = rawSample;
+            }
+        }
+        if (diagram != null && sampleText != null) {
+            return clip(diagram + "\n\nSample Essay Answer:\n" + sampleText, MAX_MODEL_ANSWER_CHARS);
+        }
+        if (diagram != null) {
+            return clip(diagram, MAX_MODEL_ANSWER_CHARS);
+        }
+        if (sampleText != null) {
+            return clip(sampleText, MAX_MODEL_ANSWER_CHARS);
+        }
+        return null;
+    }
+
+    private static String normalizeDiagram(String xml) {
+        if (xml == null || xml.isBlank()) {
+            return "(no diagram submitted)";
+        }
+        if (xml.getBytes(StandardCharsets.UTF_8).length > MAX_DIAGRAM_BYTES) {
+            return "(submitted diagram exceeds size limit)";
+        }
+        try {
+            DrawioNormalizer.Result normalized = DrawioNormalizer.normalize(xml);
+            if (normalized.elements() > MAX_DIAGRAM_ELEMENTS) {
+                return "(submitted diagram has too many elements to normalize)";
+            }
+            return normalized.text();
+        } catch (IllegalArgumentException ex) {
+            return "(the submitted diagram could not be read)";
+        }
+    }
+
+    private static String clipStudentAnswer(String value) {
+        if (value == null || value.length() <= MAX_STUDENT_ANSWER_CHARS) {
+            return value;
+        }
+        return value.substring(0, MAX_STUDENT_ANSWER_CHARS) + "\n...(truncated)";
+    }
+
+    private static String clip(String value, int max) {
+        return value.length() <= max ? value : value.substring(0, max);
     }
 
     /** A fixture on one prompt line: the model reads the layout, so an embedded newline is escaped. */

@@ -33,6 +33,9 @@ public interface AttemptAnswerRepository extends JpaRepository<AttemptAnswer, Lo
 
     boolean existsByGradingStatus(String gradingStatus);
 
+    @Query("SELECT a.deepExplanation FROM AttemptAnswer a WHERE a.attemptAnswerId = :id")
+    Optional<String> findDeepExplanationById(@Param("id") Long id);
+
     @Query("SELECT a FROM AttemptAnswer a JOIN FETCH a.question WHERE a.attempt.attemptId = :attemptId")
     List<AttemptAnswer> findWithQuestionByAttemptId(@Param("attemptId") Long attemptId);
 

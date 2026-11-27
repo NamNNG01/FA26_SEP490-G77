@@ -281,6 +281,9 @@ public class QuestionServiceImpl implements QuestionService {
                 correctOrder = new ArrayList<>(list);
             }
 
+            String cleanExplanation = questionValidator.sanitize(req.getExplanation());
+            boolean hasExplanation = cleanExplanation != null && !cleanExplanation.isBlank();
+
             Question question = Question.builder()
                     .course(course)
                     .module(req.getModuleId() != null ? moduleMap.get(req.getModuleId()) : null)
@@ -295,7 +298,9 @@ public class QuestionServiceImpl implements QuestionService {
                     .creatorRole(creatorRole)
                     .approvalStatus(approvalStatus)
                     .status(status)
-                    .aiExplanation(questionValidator.sanitize(req.getExplanation()))
+                    .aiExplanation(cleanExplanation)
+                    .aiExplanationSource(hasExplanation ? "MANAGER" : null)
+                    .aiExplanationVersion(hasExplanation ? 1 : null)
                     .essayGradingRubric(rubricJson)
                     .contentHash(hashes.get(i))
                     .scoringVersion(1)
@@ -541,8 +546,13 @@ public class QuestionServiceImpl implements QuestionService {
             q.setContent(questionValidator.sanitize(req.getContent()));
         }
         if (req.getDifficulty() != null) q.setDifficulty(req.getDifficulty());
+        boolean explanationChanged = false;
+        boolean explanationHasText = false;
         if (req.getExplanation() != null) {
-            q.setAiExplanation(questionValidator.sanitize(req.getExplanation()));
+            String sanitizedExp = questionValidator.sanitize(req.getExplanation());
+            explanationChanged = !Objects.equals(sanitizedExp, q.getAiExplanation());
+            explanationHasText = sanitizedExp != null && !sanitizedExp.isBlank();
+            q.setAiExplanation(sanitizedExp);
         }
 
         if (req.getQuestionMetadata() != null) {
@@ -702,6 +712,10 @@ public class QuestionServiceImpl implements QuestionService {
         if (scoreAffectingChanged) {
             q.setScoringVersion(q.getScoringVersion() + 1);
         }
+        if (explanationChanged) {
+            q.setAiExplanationSource(explanationHasText ? "MANAGER" : null);
+            q.setAiExplanationVersion(explanationHasText ? q.getScoringVersion() : null);
+        }
         q.setContentHash(newHash);
 
         q = questionRepository.save(q);
@@ -759,6 +773,8 @@ public class QuestionServiceImpl implements QuestionService {
                 .approvalStatus("APPROVED")
                 .status("INACTIVE")
                 .aiExplanation(original.getAiExplanation())
+                .aiExplanationSource(original.getAiExplanationSource())
+                .aiExplanationVersion(original.getAiExplanation() != null && !original.getAiExplanation().isBlank() ? 1 : null)
                 .essayGradingRubric(original.getEssayGradingRubric())
                 .contentHash(original.getContentHash())
                 .scoringVersion(1)

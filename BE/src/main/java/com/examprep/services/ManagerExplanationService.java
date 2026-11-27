@@ -3,12 +3,12 @@ package com.examprep.services;
 import com.examprep.dto.ResponseCode;
 import com.examprep.dto.question.QuestionAiExplanationRequest;
 import com.examprep.dto.question.QuestionAiExplanationResponse;
+import com.examprep.entities.AiUsageLog;
 import com.examprep.entities.ManagerExplanationJob;
 import com.examprep.entities.ManagerExplanationJobItem;
 import com.examprep.entities.Question;
 import com.examprep.entities.User;
 import com.examprep.exceptions.BadRequestException;
-import com.examprep.exceptions.BaseException;
 import com.examprep.exceptions.ForbiddenException;
 import com.examprep.exceptions.ResourceNotFoundException;
 import com.examprep.repositories.ManagerExplanationJobItemRepository;
@@ -16,15 +16,12 @@ import com.examprep.repositories.ManagerExplanationJobRepository;
 import com.examprep.repositories.QuestionRepository;
 import com.examprep.security.QuestionAccessPolicy;
 import lombok.RequiredArgsConstructor;
-import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.transaction.support.TransactionSynchronization;
 import org.springframework.transaction.support.TransactionSynchronizationManager;
 
 import java.time.Instant;
-import java.time.LocalDate;
-import java.time.ZoneOffset;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.HashMap;
@@ -35,7 +32,7 @@ import java.util.Map;
 import java.util.Set;
 
 /**
- * AI-04 manager service: validates ownership, applies daily manager limits, queues background
+ * AI-04 manager service: validates ownership, reserves monthly AI token quota, queues background
  * explanation jobs, and resolves {@code NONE | PENDING | READY | FAILED} status for question DTOs.
  */
 @Service
@@ -52,12 +49,7 @@ public class ManagerExplanationService {
     private final ManagerExplanationJobItemRepository jobItems;
     private final QuestionAccessPolicy accessPolicy;
     private final ManagerExplanationWorker worker;
-
-    @Value("${app.question-ai.explanation-daily-limit:50}")
-    private int dailyLimit;
-
-    private final Map<Long, Integer> dailyCalls = new HashMap<>();
-    private LocalDate quotaDay = LocalDate.now(ZoneOffset.UTC);
+    private final ManagerAiQuotaService quotaService;
 
     @Transactional
     public QuestionAiExplanationResponse queueExplanations(QuestionAiExplanationRequest request, User currentUser) {
@@ -96,10 +88,12 @@ public class ManagerExplanationService {
                     .jobId(null)
                     .queuedCount(0)
                     .skippedCount(skippedCount)
+                    .estimatedTokens(0L)
+                    .remainingTokens(quotaService.snapshot(currentUser.getUserId()).remainingTokens())
                     .build();
         }
 
-        enforceDailyLimit(currentUser.getUserId());
+        AiUsageLog usageLog = quotaService.reserveForExplanationJob(currentUser.getUserId(), toQueue);
 
         Instant now = Instant.now();
         ManagerExplanationJob job = jobs.save(ManagerExplanationJob.builder()
@@ -107,6 +101,7 @@ public class ManagerExplanationService {
                 .overwrite(request.isOverwrite())
                 .status(ManagerExplanationWorker.JOB_PENDING)
                 .totalCount(toQueue.size())
+                .aiUsageLogId(usageLog.getLogId())
                 .createdAt(now)
                 .updatedAt(now)
                 .build());
@@ -125,10 +120,13 @@ public class ManagerExplanationService {
         Long jobId = job.getJobId();
         dispatchAfterCommit(jobId);
 
+        long remainingAfterReserve = quotaService.snapshot(currentUser.getUserId()).remainingTokens();
         return QuestionAiExplanationResponse.builder()
                 .jobId(jobId)
                 .queuedCount(toQueue.size())
                 .skippedCount(skippedCount)
+                .estimatedTokens(Long.valueOf(usageLog.getReservedTokens()))
+                .remainingTokens(remainingAfterReserve)
                 .build();
     }
 
@@ -167,19 +165,6 @@ public class ManagerExplanationService {
             return Set.of();
         }
         return new HashSet<>(jobItems.findPendingQuestionIds(questionIds));
-    }
-
-    private synchronized void enforceDailyLimit(Long userId) {
-        LocalDate today = LocalDate.now(ZoneOffset.UTC);
-        if (!today.equals(quotaDay)) {
-            dailyCalls.clear();
-            quotaDay = today;
-        }
-        if (dailyCalls.getOrDefault(userId, 0) >= dailyLimit) {
-            throw new BaseException(ResponseCode.AI_RATE_LIMITED,
-                    "Daily AI explanation generation limit reached.");
-        }
-        dailyCalls.merge(userId, 1, Integer::sum);
     }
 
     private void dispatchAfterCommit(Long jobId) {

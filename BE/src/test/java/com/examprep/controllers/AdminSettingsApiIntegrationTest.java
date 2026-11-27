@@ -77,6 +77,22 @@ class AdminSettingsApiIntegrationTest {
                 .contentType(MediaType.APPLICATION_JSON).content("[1,2]"))
                 .andExpect(status().isBadRequest())
                 .andExpect(jsonPath("$.message").value("Settings must be a JSON object"));
+
+        mvc.perform(put(BASE).with(user(UserPrincipal.create(admin)))
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("{\"ai\":{\"managerMonthlyTokenLimit\":\"-5\"}}"))
+                .andExpect(status().isBadRequest());
+
+        mvc.perform(put(BASE).with(user(UserPrincipal.create(admin)))
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("{\"ai\":{\"managerMonthlyTokenLimit\":\"not-a-number\"}}"))
+                .andExpect(status().isBadRequest());
+
+        mvc.perform(put(BASE).with(user(UserPrincipal.create(admin)))
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("{\"ai\":{\"managerMonthlyTokenLimit\":\"1000000\"}}"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.ai.managerMonthlyTokenLimit").value("1000000"));
     }
 
     private User account(String role) {

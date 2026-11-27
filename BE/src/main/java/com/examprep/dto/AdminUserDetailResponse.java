@@ -1,6 +1,7 @@
 package com.examprep.dto;
 
 import com.examprep.entities.User;
+import com.examprep.services.ManagerAiQuotaService;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
@@ -18,7 +19,36 @@ import java.util.List;
 @AllArgsConstructor
 public class AdminUserDetailResponse {
 
+    @Data
+    @Builder
+    @NoArgsConstructor
+    @AllArgsConstructor
+    public static class AdminManagerAiQuota {
+        private long globalDefaultLimit;
+        private Long overrideLimit;
+        private long effectiveLimit;
+        private long usedTokens;
+        private long reservedTokens;
+        private long remainingTokens;
+        private Instant periodStart;
+        private Instant periodEnd;
+
+        public static AdminManagerAiQuota from(ManagerAiQuotaService.Snapshot snap) {
+            return AdminManagerAiQuota.builder()
+                    .globalDefaultLimit(snap.globalDefaultLimit())
+                    .overrideLimit(snap.overrideLimit())
+                    .effectiveLimit(snap.effectiveLimit())
+                    .usedTokens(snap.usedTokens())
+                    .reservedTokens(snap.reservedTokens())
+                    .remainingTokens(snap.remainingTokens())
+                    .periodStart(snap.periodStart())
+                    .periodEnd(snap.periodEnd())
+                    .build();
+        }
+    }
+
     private AdminSubscription subscription;
+    private AdminManagerAiQuota managerAiQuota;
     private Long userId;
     private String fullName;
     private String email;

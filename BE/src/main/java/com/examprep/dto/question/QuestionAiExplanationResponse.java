@@ -13,4 +13,6 @@ public class QuestionAiExplanationResponse {
     private Long jobId;
     private int queuedCount;
     private int skippedCount;
+    private Long estimatedTokens;
+    private Long remainingTokens;
 }

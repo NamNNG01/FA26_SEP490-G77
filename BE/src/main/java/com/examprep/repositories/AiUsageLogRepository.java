@@ -33,6 +33,16 @@ public interface AiUsageLogRepository extends JpaRepository<AiUsageLog, Long> {
     List<Object[]> sumStudentUsage(@Param("userId") Long userId, @Param("source") String source,
             @Param("from") Instant from, @Param("to") Instant to);
 
+    @Query("""
+            SELECT COALESCE(SUM(CASE WHEN l.status IN ('SUCCESS', 'PARTIAL')
+                        THEN COALESCE(l.inputTokens, 0) + COALESCE(l.outputTokens, 0) ELSE 0 END), 0),
+                   COALESCE(SUM(CASE WHEN l.status IN ('PENDING', 'PROCESSING') THEN l.reservedTokens ELSE 0 END), 0)
+            FROM AiUsageLog l
+            WHERE l.user.userId = :userId AND l.billingSource = 'MANAGER'
+              AND l.createdAt >= :from AND l.createdAt < :to""")
+    List<Object[]> sumManagerUsage(@Param("userId") Long userId,
+            @Param("from") Instant from, @Param("to") Instant to);
+
     // Spec 8 (line 1016): running (PROCESSING) jobs still hold their reservation. The shared
     // sumStudentUsage only counts PENDING reservations (house-wide), so the flashcard/plan callers
     // add these sums on top of their snapshot. Window semantics mirror sumStudentUsage
@@ -59,7 +69,10 @@ public interface AiUsageLogRepository extends JpaRepository<AiUsageLog, Long> {
                                 AND a.grading_status IN ('QUEUED', 'GRADING'))
               AND NOT EXISTS (SELECT 1 FROM quiz_generation_jobs q
                               WHERE q.ai_usage_log_id = ai_usage_logs.log_id
-                                AND q.status IN ('PENDING', 'PROCESSING'))""", nativeQuery = true)
+                                AND q.status IN ('PENDING', 'PROCESSING'))
+              AND NOT EXISTS (SELECT 1 FROM manager_explanation_jobs m
+                              WHERE m.ai_usage_log_id = ai_usage_logs.log_id
+                                AND m.status IN ('PENDING', 'PROCESSING'))""", nativeQuery = true)
     int expirePending(@Param("cutoff") Instant cutoff);
 
     // Worker claim (group E): pessimistic row lock so concurrent settlements cannot interleave.

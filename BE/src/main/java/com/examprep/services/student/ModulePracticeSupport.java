@@ -26,6 +26,7 @@ import com.examprep.repositories.QuestionPracticeSessionQuestionRepository;
 import com.examprep.repositories.QuestionRepository;
 import com.examprep.services.AttemptPaperFactory;
 import com.examprep.services.CodeAnswerJudge;
+import com.examprep.util.attempt.AnswerText;
 import com.examprep.util.attempt.AttemptGrader;
 import com.examprep.util.attempt.CodeDriver;
 import com.fasterxml.jackson.databind.JsonNode;
@@ -680,6 +681,29 @@ public class ModulePracticeSupport {
     /** Reads a stored {@code jsonb} column into a tree so the FE gets JSON, not an escaped string. */
     public JsonNode readJson(String text) {
         return paperFactory.readResponse(text);
+    }
+
+    /** Public reference for a CODE question (allowed languages and public sample test cases only). */
+    public String codeReference(Long questionId) {
+        CodeQuestionConfig config = codeConfigs.findById(questionId).orElse(null);
+        List<String> languages = null;
+        if (config != null && config.getAllowedLanguages() != null && !config.getAllowedLanguages().isBlank()) {
+            JsonNode tree = paperFactory.readResponse(config.getAllowedLanguages());
+            if (tree != null && tree.isArray()) {
+                languages = new ArrayList<>();
+                for (JsonNode language : tree) {
+                    String value = language.asText("").strip();
+                    if (!value.isEmpty()) {
+                        languages.add(value);
+                    }
+                }
+            }
+        }
+        List<AnswerText.CodeSample> samples = codeFixtures
+                .findByQuestionQuestionIdAndHiddenOrderByOrderIndexAscTestCaseIdAsc(questionId, false).stream()
+                .map(tc -> new AnswerText.CodeSample(tc.getInputData(), tc.getExpectedOutput()))
+                .toList();
+        return AnswerText.codeAnswer(languages, samples);
     }
 
     private static long number(Object value) {

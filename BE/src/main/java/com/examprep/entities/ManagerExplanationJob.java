@@ -47,6 +47,9 @@ public class ManagerExplanationJob implements Serializable {
     @Column(name = "error_message")
     private String errorMessage;
 
+    @Column(name = "ai_usage_log_id")
+    private Long aiUsageLogId;
+
     @Builder.Default
     @Column(name = "created_at", nullable = false, updatable = false)
     private Instant createdAt = Instant.now();

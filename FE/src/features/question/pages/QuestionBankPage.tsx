@@ -24,6 +24,8 @@ import {
 } from '@/app/routes';
 import { courseService, type CourseModuleResponse, type CourseSummaryItem } from '@/services/course.service';
 import { getUserRoleCode } from '@/auth/storage';
+import { aiFlashcardService, type AiUsage } from '@/services/aiFlashcard.service';
+import { getApiErrorMessage } from '@/utils/apiError';
 import {
   QUESTION_STATUS_LABELS,
   questionService,
@@ -210,6 +212,20 @@ export function QuestionBankPage() {
 
   /** Pending target URL when navigating to New Questions would overwrite an unsaved draft. */
   const [confirmReplacePath, setConfirmReplacePath] = useState<string | null>(null);
+  const [aiUsage, setAiUsage] = useState<AiUsage | null>(null);
+
+  const refreshAiUsage = () => {
+    if (isAdmin) return;
+    aiFlashcardService
+      .getMyUsage()
+      .then(setAiUsage)
+      .catch(() => {});
+  };
+
+  useEffect(() => {
+    refreshAiUsage();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isAdmin]);
 
   useEffect(() => {
     let cancelled = false;
@@ -407,8 +423,10 @@ export function QuestionBankPage() {
       });
       setSelected(new Set());
       setReloadKey(k => k + 1);
+      refreshAiUsage();
     } catch (err) {
-      toast.error(err instanceof Error && err.message ? err.message : 'Could not start the AI explanations.');
+      toast.error(getApiErrorMessage(err, 'Could not start the AI explanations.'));
+      refreshAiUsage();
     } finally {
       setBulkBusy(false);
     }
@@ -630,7 +648,20 @@ export function QuestionBankPage() {
   return (
     <div className="p-8 space-y-5">
       <div className="flex flex-wrap items-center justify-between gap-3">
-        <h2 className="text-xl font-bold text-content">Question Bank</h2>
+        <div className="flex flex-wrap items-center gap-3">
+          <h2 className="text-xl font-bold text-content">Question Bank</h2>
+          {aiUsage && (
+            <span
+              className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium bg-surface-muted border border-line text-content-soft"
+              title={`Used: ${aiUsage.tokenUsed.toLocaleString()} · Reserved: ${aiUsage.tokenReserved.toLocaleString()} · Limit: ${aiUsage.tokenLimit.toLocaleString()}`}
+            >
+              <Icon.Zap className="w-3.5 h-3.5 text-brand-ink" />
+              AI Tokens: <strong className="text-content tabular-nums">{aiUsage.tokenRemaining.toLocaleString()}</strong>
+              <span>/ {aiUsage.tokenLimit.toLocaleString()} left this month</span>
+              {aiUsage.planName && <span className="text-content-subtle">({aiUsage.planName})</span>}
+            </span>
+          )}
+        </div>
         <div className="flex flex-wrap items-center gap-2">
           <Button
             variant="secondary"
