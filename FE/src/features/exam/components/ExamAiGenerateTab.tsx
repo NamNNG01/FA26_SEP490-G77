@@ -9,6 +9,8 @@ import { Icon } from "@/assets/icons";
 import { useToast } from "@/components/ui/ToastHost";
 import {
   examService,
+  EXAM_MATERIAL_EXTENSIONS,
+  EXAM_MATERIAL_MAX_BYTES,
   EXAM_MODE_OPTIONS,
   type ExamMode,
   type AiExamDraftResponse,
@@ -195,6 +197,9 @@ export function ExamAiGenerateTab({
   const [mode, setMode] = useState<ExamMode>("EXAM");
   const [language, setLanguage] = useState<"en" | "vi">("en");
   const [context, setContext] = useState("");
+  /** Optional study material (AI-02): the AI writes the questions from it; then the instructions are optional. */
+  const [materialFile, setMaterialFile] = useState<File | null>(null);
+  const materialInputRef = useRef<HTMLInputElement>(null);
 
   const [diffDist, setDiffDist] = useState<{
     EASY: number;
@@ -339,7 +344,7 @@ export function ExamAiGenerateTab({
   const handleGenerate = async () => {
     const errors: Record<string, string> = {};
     if (!courseId) errors.courseId = MSG01;
-    if (!context.trim()) errors.context = MSG01;
+    if (!context.trim() && !materialFile) errors.context = "Write instructions for the AI, or upload a material.";
     if (Object.keys(errors).length > 0) {
       setFieldErrors(errors);
       return;
@@ -355,8 +360,7 @@ export function ExamAiGenerateTab({
       .map(([questionType, count]) => ({ questionType, count }));
 
     try {
-      const result = await examService.generateAiExam(
-        {
+      const request = {
           courseId: Number(courseId),
           moduleId: selectedModuleIds.length === 1 ? selectedModuleIds[0] : undefined,
           moduleIds: selectedModuleIds.length > 0 ? selectedModuleIds : undefined,
@@ -368,9 +372,18 @@ export function ExamAiGenerateTab({
             Number(durationMinutes) > 0 ? Number(durationMinutes) : undefined,
           language,
           context: context.trim() || undefined,
-        },
-        abortCtrl.signal,
-      );
+        };
+      const generated = materialFile
+        ? await examService.generateAiExamFromMaterial(materialFile, request, abortCtrl.signal)
+        : await examService.generateAiExam(request, abortCtrl.signal);
+      // The material endpoint takes no title or duration: the form's own values win.
+      const result = materialFile
+        ? {
+            ...generated,
+            title: title.trim() || generated.title,
+            durationMinutes: Number(durationMinutes) > 0 ? Number(durationMinutes) : generated.durationMinutes,
+          }
+        : generated;
       setDraft({
         ...result,
         questions: (result.questions ?? []).map((q, index) => ({
@@ -845,12 +858,72 @@ export function ExamAiGenerateTab({
 
           <div>
             <label className="text-sm font-medium text-content-secondary block mb-1">
-              Instructions for AI <span className="text-danger">*</span>
+              Study Material <span className="font-normal text-content-subtle">(optional)</span>
+            </label>
+            <input
+              ref={materialInputRef}
+              type="file"
+              accept={EXAM_MATERIAL_EXTENSIONS.join(",")}
+              className="hidden"
+              onChange={(e) => {
+                const file = e.target.files?.[0] ?? null;
+                e.target.value = "";
+                if (!file) return;
+                const ext = file.name.slice(file.name.lastIndexOf(".")).toLowerCase();
+                if (!(EXAM_MATERIAL_EXTENSIONS as readonly string[]).includes(ext)) {
+                  toast.error("Upload a PDF or DOCX file.", { title: "Unsupported file" });
+                  return;
+                }
+                if (file.size > EXAM_MATERIAL_MAX_BYTES) {
+                  toast.error("The material must not exceed 10 MB.", { title: "File too large" });
+                  return;
+                }
+                setMaterialFile(file);
+                setFieldErrors((prev) => ({ ...prev, context: "" }));
+              }}
+            />
+            {materialFile ? (
+              <div className="flex items-center gap-2 px-3 py-2 rounded-[10px] border border-line bg-surface">
+                <Icon.FileText className="w-4 h-4 text-brand-ink flex-shrink-0" />
+                <span className="text-sm text-content truncate flex-1" title={materialFile.name}>{materialFile.name}</span>
+                <span className="text-2xs text-content-subtle flex-shrink-0">{(materialFile.size / 1024 / 1024).toFixed(1)} MB</span>
+                <button
+                  type="button"
+                  onClick={() => setMaterialFile(null)}
+                  disabled={generating}
+                  className="p-1 rounded-[6px] text-content-subtle hover:bg-accent hover:text-content-secondary"
+                  aria-label="Remove material"
+                >
+                  <Icon.X className="w-4 h-4" />
+                </button>
+              </div>
+            ) : (
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                icon={<Icon.Upload className="w-4 h-4" />}
+                onClick={() => materialInputRef.current?.click()}
+                disabled={generating}
+              >
+                Upload Material (PDF/DOCX)
+              </Button>
+            )}
+            <p className="text-2xs text-content-subtle mt-1">
+              AI writes the questions from this file (first 30,000 characters, max 10 MB).
+            </p>
+          </div>
+
+          <div>
+            <label className="text-sm font-medium text-content-secondary block mb-1">
+              Instructions for AI {materialFile
+                ? <span className="font-normal text-content-subtle">(optional)</span>
+                : <span className="text-danger">*</span>}
             </label>
             <textarea
               rows={3}
               maxLength={2000}
-              required
+              required={!materialFile}
               aria-invalid={Boolean(fieldErrors.context)}
               className={`w-full px-3 py-1.5 text-sm rounded-[10px] border bg-surface focus:outline-none focus:ring-1 focus:ring-brand-ink ${fieldErrors.context ? "border-danger-line" : "border-line"}`}
               placeholder="e.g. Focus on recursion and Big-O, for second-year students, use real-world scenarios."

@@ -381,5 +381,34 @@ export const examService = {
     return res.data.data;
   },
 
+  /**
+   * AI-02 (POST /manager/exams/ai/generate-from-material): the same draft as generateAiExam, written
+   * from an uploaded PDF / DOCX (≤ 10 MB, first 30,000 characters read with the Student Material parser).
+   * The endpoint takes no title or duration — the caller keeps its own.
+   */
+  async generateAiExamFromMaterial(file: File, payload: AiGenerateRequest, signal?: AbortSignal): Promise<AiExamDraftResponse> {
+    const form = new FormData();
+    form.append('file', file);
+    form.append('courseId', String(payload.courseId));
+    if (payload.moduleId != null) form.append('moduleId', String(payload.moduleId));
+    payload.moduleIds?.forEach(id => form.append('moduleIds', String(id)));
+    form.append('questionCount', String(payload.questionCount));
+    form.append('difficultyDistribution', JSON.stringify(payload.difficultyDistribution));
+    form.append('questionTypes', JSON.stringify(payload.questionTypes));
+    form.append('language', payload.language);
+    if (payload.context) form.append('context', payload.context);
+    const res = await apiClient.post<ApiResponse<AiExamDraftResponse>>('/manager/exams/ai/generate-from-material', form, {
+      headers: { 'Content-Type': 'multipart/form-data' },
+      // Upload + text extraction + the AI call.
+      timeout: 180000,
+      signal,
+    });
+    return res.data.data;
+  },
+
 };
+
+/** AI-02 material limits (ExamAiController / MaterialTextReader). */
+export const EXAM_MATERIAL_MAX_BYTES = 10 * 1024 * 1024;
+export const EXAM_MATERIAL_EXTENSIONS = ['.pdf', '.docx'] as const;
 
