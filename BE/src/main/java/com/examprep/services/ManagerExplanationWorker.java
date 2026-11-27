@@ -368,8 +368,8 @@ public class ManagerExplanationWorker {
                     ? "Could not generate an AI explanation for 1 question."
                     : "Could not generate AI explanations for " + failedCount + " questions.";
         }
-        List<Long> targetIds = succeededCount > 0 ? succeededIds : allIds;
-        String link = buildNotificationLink(targetIds);
+        // The whole batch, failed questions included, so the manager can fix them from the same link.
+        String link = buildNotificationLink(allIds);
 
         Notification notification = notifications.save(Notification.builder()
                 .title(title)
