@@ -57,20 +57,35 @@ type Confirm = 'publishOne' | 'publishSaved' | null;
 type CreateMode = 'manual' | 'ai';
 type DraftFilter = 'all' | 'errors' | 'valid';
 
-/** A question saved on this visit, kept on the page (read-only) so its group & publish state are clear. */
+/** A question saved on this visit (or opened from an AI explanation notification), editable in place. */
 interface SavedQuestion {
   detail: QuestionDetail;
-  /** Built once, so the card keeps its keys across renders. */
+  /** The card's form state — the stored question until the manager changes it. */
   draft: QuestionDraft;
   groupMeta?: { groupId: number; title: string; questionType: string | null };
+  /** Changed on the page and not saved yet. */
+  edited?: boolean;
 }
 
 const typeLabel = (t: string) => QUESTION_TYPE_OPTIONS.find(o => o.value === t)?.label ?? t;
+
+/** `?review=` ids from an "AI explanations ready" notification. */
+const parseReviewIds = (raw: string | null) =>
+  [...new Set((raw ?? '').split(',').map(Number).filter(n => Number.isInteger(n) && n > 0))];
+
+/** New Questions route: a new notification batch (`?review=`) opens a fresh page. */
+export function QuestionCreatePage() {
+  const [searchParams] = useSearchParams();
+  return <QuestionFormPage key={searchParams.get('review') ?? ''} mode="create" />;
+}
 
 export function QuestionFormPage({ mode }: { mode: 'create' | 'edit' }) {
   const isEdit = mode === 'edit';
   const { questionId } = useParams();
   const [searchParams, setSearchParams] = useSearchParams();
+  /** Create mode: the AI explanation batch to review, from the notification. */
+  const [reviewIds] = useState(() => (isEdit ? [] : parseReviewIds(searchParams.get('review'))));
+  const isReview = reviewIds.length > 0;
   /** Create mode: "Duplicate" in the bank — start from a copy of this question (replaces any stored draft). */
   const [duplicateOf] = useState(() => (isEdit ? null : searchParams.get('duplicate')));
   /** Create mode: entry intent from Question Bank (+ New Question Group / + Add Question to group). */
@@ -244,6 +259,51 @@ export function QuestionFormPage({ mode }: { mode: 'create' | 'edit' }) {
     // eslint-disable-next-line react-hooks/exhaustive-deps -- runs once for the question the page opened with
   }, [duplicateOf, reloadKey]);
 
+  // Create mode, from an "AI explanations" notification: load the batch into the saved list to fix and publish.
+  const [reviewLoading, setReviewLoading] = useState(isReview);
+  const [reviewError, setReviewError] = useState<string | null>(null);
+  const [reviewReloadKey, setReviewReloadKey] = useState(0);
+  /** Unsaved draft from before, while a batch opens: keep it or clear it? */
+  const [askDraft, setAskDraft] = useState(isReview && Boolean(restored));
+  /** Course & module of the batch — the page moves there unless the draft keeps its own. */
+  const reviewLocationRef = useRef<{ courseId: string; moduleId: string } | null>(null);
+  useEffect(() => {
+    if (!isReview) return;
+    let cancelled = false;
+    setReviewLoading(true);
+    setReviewError(null);
+    Promise.all(reviewIds.map(id => questionService.getQuestionById(id).catch(() => null)))
+      .then(details => {
+        if (cancelled) return;
+        const found = details.filter((d): d is QuestionDetail => Boolean(d));
+        if (!found.length) {
+          setReviewError('These questions were not found — they may have been deleted.');
+          return;
+        }
+        setSaved(found.map(detail => ({ detail, draft: fromDetail(detail) })));
+        setPendingExplanations(new Set(found.filter(d => d.explanationStatus === 'PENDING').map(d => d.questionId)));
+        setFailedExplanations(new Set(found.filter(d => d.explanationStatus === 'FAILED').map(d => d.questionId)));
+        const first = found[0];
+        reviewLocationRef.current = {
+          courseId: first.courseId != null ? String(first.courseId) : '',
+          moduleId: first.moduleId != null ? String(first.moduleId) : '',
+        };
+        if (!restored) {
+          setCourseId(reviewLocationRef.current.courseId);
+          setModuleId(reviewLocationRef.current.moduleId);
+        }
+        if (found.length < reviewIds.length) {
+          const n = reviewIds.length - found.length;
+          toast.warning(`${n} question${n === 1 ? ' was' : 's were'} not found — they may have been deleted.`);
+        }
+      })
+      .finally(() => {
+        if (!cancelled) setReviewLoading(false);
+      });
+    return () => { cancelled = true; };
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- runs once for the batch the page opened with
+  }, [reviewReloadKey]);
+
   // Create mode: groups belong to a course — load them for the selected one.
   useEffect(() => {
     if (isEdit || !courseId) {
@@ -336,11 +396,16 @@ export function QuestionFormPage({ mode }: { mode: 'create' | 'edit' }) {
   /**
    * Edit mode: any change. Create mode: only real written questions or a drafted new group.
    */
-  const unsaved = isEdit ? dirty : manualBusy;
+  /** Create mode: saved questions changed on the page — not kept across a reload. */
+  const savedChanged = !isEdit && saved.some(s => s.edited);
+  const unsaved = isEdit ? dirty : manualBusy || savedChanged;
 
   // Unsaved edits, or AI suggestions not saved yet, hold any navigation away for confirmation.
   // Reloading only prompts for what the stored draft can't bring back.
-  const { blocker, leave } = useUnsavedChangesGuard(unsaved || aiBusy, (unsaved && (isEdit || !draftStored)) || aiBusy);
+  const { blocker, leave } = useUnsavedChangesGuard(
+    unsaved || aiBusy,
+    (unsaved && (isEdit || !draftStored)) || savedChanged || aiBusy,
+  );
 
   /**
    * Leaving without saving was confirmed — the draft goes with it. Done in the
@@ -375,7 +440,8 @@ export function QuestionFormPage({ mode }: { mode: 'create' | 'edit' }) {
   // Create mode: say once that unsaved work came back, with a way to throw it away.
   const restoredToastRef = useRef(false);
   useEffect(() => {
-    if (!restored || restoredToastRef.current) return;
+    // Opening a batch asks about the draft in a dialog instead.
+    if (!restored || restoredToastRef.current || isReview) return;
     restoredToastRef.current = true;
     toast.info(`Restored your unsaved draft from ${new Date(restored.savedAt).toLocaleString()}.`, {
       action: { label: 'Discard draft', onClick: discardRestored },
@@ -394,7 +460,12 @@ export function QuestionFormPage({ mode }: { mode: 'create' | 'edit' }) {
     });
 
   const unsavedDetails = [
-    ...(unsaved ? [isEdit ? 'Your changes to this question' : `${kept} question${kept === 1 ? '' : 's'} not saved yet`] : []),
+    ...(isEdit && unsaved ? ['Your changes to this question'] : []),
+    ...(!isEdit && manualBusy ? [`${kept} question${kept === 1 ? '' : 's'} not saved yet`] : []),
+    ...(savedChanged ? (() => {
+      const n = saved.filter(s => s.edited).length;
+      return [`Changes to ${n} saved question${n === 1 ? '' : 's'}`];
+    })() : []),
     ...(aiPending > 0 ? [`${aiPending} AI suggestion${aiPending === 1 ? '' : 's'} not saved yet`] : []),
   ];
 
@@ -491,7 +562,11 @@ export function QuestionFormPage({ mode }: { mode: 'create' | 'edit' }) {
       const byId = new Map(details.filter((d): d is QuestionDetail => Boolean(d)).map(d => [d.questionId, d]));
       setSaved(prev => prev.map(item => {
         const d = byId.get(item.detail.questionId);
-        return d && (done.has(d.questionId) || failed.has(d.questionId)) ? { ...item, detail: d, draft: fromDetail(d) } : item;
+        if (!d || !(done.has(d.questionId) || failed.has(d.questionId))) return item;
+        if (!item.edited) return { ...item, detail: d, draft: fromDetail(d) };
+        // Keep the manager's unsaved changes; take the new version and fill a still-blank explanation.
+        const explanation = explanationMissing(item.draft.explanation) ? d.aiExplanation ?? '' : item.draft.explanation;
+        return { ...item, detail: d, draft: { ...item.draft, lockVersion: d.lockVersion, explanation } };
       }));
       if (isEdit) {
         const d = details[0];
@@ -683,7 +758,7 @@ export function QuestionFormPage({ mode }: { mode: 'create' | 'edit' }) {
 
   const savedDrafts = saved.filter(s => s.detail.status === 'INACTIVE');
   /** Drafts that already have an explanation — the only ones that can be ticked for publishing. */
-  const publishableDrafts = savedDrafts.filter(s => !blockedFromPublish(s.detail));
+  const publishableDrafts = savedDrafts.filter(s => !blockedFromPublish(s.detail) && !s.edited);
   const savedPublished = saved.filter(s => s.detail.status === 'ACTIVE');
   const pickedDrafts = publishableDrafts.filter(s => toPublish.has(s.detail.questionId));
   const allDraftsPicked = publishableDrafts.length > 0 && pickedDrafts.length === publishableDrafts.length;
@@ -697,6 +772,75 @@ export function QuestionFormPage({ mode }: { mode: 'create' | 'edit' }) {
   const toggleAllDrafts = () => setToPublish(allDraftsPicked ? new Set() : new Set(publishableDrafts.map(s => s.detail.questionId)));
   /** Saved drafts with no explanation and nothing running for them yet. */
   const savedWithoutExplanation = savedDrafts.filter(s => explanationMissing(s.detail.aiExplanation) && !pendingExplanations.has(s.detail.questionId));
+
+  /** Saved questions changed on the page — they are saved (one PUT each) before they can be published. */
+  const editedSaved = saved.filter(s => s.edited);
+  const [savingSaved, setSavingSaved] = useState(false);
+  /** Saved cards whose errors show (after a save attempt). */
+  const [savedSubmitted, setSavedSubmitted] = useState<Set<number>>(() => new Set());
+
+  const editSaved = (id: number, draft: QuestionDraft) =>
+    setSaved(prev => prev.map(item => (item.detail.questionId === id ? { ...item, draft, edited: true } : item)));
+
+  const discardSaved = (id: number) =>
+    setSaved(prev => prev.map(item => (item.detail.questionId === id ? { ...item, draft: fromDetail(item.detail), edited: false } : item)));
+
+  /** Saves the changed saved questions; each keeps its own module and group. */
+  /** True when every one was saved. */
+  const saveEditedSaved = async (items: SavedQuestion[]): Promise<boolean> => {
+    if (!items.length) return true;
+    const invalid = items.filter(s => !isDraftValid(s.draft));
+    if (invalid.length) {
+      setSavedSubmitted(prev => new Set([...prev, ...invalid.map(s => s.detail.questionId)]));
+      toast.error(`${invalid.length} question${invalid.length === 1 ? '' : 's'} have errors. Fix the highlighted fields before saving.`, {
+        title: 'Cannot save yet',
+      });
+      document.getElementById(invalid[0].draft.key)?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      return false;
+    }
+    setSavingSaved(true);
+    let savedCount = 0;
+    let ok = true;
+    const requested: { id: number; overwrite: boolean }[] = [];
+    try {
+      for (const item of items) {
+        const id = item.detail.questionId;
+        const updated = await questionService.updateQuestion(id, toUpdateRequest(item.draft, item.detail.moduleId ?? null));
+        // Read back so the card shows exactly what was stored.
+        const fresh = updated?.questionId ? updated : await questionService.getQuestionById(id);
+        setSaved(prev => prev.map(s => (s.detail.questionId === id ? { ...s, detail: fresh, draft: fromDetail(fresh), edited: false } : s)));
+        setSavedSubmitted(prev => {
+          const next = new Set(prev);
+          next.delete(id);
+          return next;
+        });
+        // An explanation written by hand settles one the AI could not write.
+        if (!explanationMissing(fresh.aiExplanation)) {
+          setFailedExplanations(prev => {
+            if (!prev.has(id)) return prev;
+            const next = new Set(prev);
+            next.delete(id);
+            return next;
+          });
+        }
+        if (item.draft.explanationRequested) requested.push({ id, overwrite: !explanationMissing(item.draft.explanation) });
+        savedCount++;
+      }
+      toast.success(`${savedCount} question${savedCount === 1 ? '' : 's'} updated.`);
+    } catch (err) {
+      if (savedCount) toast.success(`${savedCount} question${savedCount === 1 ? '' : 's'} updated.`);
+      showSaveError(describeSaveError(err, 'Could not save. Please try again.'));
+      ok = false;
+    } finally {
+      setSavingSaved(false);
+    }
+    // Queued after the update so the AI reads the saved version.
+    const fill = requested.filter(r => !r.overwrite).map(r => r.id);
+    const redo = requested.filter(r => r.overwrite).map(r => r.id);
+    if (fill.length) await queueExplanations(fill);
+    if (redo.length) await queueExplanations(redo, true);
+    return ok;
+  };
 
   const applyPublished = (updated: QuestionDetail[]) => {
     const byId = new Map(updated.map(u => [u.questionId, u]));
@@ -717,10 +861,20 @@ export function QuestionFormPage({ mode }: { mode: 'create' | 'edit' }) {
   };
 
   const publishIds = async (allIds: number[], successMsg?: string) => {
+    // Publishing takes the stored version, so changed questions are saved first.
+    const changed = new Set(saved.filter(s => s.edited).map(s => s.detail.questionId));
     const blocked = new Set(saved.filter(s => blockedFromPublish(s.detail)).map(s => s.detail.questionId));
-    const ids = allIds.filter(id => !blocked.has(id));
-    if (ids.length < allIds.length) {
-      const n = allIds.length - ids.length;
+    const unchangedIds = allIds.filter(id => !changed.has(id));
+    if (unchangedIds.length < allIds.length) {
+      const n = allIds.length - unchangedIds.length;
+      toast.warning(`Save your changes to ${n} question${n === 1 ? '' : 's'} first — ${n === 1 ? 'it stays' : 'they stay'} as Draft.`, {
+        title: 'Unsaved changes',
+      });
+      successMsg = undefined;
+    }
+    const ids = unchangedIds.filter(id => !blocked.has(id));
+    if (ids.length < unchangedIds.length) {
+      const n = unchangedIds.length - ids.length;
       toast.warning(`${n} question${n === 1 ? ' has' : 's have'} no explanation yet and stay${n === 1 ? 's' : ''} as Draft.`, {
         title: 'Explanation required to publish',
       });
@@ -735,6 +889,13 @@ export function QuestionFormPage({ mode }: { mode: 'create' | 'edit' }) {
       const updated = await questionService.batchUpdateStatus(ids, 'ACTIVE');
       applyPublished(updated);
       toast.success(successMsg ?? `${updated.length} question${updated.length === 1 ? '' : 's'} published.`);
+      // Everything saved on the page is published — the batch is done, back to the bank.
+      const published = new Set(updated.filter(u => u.status === 'ACTIVE').map(u => u.questionId));
+      if (saved.every(s => s.detail.status === 'ACTIVE' || published.has(s.detail.questionId))) {
+        // Unsaved new questions still ask before leaving.
+        if (manualBusy) goToBank();
+        else leave(goToBank);
+      }
     } catch (err) {
       showSaveError(describeSaveError(err, 'Could not publish the questions.'));
     } finally {
@@ -800,7 +961,7 @@ export function QuestionFormPage({ mode }: { mode: 'create' | 'edit' }) {
         return;
       }
       await createBatch(questions);
-      // The saved questions stay on the page (read-only) to inspect and publish; "Add Question" starts the next one.
+      // The saved questions stay on the page to fix and publish; "Add Question" starts the next one.
       resetManual();
     } catch (err) {
       const error = describeSaveError(err, 'Could not save. Please try again.');
@@ -843,7 +1004,14 @@ export function QuestionFormPage({ mode }: { mode: 'create' | 'edit' }) {
     }
   };
 
-  const save = !isEdit && createMode === 'ai' ? saveAi : saveManual;
+  /** Save All: the changed saved questions first, then the new ones. */
+  const saveAll = async () => {
+    const changed = editedSaved;
+    if (changed.length && !(await saveEditedSaved(changed))) return;
+    if (questions.length || !changed.length) await saveManual();
+  };
+
+  const save = isEdit ? saveManual : createMode === 'ai' ? saveAi : saveAll;
 
   /** Edit mode: Publish needs a stored explanation (an unsaved one in the box doesn't count yet). */
   const editPublishBlocked = !savedHasExplanation || (questions[0]?.questionId != null && pendingExplanations.has(questions[0].questionId));
@@ -973,11 +1141,46 @@ export function QuestionFormPage({ mode }: { mode: 'create' | 'edit' }) {
             </div>
           )}
 
-          {/* Questions saved on this visit — grouped visually by Question Group vs Standalone with clear Publish controls */}
-          {!isEdit && saved.length > 0 && (() => {
+          {!isEdit && isReview && reviewLoading && (
+            <div className="card p-8 flex items-center justify-center gap-3 text-content-soft"><Spinner size="sm" /> Loading your AI explanation batch…</div>
+          )}
+          {!isEdit && isReview && !reviewLoading && reviewError && (
+            <div className="space-y-3">
+              <Alert type="error" title="Could not open the batch" message={reviewError} />
+              <Button variant="secondary" onClick={() => setReviewReloadKey(k => k + 1)}>Try again</Button>
+            </div>
+          )}
+
+          {/* One list: saved questions (the AI batch, or saved on this visit) first, then the new ones being written */}
+          {!isEdit && (createMode === 'manual' || saved.length > 0) && (() => {
+            const showNew = createMode === 'manual';
+            const presentTypes = [...new Set([...saved.map(s => s.draft.type), ...(showNew ? questions.map(q => q.type) : [])])];
+            const activeTypeFilter =
+              draftTypeFilter === 'ALL' || presentTypes.includes(draftTypeFilter as QuestionDraft['type'])
+                ? draftTypeFilter
+                : 'ALL';
+            /** A saved question only has errors once it is changed. */
+            const savedHasError = (s: SavedQuestion) => Boolean(s.edited) && !isDraftValid(s.draft);
+            const passes = (type: string, hasError: boolean) =>
+              !(draftFilter === 'errors' && !hasError)
+              && !(draftFilter === 'valid' && hasError)
+              && (activeTypeFilter === 'ALL' || type === activeTypeFilter);
+
+            const draftEntries = showNew ? questions.map((q, idx) => ({ q, idx, hasError: hasDraftError(q) })) : [];
+            const errorCount = draftEntries.filter(e => e.hasError).length + saved.filter(savedHasError).length;
+            const totalCount = saved.length + draftEntries.length;
+            const validCount = totalCount - errorCount;
+            const visibleSaved = saved.filter(s => passes(s.draft.type, savedHasError(s)));
+            const filteredEntries = draftEntries.filter(e => passes(e.q.type, e.hasError));
+            const firstError = saved.find(savedHasError)?.draft.key
+              ?? draftEntries.find(e => e.hasError)?.q.key;
+
+            // Numbering runs through the whole list: saved questions in save order, then the new ones.
+            const savedNumber = new Map(saved.map((s, i) => [s.detail.questionId, i]));
+
             const groupedBuckets = new Map<number, { meta: { groupId: number; title: string; questionType: string | null }; items: SavedQuestion[] }>();
             const standaloneItems: SavedQuestion[] = [];
-            saved.forEach(item => {
+            visibleSaved.forEach(item => {
               const gid = item.detail.groupId;
               if (gid != null) {
                 const existing = groupedBuckets.get(gid);
@@ -998,26 +1201,30 @@ export function QuestionFormPage({ mode }: { mode: 'create' | 'edit' }) {
               }
             });
 
-            const renderSavedCard = (item: SavedQuestion, idx: number) => {
-              const { detail, draft } = item;
+            const renderSavedCard = (item: SavedQuestion, groupKind?: GroupKind | null) => {
+              const { detail, draft, edited } = item;
+              const id = detail.questionId;
               const isDraft = detail.status === 'INACTIVE';
-              const pending = pendingExplanations.has(detail.questionId);
-              const failed = failedExplanations.has(detail.questionId);
+              const pending = pendingExplanations.has(id);
+              const failed = failedExplanations.has(id);
               const blocked = blockedFromPublish(detail);
               return (
+                <div key={draft.key} id={draft.key} className="scroll-mt-4">
                 <QuestionFormBlock
-                  key={draft.key}
                   q={draft}
-                  index={idx}
-                  onChange={() => {}}
-                  showErrors={false}
-                  readOnly
+                  index={savedNumber.get(id) ?? 0}
+                  onChange={next => editSaved(id, next)}
+                  showErrors={savedSubmitted.has(id)}
+                  // Only drafts can change — the backend rejects edits to a published question.
+                  readOnly={!isDraft}
+                  allowedTypes={groupKind ? typesOfKind(groupKind) : undefined}
+                  onRequestExplanation={requested => editSaved(id, { ...draft, explanationRequested: requested || undefined })}
                   explanationStatus={pending ? 'PENDING' : failed ? 'FAILED' : undefined}
                   leading={
                     <Checkbox
-                      checked={toPublish.has(detail.questionId)}
-                      onChange={() => togglePublish(detail.questionId)}
-                      disabled={!isDraft || publishing || blocked}
+                      checked={toPublish.has(id)}
+                      onChange={() => togglePublish(id)}
+                      disabled={!isDraft || publishing || blocked || edited}
                     />
                   }
                   actions={
@@ -1025,7 +1232,24 @@ export function QuestionFormPage({ mode }: { mode: 'create' | 'edit' }) {
                       <Badge variant={isDraft ? 'default' : 'success'} className="whitespace-nowrap">
                         {QUESTION_STATUS_LABELS[detail.status] ?? detail.status}
                       </Badge>
-                      {isDraft && blocked && !pending && (
+                      {edited && (
+                        <>
+                          <Badge variant="warning" className="whitespace-nowrap">Unsaved changes</Badge>
+                          <Button size="sm" variant="ghost" onClick={() => discardSaved(id)} disabled={savingSaved}>
+                            Discard
+                          </Button>
+                          <Button
+                            size="sm"
+                            icon={<Icon.Check className="w-3.5 h-3.5" />}
+                            onClick={() => saveEditedSaved([item])}
+                            loading={savingSaved}
+                            disabled={savingSaved}
+                          >
+                            Save
+                          </Button>
+                        </>
+                      )}
+                      {!edited && isDraft && blocked && !pending && (
                         <Button
                           size="sm"
                           variant="outline"
@@ -1036,12 +1260,12 @@ export function QuestionFormPage({ mode }: { mode: 'create' | 'edit' }) {
                           {failed ? 'Retry AI Explanation' : 'Generate AI Explanation'}
                         </Button>
                       )}
-                      {isDraft && !blocked && (
+                      {!edited && isDraft && !blocked && (
                         <Button
                           size="sm"
                           variant="outline"
                           icon={<Icon.Upload className="w-3.5 h-3.5" />}
-                          onClick={() => publishIds([detail.questionId], 'Question published.')}
+                          onClick={() => publishIds([id], 'Question published.')}
                           disabled={publishing}
                         >
                           Publish
@@ -1050,153 +1274,52 @@ export function QuestionFormPage({ mode }: { mode: 'create' | 'edit' }) {
                     </div>
                   }
                 />
+                </div>
               );
             };
 
             return (
-              <section aria-label="Saved questions in this session" className="card p-4 space-y-4">
-                <div className="flex flex-wrap items-center justify-between gap-2 pb-2 border-b border-line-soft">
+              <section aria-label="Questions" className="space-y-3">
+                {isReview && saved.length > 0 && (
+                  <Alert
+                    type="info"
+                    title="Your AI explanation batch"
+                    message={failedExplanations.size > 0
+                      ? `AI could not write ${failedExplanations.size} explanation${failedExplanations.size === 1 ? '' : 's'}. Edit any question right here, save it, then publish — or retry the AI.`
+                      : 'Review the explanations, edit any question right here and save it, then publish. Once all are published you go back to the Question Bank.'}
+                  />
+                )}
+
+                <div className="flex flex-wrap items-center justify-between gap-3 pt-1">
                   <div className="flex flex-wrap items-center gap-2">
-                    <h3 className="text-base font-semibold text-content">Saved in this session ({saved.length})</h3>
-                    <Badge variant="success">{savedPublished.length} Published</Badge>
-                    <Badge variant={savedDrafts.length > 0 ? 'warning' : 'default'}>{savedDrafts.length} Draft</Badge>
-                  </div>
-                  <div className="flex flex-wrap items-center gap-3">
+                    <h3 className="text-base font-semibold text-content">
+                      Questions <span className="text-content-soft font-normal">({totalCount})</span>
+                    </h3>
+                    {draftEntries.length > 0 && <Badge variant="info">{draftEntries.length} New</Badge>}
+                    {savedDrafts.length > 0 && <Badge variant="warning">{savedDrafts.length} Draft</Badge>}
+                    {savedPublished.length > 0 && <Badge variant="success">{savedPublished.length} Published</Badge>}
+                    {totalCount > 0 && (
+                      <span className="text-xs text-content-subtle">
+                        <span className="text-success font-medium">{validCount} valid</span>
+                        {' · '}
+                        <span className={errorCount > 0 ? 'text-danger font-medium' : 'text-content-subtle'}>
+                          {errorCount} with errors
+                        </span>
+                      </span>
+                    )}
                     {pendingExplanations.size > 0 && (
                       <Badge variant="info"><Icon.Clock className="w-3 h-3" /> AI writing {pendingExplanations.size} explanation{pendingExplanations.size === 1 ? '' : 's'}</Badge>
                     )}
-                    {aiUsage && (
+                    {aiUsage && saved.length > 0 && (
                       <span className="text-xs text-content-subtle tabular-nums">
                         AI tokens: <strong className="text-content">{aiUsage.tokenRemaining.toLocaleString()}</strong> / {aiUsage.tokenLimit.toLocaleString()} left this month
                       </span>
                     )}
-                    {savedWithoutExplanation.length > 0 && (
-                      <Button
-                        size="sm"
-                        variant="outline"
-                        icon={<Icon.Zap className="w-3.5 h-3.5" />}
-                        onClick={() => queueExplanations(savedWithoutExplanation.map(s => s.detail.questionId))}
-                      >
-                        Generate AI Explanations ({savedWithoutExplanation.length})
-                      </Button>
-                    )}
-                    {publishableDrafts.length > 0 && (
-                      <Checkbox
-                        label={`Select all drafts (${publishableDrafts.length})`}
-                        checked={allDraftsPicked}
-                        indeterminate={pickedDrafts.length > 0 && !allDraftsPicked}
-                        onChange={toggleAllDrafts}
-                        disabled={publishing}
-                      />
-                    )}
-                    {pickedDrafts.length > 0 && (
-                      <Button
-                        size="sm"
-                        icon={<Icon.Upload className="w-3.5 h-3.5" />}
-                        onClick={() => setConfirm('publishSaved')}
-                        loading={publishing}
-                        disabled={publishing}
-                      >
-                        Publish Selected ({pickedDrafts.length})
-                      </Button>
-                    )}
-                    <Button size="sm" variant="ghost" onClick={goToBank}>
-                      Done · Question Bank
-                    </Button>
-                  </div>
-                </div>
-
-                {[...groupedBuckets.values()].map(bucket => {
-                  const gPub = bucket.items.filter(s => s.detail.status === 'ACTIVE').length;
-                  const gDraftIds = bucket.items.filter(s => s.detail.status === 'INACTIVE').map(s => s.detail.questionId);
-                  const gKind = asGroupKind(bucket.meta.questionType);
-                  const allGroupPub = gPub === bucket.items.length;
-                  return (
-                    <div key={bucket.meta.groupId} className="rounded-[10px] border border-line bg-surface-alt/40 p-3 space-y-2.5">
-                      <div className="flex flex-wrap items-center justify-between gap-2">
-                        <div className="flex flex-wrap items-center gap-2 min-w-0">
-                          <Icon.Layers className="w-4 h-4 text-brand-ink flex-shrink-0" />
-                          <span className="text-sm font-semibold text-content truncate">{bucket.meta.title}</span>
-                          {gKind && <Badge variant="purple">{GROUP_KIND_LABELS[gKind]}</Badge>}
-                          <Badge variant={allGroupPub ? 'success' : gPub > 0 ? 'warning' : 'default'}>
-                            {allGroupPub
-                              ? `Group Published (${gPub}/${bucket.items.length})`
-                              : gPub > 0
-                                ? `Partially Published (${gPub}/${bucket.items.length})`
-                                : `Draft (0/${bucket.items.length} published)`}
-                          </Badge>
-                        </div>
-                        {gDraftIds.length > 0 && (
-                          <Button
-                            size="sm"
-                            variant="secondary"
-                            icon={<Icon.Upload className="w-3.5 h-3.5" />}
-                            onClick={() => publishIds(gDraftIds, `Published all ${gDraftIds.length} question(s) in “${bucket.meta.title}”.`)}
-                            disabled={publishing}
-                          >
-                            Publish Group ({gDraftIds.length})
-                          </Button>
-                        )}
-                      </div>
-                      <div className="space-y-2">
-                        {bucket.items.map((item, idx) => renderSavedCard(item, idx))}
-                      </div>
-                    </div>
-                  );
-                })}
-
-                {standaloneItems.length > 0 && (
-                  <div className="space-y-2">
-                    {groupedBuckets.size > 0 && (
-                      <h4 className="text-xs font-semibold uppercase tracking-wide text-content-subtle">
-                        Standalone Questions ({standaloneItems.length})
-                      </h4>
-                    )}
-                    {standaloneItems.map((item, idx) => renderSavedCard(item, idx))}
-                  </div>
-                )}
-              </section>
-            );
-          })()}
-
-          {/* Manual mode header + inline filter bar */}
-          {!isEdit && createMode === 'manual' && (() => {
-            const draftEntries = questions.map((q, idx) => ({ q, idx, hasError: hasDraftError(q) }));
-            const errorEntries = draftEntries.filter(e => e.hasError);
-            const validEntries = draftEntries.filter(e => !e.hasError);
-            const presentTypes = [...new Set(questions.map(q => q.type))];
-            const activeTypeFilter =
-              draftTypeFilter === 'ALL' || presentTypes.includes(draftTypeFilter as QuestionDraft['type'])
-                ? draftTypeFilter
-                : 'ALL';
-            const filteredEntries = draftEntries.filter(e => {
-              if (draftFilter === 'errors' && !e.hasError) return false;
-              if (draftFilter === 'valid' && e.hasError) return false;
-              if (activeTypeFilter !== 'ALL' && e.q.type !== activeTypeFilter) return false;
-              return true;
-            });
-
-            return (
-              <>
-                <div className="flex flex-wrap items-center justify-between gap-3 pt-1">
-                  <div className="flex flex-wrap items-center gap-2">
-                    <h3 className="text-base font-semibold text-content">
-                      Drafting Questions <span className="text-content-soft font-normal">({questions.length})</span>
-                    </h3>
-                    {questions.length > 0 && (
-                      <span className="text-xs text-content-subtle">
-                        <span className="text-success font-medium">{validEntries.length} valid</span>
-                        {' · '}
-                        <span className={errorEntries.length > 0 ? 'text-danger font-medium' : 'text-content-subtle'}>
-                          {errorEntries.length} with errors
-                        </span>
-                      </span>
-                    )}
                   </div>
 
-                  {questions.length > 0 && (
+                  {totalCount > 0 && (
                     <div className="flex flex-wrap items-center gap-2">
-                      {blankExplanationCount > 0 && (
+                      {showNew && blankExplanationCount > 0 && (
                         <Button
                           size="sm"
                           variant="outline"
@@ -1207,11 +1330,21 @@ export function QuestionFormPage({ mode }: { mode: 'create' | 'edit' }) {
                           AI Explanations for blanks ({blankExplanationCount})
                         </Button>
                       )}
+                      {savedWithoutExplanation.length > 0 && (
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          icon={<Icon.Zap className="w-3.5 h-3.5" />}
+                          onClick={() => queueExplanations(savedWithoutExplanation.map(s => s.detail.questionId))}
+                        >
+                          Generate AI Explanations ({savedWithoutExplanation.length})
+                        </Button>
+                      )}
                       <div className="inline-flex items-center rounded-[8px] border border-line bg-surface p-0.5 gap-0.5">
                         {([
-                          { key: 'all', label: `All (${questions.length})` },
-                          { key: 'errors', label: `Errors (${errorEntries.length})` },
-                          { key: 'valid', label: `Valid (${validEntries.length})` },
+                          { key: 'all', label: `All (${totalCount})` },
+                          { key: 'errors', label: `Errors (${errorCount})` },
+                          { key: 'valid', label: `Valid (${validCount})` },
                         ] as const).map(tab => (
                           <button
                             key={tab.key}
@@ -1242,31 +1375,113 @@ export function QuestionFormPage({ mode }: { mode: 'create' | 'edit' }) {
                         </select>
                       )}
 
-                      {errorEntries.length > 0 && (
-                        <Button
-                          size="sm"
-                          variant="outline"
-                          onClick={() => revealAndScrollTo(errorEntries[0].q.key)}
-                        >
-                          Jump to error (#{errorEntries[0].idx + 1})
+                      {firstError && (
+                        <Button size="sm" variant="outline" onClick={() => revealAndScrollTo(firstError)}>
+                          Jump to error
                         </Button>
                       )}
                     </div>
                   )}
                 </div>
 
-                {/* Manual mode — question blocks scroll with the page; the side panel stays pinned */}
+                {(publishableDrafts.length > 0 || pickedDrafts.length > 0) && (
+                  <div className="flex flex-wrap items-center justify-between gap-3 rounded-[10px] border border-line bg-surface-alt/40 px-3 py-2">
+                    <Checkbox
+                      label={`Select all drafts to publish (${publishableDrafts.length})`}
+                      checked={allDraftsPicked}
+                      indeterminate={pickedDrafts.length > 0 && !allDraftsPicked}
+                      onChange={toggleAllDrafts}
+                      disabled={publishing}
+                    />
+                    {pickedDrafts.length > 0 && (
+                      <Button
+                        size="sm"
+                        icon={<Icon.Upload className="w-3.5 h-3.5" />}
+                        onClick={() => setConfirm('publishSaved')}
+                        loading={publishing}
+                        disabled={publishing}
+                      >
+                        Publish Selected ({pickedDrafts.length})
+                      </Button>
+                    )}
+                  </div>
+                )}
+
                 <div ref={listRef} className="space-y-3 scroll-mt-5">
-                  {questions.length === 0 ? (
+                  {[...groupedBuckets.values()].map(bucket => {
+                    const gPub = bucket.items.filter(s => s.detail.status === 'ACTIVE').length;
+                    const gDraftIds = bucket.items.filter(s => s.detail.status === 'INACTIVE').map(s => s.detail.questionId);
+                    const gKind = asGroupKind(bucket.meta.questionType);
+                    const allGroupPub = gPub === bucket.items.length;
+                    return (
+                      <div key={bucket.meta.groupId} className="rounded-[10px] border border-line bg-surface-alt/40 p-3 space-y-2.5">
+                        <div className="flex flex-wrap items-center justify-between gap-2">
+                          <div className="flex flex-wrap items-center gap-2 min-w-0">
+                            <Icon.Layers className="w-4 h-4 text-brand-ink flex-shrink-0" />
+                            <span className="text-sm font-semibold text-content truncate">{bucket.meta.title}</span>
+                            {gKind && <Badge variant="purple">{GROUP_KIND_LABELS[gKind]}</Badge>}
+                            <Badge variant={allGroupPub ? 'success' : gPub > 0 ? 'warning' : 'default'}>
+                              {allGroupPub
+                                ? `Group Published (${gPub}/${bucket.items.length})`
+                                : gPub > 0
+                                  ? `Partially Published (${gPub}/${bucket.items.length})`
+                                  : `Draft (0/${bucket.items.length} published)`}
+                            </Badge>
+                          </div>
+                          {gDraftIds.length > 0 && (
+                            <Button
+                              size="sm"
+                              variant="secondary"
+                              icon={<Icon.Upload className="w-3.5 h-3.5" />}
+                              onClick={() => publishIds(gDraftIds, `Published all ${gDraftIds.length} question(s) in “${bucket.meta.title}”.`)}
+                              disabled={publishing}
+                            >
+                              Publish Group ({gDraftIds.length})
+                            </Button>
+                          )}
+                        </div>
+                        <div className="space-y-2">
+                          {bucket.items.map(item => renderSavedCard(item, gKind))}
+                        </div>
+                      </div>
+                    );
+                  })}
+
+                  {standaloneItems.map(item => renderSavedCard(item))}
+
+                  {filteredEntries.map(({ q, idx }) => (
+                    <div key={q.key} id={q.key} className="scroll-mt-4">
+                      <QuestionFormBlock
+                        q={q}
+                        index={saved.length + idx}
+                        onChange={updated => updateQuestion(idx, updated)}
+                        showErrors={submitted || Boolean(q.importIssue)}
+                        removable
+                        onRemove={() => (isKept(q) ? setConfirmRemove(idx) : remove(idx))}
+                        onDuplicate={() => duplicateQuestion(idx)}
+                        duplicateError={inBank.has(q.key) ? 'This question already exists in this course. Change its content or answers before saving, or remove it.' : undefined}
+                        canMoveUp={idx > 0}
+                        canMoveDown={idx < questions.length - 1}
+                        onMoveUp={() => move(idx, -1)}
+                        onMoveDown={() => move(idx, 1)}
+                        allowedTypes={allowedTypes}
+                        kindError={submitted || Boolean(q.importIssue) ? kindError(q) : undefined}
+                        onRequestExplanation={requested => requestExplanation(idx, requested)}
+                        actions={<Badge variant="info" className="whitespace-nowrap">New</Badge>}
+                      />
+                    </div>
+                  ))}
+
+                  {totalCount === 0 ? (
                     <div className="card p-10 text-center space-y-2">
-                      <p className="text-base font-medium text-content-secondary">No unsaved questions yet</p>
+                      <p className="text-base font-medium text-content-secondary">No questions yet</p>
                       <p className="text-sm text-content-subtle">
                         {groupCtx.mode === 'new'
                           ? 'A question group requires at least 1 question — click “Add Question” to write one.'
                           : 'Use “Add Question” or import an Excel, Word, or PDF file.'}
                       </p>
                     </div>
-                  ) : filteredEntries.length === 0 ? (
+                  ) : visibleSaved.length === 0 && filteredEntries.length === 0 && (
                     <div className="card p-8 text-center space-y-3">
                       <p className="text-sm text-content-subtle">
                         {draftFilter === 'errors'
@@ -1283,31 +1498,9 @@ export function QuestionFormPage({ mode }: { mode: 'create' | 'edit' }) {
                         Show all questions
                       </Button>
                     </div>
-                  ) : (
-                    filteredEntries.map(({ q, idx }) => (
-                      <div key={q.key} id={q.key} className="scroll-mt-4">
-                        <QuestionFormBlock
-                          q={q}
-                          index={idx}
-                          onChange={updated => updateQuestion(idx, updated)}
-                          showErrors={submitted || Boolean(q.importIssue)}
-                          removable={!isEdit}
-                          onRemove={() => (isKept(q) ? setConfirmRemove(idx) : remove(idx))}
-                          onDuplicate={isEdit ? undefined : () => duplicateQuestion(idx)}
-                          duplicateError={inBank.has(q.key) ? 'This question already exists in this course. Change its content or answers before saving, or remove it.' : undefined}
-                          canMoveUp={idx > 0}
-                          canMoveDown={idx < questions.length - 1}
-                          onMoveUp={isEdit ? undefined : () => move(idx, -1)}
-                          onMoveDown={isEdit ? undefined : () => move(idx, 1)}
-                          allowedTypes={allowedTypes}
-                          kindError={submitted || Boolean(q.importIssue) ? kindError(q) : undefined}
-                          onRequestExplanation={requested => requestExplanation(idx, requested)}
-                        />
-                      </div>
-                    ))
                   )}
                 </div>
-              </>
+              </section>
             );
           })()}
 
@@ -1354,11 +1547,8 @@ export function QuestionFormPage({ mode }: { mode: 'create' | 'edit' }) {
 
         <QuestionSidePanel
           tabs={modeSwitch}
-          onPublish={isEdit ? undefined : () => setConfirm('publishSaved')}
-          publishCount={pickedDrafts.length}
-          publishing={publishing}
           mode={mode}
-          count={questions.length}
+          count={questions.length + editedSaved.length}
           courseId={courseId}
           moduleId={moduleId}
           onLocationChange={changeLocation}
@@ -1388,6 +1578,25 @@ export function QuestionFormPage({ mode }: { mode: 'create' | 'edit' }) {
         onLeave={discardOnLeave}
         message="You have work on this page that hasn’t been saved. If you leave now, it will be lost:"
         details={unsavedDetails}
+      />
+
+      <ConfirmDialog
+        open={askDraft}
+        onClose={() => setAskDraft(false)}
+        onConfirm={() => {
+          discardRestored();
+          const loc = reviewLocationRef.current;
+          if (loc) {
+            setCourseId(loc.courseId);
+            setModuleId(loc.moduleId);
+          }
+          setAskDraft(false);
+        }}
+        tone="danger"
+        title="Replace your unsaved draft?"
+        description={`You have ${restored?.questions.length ?? 0} unsaved question${restored?.questions.length === 1 ? '' : 's'} from before. Discard them to work on the AI explanation batch, or keep them below the batch.`}
+        cancelLabel="Keep draft"
+        confirmLabel="Discard draft"
       />
 
       <ConfirmDialog

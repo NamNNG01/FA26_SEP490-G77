@@ -56,7 +56,7 @@ import {
   ManagerReviewPage,
   ManagerQuestionIssuesPage,
 } from '@/features/content-manager';
-import { QuestionBankPage, QuestionDetailPage, QuestionFormPage } from '@/features/question';
+import { QuestionBankPage, QuestionCreatePage, QuestionDetailPage } from '@/features/question';
 import { CourseListPage, CourseDetailPage, CourseFormPage } from '@/features/course';
 import { FlashcardManagementPage, FlashcardDeckDetailPage } from '@/features/flashcard';
 import { PublicCoursesPage, PublicCourseDetailPage } from '@/features/catalog';
@@ -327,7 +327,7 @@ function AppRoutes() {
           <Route path={ROUTES.managerQuestionIssues} element={<ManagerQuestionIssuesPage />} />
           <Route path={ROUTES.managerDashboard} element={<CMDashboard />} />
           <Route path={ROUTES.managerQuestions} element={<QuestionBankPage />} />
-          <Route path={ROUTES.managerQuestionCreate} element={<QuestionFormPage mode="create" />} />
+          <Route path={ROUTES.managerQuestionCreate} element={<QuestionCreatePage />} />
           <Route path={ROUTES.managerQuestionEdit} element={<QuestionDetailPage />} />
           <Route path={ROUTES.managerExams} element={<ExamListPage />} />
           <Route path={ROUTES.managerExamQuizNew} element={<ExamFormPage formKind="QUIZ" mode="create" />} />

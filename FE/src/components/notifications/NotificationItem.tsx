@@ -40,6 +40,12 @@ export function formatRelativeTime(iso: string): string {
 
 /** In-app path for the notification, or null when it only informs (clicking just marks it read). */
 export function notificationTarget(n: StudentNotification): string | null {
+  // AI-04 batch done: open the batch on New Questions, where every question can be fixed and published in place.
+  if (n.type?.startsWith('AI_EXPLANATION_') && n.link) {
+    const match = /^\/manager\/question-bank(?:\/(\d+)|\?ids=([\d,]+))$/.exec(n.link);
+    const ids = match?.[1] ?? match?.[2];
+    if (ids) return `${ROUTES.managerQuestionCreate}?review=${ids}`;
+  }
   if (n.link && n.link.startsWith('/')) {
     if (n.link.startsWith('/contributions/')) return `/student${n.link}`;
     if (n.link.startsWith('/decks/')) return `${ROUTES.studentFlashcards}/${n.link.slice('/decks/'.length)}`;

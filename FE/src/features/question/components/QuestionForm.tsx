@@ -3,6 +3,7 @@ import { Button } from "@/components/ui/Button";
 import { Select } from "@/components/ui/Select";
 import { Badge } from "@/components/ui/Badge";
 import { Icon } from "@/assets/icons";
+import { useAutoGrow } from "@/hooks/useAutoGrow";
 import {
   DIFFICULTY_OPTIONS,
   QUESTION_TYPE_OPTIONS,
@@ -125,6 +126,11 @@ export function QuestionForm({
   // The textarea holds only the text; the image stays at the end of the stored content.
   const { text, images } = splitQuestionImage(q.content);
   const setText = (next: string) => set({ content: withQuestionImage(next, images[0]?.url ?? null) });
+
+  // Question text and explanation grow with what is written instead of scrolling.
+  const explanationRef = useRef<HTMLTextAreaElement>(null);
+  useAutoGrow(textRef, text);
+  useAutoGrow(explanationRef, q.explanation);
 
   const insertBlank = () => {
     const marker = `{{${nextBlankIndex(q.content)}}}`;
@@ -331,7 +337,7 @@ export function QuestionForm({
           readOnly={readOnly}
           onChange={(e) => setText(e.target.value)}
           aria-invalid={Boolean(contentError)}
-          className={`w-full h-[96px] px-3 py-2 rounded-[10px] border text-base text-content bg-surface resize-y focus:outline-none focus:ring-2 transition-all ${
+          className={`w-full min-h-[96px] px-3 py-2 rounded-[10px] border text-base text-content bg-surface resize-none overflow-hidden focus:outline-none focus:ring-2 transition-[border-color,box-shadow] ${
             contentError
               ? "border-danger-solid focus:ring-danger-solid/20 focus:border-danger-solid"
               : "border-line focus:ring-brand-600/20 focus:border-brand-600"
@@ -396,10 +402,11 @@ export function QuestionForm({
         )}
         <textarea
           id={`${q.key}-explanation`}
+          ref={explanationRef}
           value={q.explanation}
           readOnly={readOnly}
           onChange={(e) => set({ explanation: e.target.value })}
-          className="w-full h-[64px] px-3 py-2 rounded-[10px] border border-line text-sm text-content bg-surface resize-y focus:outline-none focus:ring-2 focus:ring-brand-600/20 focus:border-brand-600 transition-all"
+          className="w-full min-h-[64px] px-3 py-2 rounded-[10px] border border-line text-sm text-content bg-surface resize-none overflow-hidden focus:outline-none focus:ring-2 focus:ring-brand-600/20 focus:border-brand-600 transition-[border-color,box-shadow]"
           placeholder="Why the answer is correct — shown to students during review."
         />
       </div>}
