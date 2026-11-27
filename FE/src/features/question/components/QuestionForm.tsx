@@ -58,6 +58,8 @@ export function QuestionForm({
   duplicateError,
   leading,
   readOnly,
+  onRequestExplanation,
+  explanationStatus,
 }: {
   q: QuestionDraft;
   index: number;
@@ -88,6 +90,13 @@ export function QuestionForm({
   leading?: React.ReactNode;
   /** Shows the question without letting it be edited (a saved question on the create page). */
   readOnly?: boolean;
+  /**
+   * Manager forms: shows "Generate AI Explanation". Clicking it only flags the question
+   * (`explanationRequested`); the page queues the AI after saving, so the manager never waits.
+   */
+  onRequestExplanation?: (requested: boolean) => void;
+  /** Saved question whose explanation the AI is writing (PENDING) or could not write (FAILED). */
+  explanationStatus?: 'PENDING' | 'FAILED';
 }) {
   const textRef = useRef<HTMLTextAreaElement>(null);
   const errors = validateDraft(q);
@@ -343,13 +352,48 @@ export function QuestionForm({
       {sections?.includes('rubric') && RUBRIC_TYPES.includes(q.type) && <RubricAnswers q={q} set={set} error={answersError} readOnly={readOnly} />}
 
       {showSection('explanation') && <div>
-        <label
-          htmlFor={`${q.key}-explanation`}
-          className="block text-sm font-medium text-content-secondary mb-1"
-        >
-          Explanation{" "}
-          <span className="font-normal text-content-subtle">(optional)</span>
-        </label>
+        <div className="flex flex-wrap items-center justify-between gap-2 mb-1">
+          <label
+            htmlFor={`${q.key}-explanation`}
+            className="text-sm font-medium text-content-secondary"
+          >
+            Explanation{" "}
+            <span className="font-normal text-content-subtle">
+              {onRequestExplanation ? "(required to publish — leave it to AI if you like)" : "(optional)"}
+            </span>
+          </label>
+          {explanationStatus === 'PENDING' && (
+            <Badge variant="info"><Icon.Clock className="w-3 h-3" /> AI is writing the explanation…</Badge>
+          )}
+          {explanationStatus === 'FAILED' && (
+            <Badge variant="danger"><Icon.AlertCircle className="w-3 h-3" /> AI could not write it</Badge>
+          )}
+          {!readOnly && onRequestExplanation && !q.explanationRequested && (
+            <button
+              type="button"
+              onClick={() => onRequestExplanation(true)}
+              className="inline-flex items-center gap-1 text-xs font-medium text-brand-ink hover:underline"
+            >
+              <Icon.Zap className="w-3.5 h-3.5" />
+              {q.explanation.trim() ? "Regenerate with AI" : "Generate AI Explanation"}
+            </button>
+          )}
+        </div>
+        {q.explanationRequested && (
+          <div className="flex items-start justify-between gap-2 mb-1.5 px-3 py-2 rounded-[10px] border border-line bg-primary-light text-xs text-brand-ink">
+            <span className="flex items-start gap-1.5">
+              <Icon.Zap className="w-3.5 h-3.5 mt-px flex-shrink-0" />
+              {q.explanation.trim()
+                ? "AI will rewrite this explanation in the background after you save."
+                : "AI will write this explanation in the background after you save — you can save now."}
+            </span>
+            {!readOnly && onRequestExplanation && (
+              <button type="button" onClick={() => onRequestExplanation(false)} className="font-medium hover:underline flex-shrink-0">
+                Cancel
+              </button>
+            )}
+          </div>
+        )}
         <textarea
           id={`${q.key}-explanation`}
           value={q.explanation}

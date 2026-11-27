@@ -14,6 +14,7 @@ import type { ApiResponse } from '@/types/api';
  *   GET /api/v1/manager/questions  (Q-01: list with filters + pagination)
  *   POST /api/v1/manager/exams/ai/generate  (AI-01: draft questions with AI)
  *   POST /api/v1/manager/exams/ai/generate-from-material  (AI-02: draft questions with AI from a file)
+ *   POST /api/v1/manager/questions/ai/explanations  (AI-04: queue background AI explanations for saved questions)
  */
 
 /** Values accepted by the `questions.question_type` CHECK constraint. */
@@ -36,6 +37,18 @@ export type QuestionDifficulty = 'EASY' | 'MEDIUM' | 'HARD';
  * ARCHIVED is no longer reachable from the UI — it stays here for questions archived before.
  */
 export type QuestionStatus = 'INACTIVE' | 'ACTIVE' | 'ARCHIVED';
+
+/**
+ * Background AI explanation state of a question (AI-04). PENDING = queued or being written;
+ * FAILED = the AI could not write one (the manager can queue it again). Missing on older
+ * responses — then a blank explanation just reads as "none".
+ */
+export type ExplanationStatus = 'NONE' | 'PENDING' | 'READY' | 'FAILED';
+
+/** A question can only be published once it has an explanation (Report-3 6.2). */
+export function explanationMissing(text: string | null | undefined): boolean {
+  return !text?.trim();
+}
 
 /** UI names for the stored statuses: INACTIVE shows as Draft, ACTIVE as Published. */
 export const QUESTION_STATUS_LABELS: Record<QuestionStatus, string> = {
@@ -66,6 +79,9 @@ export interface QuestionListItem {
   lockVersion: number | null;
   optionCount: number;
   updatedAt: string | null; // Instant → ISO string
+  /** AI-04: whether ai_explanation is filled, and its background generation state. */
+  hasExplanation?: boolean;
+  explanationStatus?: ExplanationStatus;
 }
 
 export interface QuestionListParams {
@@ -80,6 +96,8 @@ export interface QuestionListParams {
   questionTypes?: string[];
   difficulty?: string;
   status?: string;
+  /** Only these questions (repeated query param) — the "explanations ready" notification link. */
+  ids?: number[];
   page?: number;
   size?: number;
 }
@@ -211,6 +229,8 @@ export interface QuestionDetail {
   scoringVersion: number | null;
   lockVersion: number | null;
   aiExplanation: string | null;
+  /** AI-04 background generation state. */
+  explanationStatus?: ExplanationStatus;
   status: QuestionStatus;
   approvalStatus: string;
   essayGradingRubric: unknown;
@@ -438,6 +458,13 @@ export const IMPORT_EXTENSIONS = ['.pdf', '.docx', '.xlsx', '.xls'] as const;
 /** AI-02 material files (MaterialTextReader) — any layout, also plain text. */
 export const AI_MATERIAL_EXTENSIONS = ['.pdf', '.docx', '.txt'] as const;
 
+/** AI-04 answer: the questions queued now; the rest already had an explanation or were already queued. */
+export interface ExplanationJobAccepted {
+  jobId: number | null;
+  queuedCount: number;
+  skippedCount: number;
+}
+
 /** `VITE_AI_MOCK=true` uses demo data for AI generation (no AI quota spent). */
 const AI_MOCK = import.meta.env.VITE_AI_MOCK === 'true';
 
@@ -560,6 +587,16 @@ export const questionService = {
       url: '/manager/questions/batch/status',
       data: { questionIds, status },
     });
+    return res.data;
+  },
+
+  /**
+   * AI-04: asks the AI to write the explanations of saved questions in the background. The
+   * backend notifies the manager (NT-01) when the batch is done. `overwrite` also rewrites
+   * explanations that are already filled ("Regenerate").
+   */
+  async queueAiExplanations(questionIds: number[], overwrite = false): Promise<ExplanationJobAccepted> {
+    const res = await api.post<ApiResponse<ExplanationJobAccepted>>('/manager/questions/ai/explanations', { questionIds, overwrite });
     return res.data;
   },
 

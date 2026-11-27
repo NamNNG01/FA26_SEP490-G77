@@ -20,19 +20,22 @@ import {
 const PREVIEW_SIZE = 10;
 
 /**
- * NotificationBell — YouTube-style header bell, STUDENT only (renders nothing otherwise).
+ * NotificationBell — YouTube-style header bell for STUDENT and COURSE_MANAGER (renders nothing otherwise).
+ * Both roles read the same inbox API (NT-01..03); managers get e.g. "AI explanations ready" (AI-04).
  *
  *   - Red badge with the unread count (NT-01 `unreadCount`, polled every 30 s by the shared store).
  *   - Opening fetches the newest PREVIEW_SIZE notifications; unread rows are bold.
  *   - Clicking a row marks it read (NT-02) and opens its `link`; a row without a link only gets marked.
- *   - "Mark all as read" (NT-03) and "See all" → /student/notifications.
+ *   - "Mark all as read" (NT-03) and, for students, "See all" → /student/notifications.
+ *   - Managers: a new unread notification while the app is open also shows as a toast with its link.
  *
  * Closes on outside click, Escape and route change, like UserDropdown.
  */
 export function NotificationBell() {
   const { user } = useAuth();
   const isStudent = user?.role === Role.STUDENT;
-  const unread = useUnreadNotificationCount(isStudent ? user?.userId ?? null : null);
+  const isManager = user?.role === Role.COURSE_MANAGER;
+  const unread = useUnreadNotificationCount(isStudent || isManager ? user?.userId ?? null : null);
   const navigate = useNavigate();
   const location = useLocation();
   const toast = useToast();
@@ -42,6 +45,8 @@ export function NotificationBell() {
   const [error, setError] = useState<string | null>(null);
   const [markingAll, setMarkingAll] = useState(false);
   const rootRef = useRef<HTMLDivElement>(null);
+  /** Last unread count seen; null until the first poll answers (that one never toasts). */
+  const lastUnreadRef = useRef<number | null>(null);
   const panelRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -64,6 +69,31 @@ export function NotificationBell() {
     setOpen(false);
   }, [location.pathname]);
 
+  // Managers wait on background AI work: say so the moment its notification lands.
+  useEffect(() => {
+    if (!isManager) return;
+    const before = lastUnreadRef.current;
+    lastUnreadRef.current = unread;
+    if (before == null || unread <= before) return;
+    let cancelled = false;
+    studentNotificationService
+      .list({ unreadOnly: true, page: 0, size: 1 })
+      .then(inbox => {
+        const n = inbox.content[0];
+        if (cancelled || !n) return;
+        const target = notificationTarget(n);
+        const show = n.type?.endsWith('_FAILED') ? toast.warning : toast.info;
+        show(n.body || '', {
+          title: n.title,
+          duration: 10000,
+          action: target ? { label: 'Open', onClick: () => handleItem(n) } : undefined,
+        });
+      })
+      .catch(() => {});
+    return () => { cancelled = true; };
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- reacts to the polled count only
+  }, [unread, isManager]);
+
   // Every open shows the latest list.
   useEffect(() => {
     if (!open) return;
@@ -80,7 +110,7 @@ export function NotificationBell() {
     return () => { cancelled = true; };
   }, [open]);
 
-  if (!isStudent) return null;
+  if (!isStudent && !isManager) return null;
 
   function handleItem(n: StudentNotification) {
     markNotificationRead(n);
@@ -182,7 +212,7 @@ export function NotificationBell() {
             )}
           </div>
 
-          <div className="border-t border-line p-1">
+          {isStudent && <div className="border-t border-line p-1">
             <button
               type="button"
               data-menu-item
@@ -191,7 +221,7 @@ export function NotificationBell() {
             >
               See all notifications
             </button>
-          </div>
+          </div>}
         </div>
       )}
     </div>

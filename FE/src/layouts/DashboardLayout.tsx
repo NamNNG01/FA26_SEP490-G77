@@ -17,7 +17,7 @@ import { useScrollTopOnRouteChange } from '@/hooks/useScrollTopOnRouteChange';
  * while <Outlet /> swaps the page content, so sidebar state (collapse)
  * survives navigation; <main> scrolls back to the top on every new page.
  *
- * Header layout: [Logo → role dashboard] [course search — STUDENT only] ... [Home · Courses — STUDENT only] [NotificationBell — STUDENT only] [UserDropdown].
+ * Header layout: [Logo → role dashboard] [course search — STUDENT only] ... [Home · Courses — STUDENT only] [NotificationBell — STUDENT & COURSE_MANAGER] [UserDropdown].
  * The user menu (Profile / Theme / Logout) lives in UserDropdown; there is
  * no standalone Logout button anymore.
  */
