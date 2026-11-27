@@ -200,9 +200,15 @@ export function UsersPage({ onNavigate }: { onNavigate?: (id: string, params?: R
       const value = formatLastLogin(row.lastLoginAt as string | null);
       return value ? <span className="text-sm text-content-soft">{value}</span> : <span className="text-content-faint">—</span>;
     }},
-    { key: 'subscription', label: 'Subscription', render: (row: Record<string, unknown>) => {
+    { key: 'subscription', label: 'Plan / AI Quota', render: (row: Record<string, unknown>) => {
       const item = row as unknown as AdminUserItem;
-      return <SubscriptionCell role={item.role} subscription={item.subscription} />;
+      return (
+        <SubscriptionCell
+          role={item.role}
+          subscription={item.subscription}
+          managerMonthlyAiTokenLimit={item.managerMonthlyAiTokenLimit}
+        />
+      );
     }},
     { key: 'actions', label: '', render: (row: Record<string, unknown>) => {
       const item = row as unknown as AdminUserItem;

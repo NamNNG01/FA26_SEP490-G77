@@ -4,6 +4,7 @@ import com.examprep.entities.*;
 import com.examprep.repositories.ManagerExplanationJobItemRepository;
 import com.examprep.repositories.ManagerExplanationJobRepository;
 import com.examprep.repositories.QuestionRepository;
+import com.examprep.repositories.SystemSettingRepository;
 import com.examprep.security.UserPrincipal;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -95,6 +96,7 @@ public class ManagerAiExplanationIntegrationTest {
     @Autowired QuestionRepository questionRepo;
     @Autowired ManagerExplanationJobRepository jobRepo;
     @Autowired ManagerExplanationJobItemRepository jobItemRepo;
+    @Autowired SystemSettingRepository settingRepo;
 
     private TransactionTemplate tx;
     private User manager;
@@ -112,6 +114,7 @@ public class ManagerAiExplanationIntegrationTest {
         providerStatus = 200;
         tx = new TransactionTemplate(txManager);
         tx.executeWithoutResult(s -> {
+            settingRepo.deleteById("platform");
             manager = User.builder().email(UUID.randomUUID() + "@example.com").fullName("Mgr").passwordHash("x")
                     .roleName(User.ROLE_COURSE_MANAGER).build();
             foreignManager = User.builder().email(UUID.randomUUID() + "@example.com").fullName("OtherMgr").passwordHash("x")
@@ -330,6 +333,88 @@ public class ManagerAiExplanationIntegrationTest {
                         .with(user(UserPrincipal.create(manager))))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.data.publishedQuestionCount").value(1));
+    }
+
+    @Test
+    void monthlyTokenQuotaFollowsGlobalDefaultAndPerManagerOverride() throws Exception {
+        // Clear any leftover system setting from prior tests and read initial manager usage (1,000,000 default).
+        tx.executeWithoutResult(s -> settingRepo.deleteById("platform"));
+
+        mvc.perform(get("/api/v1/ai/usage/me").with(user(UserPrincipal.create(manager))))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.billingSource").value("GLOBAL_DEFAULT"))
+                .andExpect(jsonPath("$.data.tokenLimit").value(1_000_000))
+                .andExpect(jsonPath("$.data.tokenUsed").value(0))
+                .andExpect(jsonPath("$.data.tokenRemaining").value(1_000_000));
+
+        // Run one AI-04 job: provider returns 100 input + 50 output = 150 tokens used.
+        REPLIES.add(json.writeValueAsString(Map.of("items", List.of(
+                Map.of("questionId", blankQ1.getQuestionId(), "explanation", "Explanation 1.")))));
+        MvcResult firstAccepted = mvc.perform(post("/api/v1/manager/questions/ai/explanations")
+                        .with(user(UserPrincipal.create(manager)))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(json.writeValueAsString(Map.of(
+                                "questionIds", List.of(blankQ1.getQuestionId()),
+                                "overwrite", false))))
+                .andExpect(status().isAccepted())
+                .andReturn();
+        awaitJobDone(json.readTree(firstAccepted.getResponse().getContentAsString()).path("data").path("jobId").asLong());
+
+        mvc.perform(get("/api/v1/ai/usage/me").with(user(UserPrincipal.create(manager))))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.tokenUsed").value(150))
+                .andExpect(jsonPath("$.data.tokenReserved").value(0))
+                .andExpect(jsonPath("$.data.tokenRemaining").value(999_850));
+
+        // Admin sets Global Default to 500 -> remaining is 350, below next job estimate -> 402 QUOTA_EXCEEDED.
+        User admin = tx.execute(s -> {
+            User a = User.builder().email(UUID.randomUUID() + "@example.com").fullName("Admin").passwordHash("x")
+                    .roleName(User.ROLE_ADMIN).build();
+            em.persist(a);
+            return a;
+        });
+        mvc.perform(put("/api/v1/admin/settings")
+                        .with(user(UserPrincipal.create(admin)))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"ai\":{\"managerMonthlyTokenLimit\":\"500\"}}"))
+                .andExpect(status().isOk());
+
+        mvc.perform(post("/api/v1/manager/questions/ai/explanations")
+                        .with(user(UserPrincipal.create(manager)))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(json.writeValueAsString(Map.of(
+                                "questionIds", List.of(blankQ2.getQuestionId()),
+                                "overwrite", false))))
+                .andExpect(status().isPaymentRequired())
+                .andExpect(jsonPath("$.message").value(containsString("Monthly AI token quota exceeded")));
+
+        // Admin sets Per-Manager Override to 5,000 -> manager can regenerate / queue again.
+        mvc.perform(put("/api/v1/admin/users/" + manager.getUserId() + "/manager-ai-quota")
+                        .with(user(UserPrincipal.create(admin)))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"monthlyTokenLimit\":5000}"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.effectiveLimit").value(5000))
+                .andExpect(jsonPath("$.data.remainingTokens").value(4850));
+
+        REPLIES.add(json.writeValueAsString(Map.of("items", List.of(
+                Map.of("questionId", blankQ2.getQuestionId(), "explanation", "Explanation 2.")))));
+        MvcResult overrideAccepted = mvc.perform(post("/api/v1/manager/questions/ai/explanations")
+                        .with(user(UserPrincipal.create(manager)))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(json.writeValueAsString(Map.of(
+                                "questionIds", List.of(blankQ2.getQuestionId()),
+                                "overwrite", false))))
+                .andExpect(status().isAccepted())
+                .andReturn();
+        awaitJobDone(json.readTree(overrideAccepted.getResponse().getContentAsString()).path("data").path("jobId").asLong());
+
+        mvc.perform(get("/api/v1/ai/usage/me").with(user(UserPrincipal.create(manager))))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.billingSource").value("CUSTOM_OVERRIDE"))
+                .andExpect(jsonPath("$.data.tokenLimit").value(5000))
+                .andExpect(jsonPath("$.data.tokenUsed").value(300))
+                .andExpect(jsonPath("$.data.tokenRemaining").value(4700));
     }
 
     private Question createChoiceQuestion(String content, String explanation) {

@@ -44,6 +44,16 @@ public class AdminUserController {
         return ResponseEntity.ok(ApiResponse.success(service.setSubscription(id, request)));
     }
 
+    @PutMapping("/{id}/manager-ai-quota")
+    @Operation(summary = "UM-08: Set or clear a Content Manager's monthly AI token quota override",
+            description = "ADMIN only. Null monthlyTokenLimit resets the manager to the Global Default in System Settings.")
+    public ResponseEntity<ApiResponse<AdminUserDetailResponse.AdminManagerAiQuota>> managerAiQuota(
+            @PathVariable Long id,
+            @Valid @RequestBody AdminUserRequests.ManagerAiQuota request) {
+        return ResponseEntity.ok(ApiResponse.success(service.setManagerAiQuota(id, request),
+                "Manager AI quota updated."));
+    }
+
     @GetMapping
     @Operation(summary = "UM-01: Search, filter and paginate the user list with overview counters",
             description = "ADMIN only. Powers the User List screen and the Course Manager dropdown "

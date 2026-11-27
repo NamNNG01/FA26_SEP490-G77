@@ -58,7 +58,16 @@ function scoreLabel(score: number | null): string | null {
 }
 
 /** `planId` '' = the Free plan; `endDate` is YYYY-MM-DD and only used with a paid plan. */
-type EditForm = { fullName: string; email: string; role: AdminUserRole; status: AdminUserStatus; planId: string; endDate: string };
+type EditForm = {
+  fullName: string;
+  email: string;
+  role: AdminUserRole;
+  status: AdminUserStatus;
+  planId: string;
+  endDate: string;
+  quotaMode: 'default' | 'custom';
+  customMonthlyTokenLimit: string;
+};
 
 /** Local calendar date as YYYY-MM-DD (what <input type="date"> reads and writes). */
 function toDateInput(date: Date): string {
@@ -131,11 +140,21 @@ export function UserDetailPage({ onNavigate, params: paramsProp }: { onNavigate?
   const [notFound, setNotFound] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [editOpen, setEditOpen] = useState(false);
-  const [form, setForm] = useState<EditForm>({ fullName: '', email: '', role: 'STUDENT', status: 'ACTIVE', planId: '', endDate: '' });
+  const [form, setForm] = useState<EditForm>({
+    fullName: '',
+    email: '',
+    role: 'STUDENT',
+    status: 'ACTIVE',
+    planId: '',
+    endDate: '',
+    quotaMode: 'default',
+    customMonthlyTokenLimit: '1000000',
+  });
   /** Paid plans for the subscription picker; null while loading. */
   const [plans, setPlans] = useState<AdminSubscriptionPlan[] | null>(null);
   const [plansError, setPlansError] = useState<string | null>(null);
   const [endDateError, setEndDateError] = useState<string | undefined>();
+  const [customLimitError, setCustomLimitError] = useState<string | undefined>();
   const [saving, setSaving] = useState(false);
   const [resetting, setResetting] = useState(false);
   const [resetConfirmOpen, setResetConfirmOpen] = useState(false);
@@ -181,10 +200,26 @@ export function UserDetailPage({ onNavigate, params: paramsProp }: { onNavigate?
     return { planId: active ? String(active.planId) : '', endDate: active?.endDate ? toDateInput(new Date(active.endDate)) : '' };
   };
 
+  /** The manager monthly AI quota the form started from, to send UM-08 only when it changed. */
+  const initialQuota = (p: AdminUserDetail) => {
+    const q = p.managerAiQuota;
+    return q?.overrideLimit != null
+      ? { quotaMode: 'custom' as const, customMonthlyTokenLimit: String(q.overrideLimit) }
+      : { quotaMode: 'default' as const, customMonthlyTokenLimit: String(q?.globalDefaultLimit ?? 1000000) };
+  };
+
   const openEdit = () => {
     if (!profile) return;
-    setForm({ fullName: profile.fullName, email: profile.email, role: profile.role, status: profile.status, ...initialPlan(profile) });
+    setForm({
+      fullName: profile.fullName,
+      email: profile.email,
+      role: profile.role,
+      status: profile.status,
+      ...initialPlan(profile),
+      ...initialQuota(profile),
+    });
     setEndDateError(undefined);
+    setCustomLimitError(undefined);
     setEditOpen(true);
     setPlansError(null);
     const currentPlanId = activeSubscription(profile.subscription)?.planId;
@@ -219,6 +254,17 @@ export function UserDetailPage({ onNavigate, params: paramsProp }: { onNavigate?
       if (!form.endDate) { setEndDateError('Choose when the plan ends.'); return; }
       if (form.endDate < toDateInput(new Date())) { setEndDateError('The end date cannot be in the past.'); return; }
     }
+    const qStart = initialQuota(profile);
+    const trimmedLimit = form.customMonthlyTokenLimit.trim();
+    const quotaChanged =
+      form.role === 'COURSE_MANAGER' &&
+      (profile.role !== 'COURSE_MANAGER'
+        ? form.quotaMode === 'custom'
+        : form.quotaMode !== qStart.quotaMode || (form.quotaMode === 'custom' && trimmedLimit !== qStart.customMonthlyTokenLimit));
+    if (form.role === 'COURSE_MANAGER' && form.quotaMode === 'custom' && !/^\d+$/.test(trimmedLimit)) {
+      setCustomLimitError('Enter a non-negative whole number of tokens.');
+      return;
+    }
     setSaving(true);
     try {
       await adminUserService.update(profile.userId, { fullName, email, role: form.role, status: form.status });
@@ -234,11 +280,15 @@ export function UserDetailPage({ onNavigate, params: paramsProp }: { onNavigate?
           endDate: form.planId ? form.endDate : null,
         });
       }
+      if (quotaChanged) {
+        await adminUserService.setManagerAiQuota(profile.userId, {
+          monthlyTokenLimit: form.quotaMode === 'custom' ? Number(trimmedLimit) : null,
+        });
+      }
       toast.success('User updated.');
       setEditOpen(false);
     } catch (err) {
-      // The profile is saved; keep the dialog open so the plan can be retried.
-      toast.error(getApiErrorMessage(err, 'The profile was saved, but the subscription could not be changed.'));
+      toast.error(getApiErrorMessage(err, 'The profile was saved, but the quota or subscription could not be updated.'));
     } finally {
       setSaving(false);
       await load();
@@ -308,8 +358,10 @@ export function UserDetailPage({ onNavigate, params: paramsProp }: { onNavigate?
     );
   }
 
-  // Learning stats and exam attempts only exist for students.
+  // Learning stats and exam attempts only exist for students; AI quota card applies to Content Managers.
   const isStudent = profile.role === 'STUDENT';
+  const isManager = profile.role === 'COURSE_MANAGER';
+  const managerQuota = profile.managerAiQuota ?? null;
   const attemptRows = profile.recentAttempts.map(attempt => ({ ...attempt, id: attempt.attemptId }));
   const attemptColumns: TableColumn[] = [
     { key: 'examTitle', label: 'Exam Name', render: (row: Record<string, unknown>) => (
@@ -371,6 +423,12 @@ export function UserDetailPage({ onNavigate, params: paramsProp }: { onNavigate?
                 { label: 'Date Joined', value: formatDateTime(profile.createdAt) ?? '—' },
                 { label: 'Last Login', value: formatDateTime(profile.lastLoginAt) ?? '—' },
                 ...(isStudent ? [{ label: 'Subscription', value: subscriptionLabel(profile) }] : []),
+                ...(isManager && managerQuota
+                  ? [{
+                      label: 'AI Token Quota',
+                      value: `${managerQuota.effectiveLimit.toLocaleString()} / mo (${managerQuota.overrideLimit != null ? 'Custom override' : 'Global default'})`,
+                    }]
+                  : []),
               ].map(f => (
                 <div key={f.label} className="min-w-0">
                   <p className="text-xs text-content-subtle">{f.label}</p>
@@ -379,6 +437,40 @@ export function UserDetailPage({ onNavigate, params: paramsProp }: { onNavigate?
               ))}
             </div>
           </div>
+
+          {isManager && managerQuota && (
+            <div>
+              <div className="flex flex-wrap items-center justify-between gap-2 mb-3">
+                <h3 className="text-lg font-semibold text-content">AI Token Quota (Monthly)</h3>
+                <Badge variant={managerQuota.overrideLimit != null ? 'info' : 'default'}>
+                  {managerQuota.overrideLimit != null
+                    ? `Custom override (global default: ${managerQuota.globalDefaultLimit.toLocaleString()})`
+                    : 'Using global default'}
+                </Badge>
+              </div>
+              <div className="grid grid-cols-2 xl:grid-cols-4 gap-3">
+                <div className="bg-surface-alt rounded-[10px] p-4">
+                  <p className="text-xl font-bold text-content tabular-nums">{managerQuota.effectiveLimit.toLocaleString()}</p>
+                  <p className="text-xs text-content-subtle mt-0.5">Monthly Limit</p>
+                </div>
+                <div className="bg-surface-alt rounded-[10px] p-4">
+                  <p className="text-xl font-bold text-brand-ink tabular-nums">{managerQuota.usedTokens.toLocaleString()}</p>
+                  <p className="text-xs text-content-subtle mt-0.5">Used This Month</p>
+                </div>
+                <div className="bg-surface-alt rounded-[10px] p-4">
+                  <p className="text-xl font-bold text-warning tabular-nums">{managerQuota.reservedTokens.toLocaleString()}</p>
+                  <p className="text-xs text-content-subtle mt-0.5">Reserved (In Queue)</p>
+                </div>
+                <div className="bg-surface-alt rounded-[10px] p-4">
+                  <p className="text-xl font-bold text-success tabular-nums">{managerQuota.remainingTokens.toLocaleString()}</p>
+                  <p className="text-xs text-content-subtle mt-0.5">Remaining</p>
+                </div>
+              </div>
+              <p className="text-xs text-content-subtle mt-2">
+                Current cycle resets on {formatDateTime(managerQuota.periodEnd) ?? 'next month'} (Asia/Ho_Chi_Minh).
+              </p>
+            </div>
+          )}
 
           {isStudent && <>
           {/* Learning Statistics */}
@@ -491,6 +583,44 @@ export function UserDetailPage({ onNavigate, params: paramsProp }: { onNavigate?
                   value={form.endDate}
                   error={endDateError}
                   onChange={e => { setForm(prev => ({ ...prev, endDate: e.target.value })); setEndDateError(undefined); }}
+                />
+              )}
+            </div>
+          )}
+          {form.role === 'COURSE_MANAGER' && (
+            <div className="space-y-3 pt-4 border-t border-line-soft">
+              <div>
+                <p className="text-sm font-semibold text-content">AI Token Quota (Monthly)</p>
+                <p className="text-xs text-content-subtle mt-0.5">
+                  Inherits the System Settings global default ({(managerQuota?.globalDefaultLimit ?? 1000000).toLocaleString()} tokens/mo) unless overridden here.
+                </p>
+              </div>
+              <Select
+                label="Quota Mode"
+                value={form.quotaMode}
+                onChange={v => {
+                  setForm(prev => ({ ...prev, quotaMode: v as 'default' | 'custom' }));
+                  setCustomLimitError(undefined);
+                }}
+                options={[
+                  { label: `Use Global Default (${(managerQuota?.globalDefaultLimit ?? 1000000).toLocaleString()} / mo)`, value: 'default' },
+                  { label: 'Custom Per-Manager Override', value: 'custom' },
+                ]}
+              />
+              {form.quotaMode === 'custom' && (
+                <Input
+                  label="Monthly AI Token Limit"
+                  type="number"
+                  min={0}
+                  step={1000}
+                  required
+                  suffix="tokens / mo"
+                  value={form.customMonthlyTokenLimit}
+                  error={customLimitError}
+                  onChange={e => {
+                    setForm(prev => ({ ...prev, customMonthlyTokenLimit: e.target.value }));
+                    setCustomLimitError(undefined);
+                  }}
                 />
               )}
             </div>

@@ -565,10 +565,12 @@ class ExamAiApiIntegrationTest {
                 Map.of("courseId", course.getCourseId(), "moduleId", draftQuestions.get(0).path("moduleId").asLong(),
                         "questionType", "SINGLE_CHOICE", "difficulty", "EASY",
                         "content", "Batch multi-module Q1",
+                        "explanation", "Sample explanation 1.",
                         "options", List.of(Map.of("optionText", "A", "isCorrect", true, "orderIndex", 0), Map.of("optionText", "B", "isCorrect", false, "orderIndex", 1))),
                 Map.of("courseId", course.getCourseId(), "moduleId", draftQuestions.get(1).path("moduleId").asLong(),
                         "questionType", "SINGLE_CHOICE", "difficulty", "MEDIUM",
                         "content", "Batch multi-module Q2",
+                        "explanation", "Sample explanation 2.",
                         "options", List.of(Map.of("optionText", "C", "isCorrect", true, "orderIndex", 0), Map.of("optionText", "D", "isCorrect", false, "orderIndex", 1)))
         );
 
@@ -612,10 +614,12 @@ class ExamAiApiIntegrationTest {
                 Map.of("courseId", course.getCourseId(), "moduleId", module.getModuleId(),
                         "questionType", "SINGLE_CHOICE", "difficulty", "EASY",
                         "content", "Draft exam question to archive",
+                        "explanation", "Sample draft explanation.",
                         "options", List.of(Map.of("optionText", "Yes", "isCorrect", true, "orderIndex", 0), Map.of("optionText", "No", "isCorrect", false, "orderIndex", 1))),
                 Map.of("courseId", course.getCourseId(), "moduleId", module.getModuleId(),
                         "questionType", "SINGLE_CHOICE", "difficulty", "EASY",
                         "content", "Published exam question cannot archive",
+                        "explanation", "Sample published explanation.",
                         "options", List.of(Map.of("optionText", "Yes", "isCorrect", true, "orderIndex", 0), Map.of("optionText", "No", "isCorrect", false, "orderIndex", 1)))
         );
         String batchRes = call(manager, post("/api/v1/manager/questions/batch")

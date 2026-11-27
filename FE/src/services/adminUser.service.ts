@@ -28,12 +28,24 @@ export interface AdminUserSubscription {
   status: 'ACTIVE' | 'EXPIRED' | 'CANCELLED' | string;
 }
 
+export interface AdminManagerAiQuota {
+  globalDefaultLimit: number;
+  overrideLimit: number | null;
+  effectiveLimit: number;
+  usedTokens: number;
+  reservedTokens: number;
+  remainingTokens: number;
+  periodStart: string;
+  periodEnd: string;
+}
+
 /** UM-01: one row of GET /admin/users. */
 export interface AdminUserItem extends AdminUserProfile {
   /** Null when the account has never logged in. */
   lastLoginAt: string | null;
   enrolledCoursesCount: number;
   subscription?: AdminUserSubscription | null;
+  managerMonthlyAiTokenLimit?: number | null;
 }
 
 /** UM-01: overview counters above the list — computed across every account, filters ignored. */
@@ -70,6 +82,7 @@ export interface AdminUserRecentAttempt {
 export interface AdminUserDetail extends AdminUserProfile {
   lastLoginAt: string | null;
   subscription?: AdminUserSubscription | null;
+  managerAiQuota?: AdminManagerAiQuota | null;
   stats: AdminUserLearningStats;
   recentAttempts: AdminUserRecentAttempt[];
 }
@@ -141,6 +154,13 @@ export const adminUserService = {
   async setSubscription(userId: number, payload: AdminUserSubscriptionPayload) {
     const res = await api.request<ApiResponse<AdminUserSubscription | null>>({
       method: 'put', url: `/admin/users/${userId}/subscription`, data: payload,
+    });
+    return res.data;
+  },
+  /** UM-08 — set or clear a Content Manager's monthly AI token quota override (null = Global Default). */
+  async setManagerAiQuota(userId: number, payload: { monthlyTokenLimit: number | null }) {
+    const res = await api.request<ApiResponse<AdminManagerAiQuota>>({
+      method: 'put', url: `/admin/users/${userId}/manager-ai-quota`, data: payload,
     });
     return res.data;
   },

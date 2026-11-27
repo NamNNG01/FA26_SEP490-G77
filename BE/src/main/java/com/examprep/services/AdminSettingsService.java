@@ -47,6 +47,7 @@ public class AdminSettingsService {
         if (document == null || !document.isObject()) {
             throw new BadRequestException("Settings must be a JSON object");
         }
+        validateAiSection(document.path("ai"));
         String serialized = document.toString();
         if (serialized.getBytes(StandardCharsets.UTF_8).length > MAX_DOCUMENT_BYTES) {
             throw new BadRequestException("Settings document is too large");
@@ -58,6 +59,45 @@ public class AdminSettingsService {
                 .updatedBy(userId)
                 .build());
         return document;
+    }
+
+    private static void validateAiSection(JsonNode ai) {
+        if (ai == null || ai.isMissingNode() || ai.isNull()) {
+            return;
+        }
+        if (!ai.isObject()) {
+            throw new BadRequestException("ai settings must be a JSON object");
+        }
+        JsonNode limitNode = ai.path("managerMonthlyTokenLimit");
+        if (limitNode.isMissingNode() || limitNode.isNull()) {
+            return;
+        }
+        long parsed = parseNonNegativeLimit(limitNode);
+        if (parsed < 0) {
+            throw new BadRequestException("Manager monthly AI token limit must be a non-negative integer.");
+        }
+    }
+
+    /** Parses a non-negative whole number from either a JSON number or numeric string; returns -1 if invalid. */
+    public static long parseNonNegativeLimit(JsonNode node) {
+        if (node == null || node.isMissingNode() || node.isNull()) {
+            return -1;
+        }
+        if (node.isIntegralNumber()) {
+            return node.asLong(-1);
+        }
+        if (node.isTextual()) {
+            String raw = node.asText().strip();
+            if (raw.isEmpty()) {
+                return -1;
+            }
+            try {
+                return Long.parseLong(raw);
+            } catch (NumberFormatException ex) {
+                return -1;
+            }
+        }
+        return -1;
     }
 
     private JsonNode read(String value) {

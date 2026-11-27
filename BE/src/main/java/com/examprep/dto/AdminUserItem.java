@@ -18,6 +18,7 @@ import java.time.Instant;
 public class AdminUserItem {
 
     private AdminSubscription subscription;
+    private Long managerMonthlyAiTokenLimit;
     private Long userId;
     private String fullName;
     private String email;
@@ -42,6 +43,8 @@ public class AdminUserItem {
                 .lastLoginAt(user.getLastLoginAt())
                 .enrolledCoursesCount(enrolledCoursesCount)
                 .createdAt(user.getCreatedAt())
+                .managerMonthlyAiTokenLimit(User.ROLE_COURSE_MANAGER.equals(user.getRoleName())
+                        ? user.getManagerMonthlyAiTokenLimit() : null)
                 .build();
     }
 }

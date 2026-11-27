@@ -41,4 +41,5 @@ public interface AdminUserService {
     void resetPassword(Long id);
     AdminUserResponse create(AdminUserRequests.Create request);
     com.examprep.dto.AdminSubscription setSubscription(Long id, AdminUserRequests.Subscription request);
+    AdminUserDetailResponse.AdminManagerAiQuota setManagerAiQuota(Long id, AdminUserRequests.ManagerAiQuota request);
 }

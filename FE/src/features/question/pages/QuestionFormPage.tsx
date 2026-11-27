@@ -36,6 +36,8 @@ import {
 } from '../model';
 import { clearCreateDraft, hasUnsavedCreateWork, loadCreateDraft, saveCreateDraft, type CreateDraftSnapshot } from '../createDraft';
 import { Icon } from '@/assets/icons';
+import { getUserRoleCode } from '@/auth/storage';
+import { aiFlashcardService, type AiUsage } from '@/services/aiFlashcard.service';
 import { describeSaveError, loadErrorMessage, type SaveError } from '../saveError';
 import { getApiErrorMessage } from '@/utils/apiError';
 
@@ -106,6 +108,16 @@ export function QuestionFormPage({ mode }: { mode: 'create' | 'edit' }) {
   /** Saved drafts ticked for publishing. */
   const [toPublish, setToPublish] = useState<Set<number>>(() => new Set());
   const [publishing, setPublishing] = useState(false);
+  const [aiUsage, setAiUsage] = useState<AiUsage | null>(null);
+  const isCourseManager = getUserRoleCode() === 'COURSE_MANAGER';
+  const refreshAiUsage = useCallback(() => {
+    if (!isCourseManager) return;
+    aiFlashcardService.getMyUsage().then(setAiUsage).catch(() => {});
+  }, [isCourseManager]);
+
+  useEffect(() => {
+    refreshAiUsage();
+  }, [refreshAiUsage]);
   /** Create mode: standalone batch, or questions that share one group passage. */
   const [groupCtx, setGroupCtx] = useState<GroupContextValue>(() => {
     if (entryIntent?.context === 'new-group') return { ...emptyGroupContext(), mode: 'new' };
@@ -451,12 +463,14 @@ export function QuestionFormPage({ mode }: { mode: 'create' | 'edit' }) {
       toast.info('You will get a notification when they are ready — publishing unlocks then.', {
         title: `AI is writing ${queued} explanation${queued === 1 ? '' : 's'} in the background`,
       });
+      refreshAiUsage();
     } catch (err) {
       toast.error(getApiErrorMessage(err, 'Could not start the AI explanations.'), {
         title: 'AI explanations not started',
         action: { label: 'Try again', onClick: () => { void queueExplanations(ids, overwrite); } },
         duration: null,
       });
+      refreshAiUsage();
     }
   };
 
@@ -1050,6 +1064,11 @@ export function QuestionFormPage({ mode }: { mode: 'create' | 'edit' }) {
                   <div className="flex flex-wrap items-center gap-3">
                     {pendingExplanations.size > 0 && (
                       <Badge variant="info"><Icon.Clock className="w-3 h-3" /> AI writing {pendingExplanations.size} explanation{pendingExplanations.size === 1 ? '' : 's'}</Badge>
+                    )}
+                    {aiUsage && (
+                      <span className="text-xs text-content-subtle tabular-nums">
+                        AI tokens: <strong className="text-content">{aiUsage.tokenRemaining.toLocaleString()}</strong> / {aiUsage.tokenLimit.toLocaleString()} left this month
+                      </span>
                     )}
                     {savedWithoutExplanation.length > 0 && (
                       <Button

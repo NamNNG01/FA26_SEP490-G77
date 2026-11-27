@@ -1,6 +1,7 @@
 package com.examprep.dto;
 
 import jakarta.validation.constraints.Email;
+import jakarta.validation.constraints.Min;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.Size;
 
@@ -24,6 +25,8 @@ public final class AdminUserRequests {
                          @NotBlank @Email @Size(max = 150) String email,
                          @NotBlank String role) {}
     public record Subscription(Long planId, java.time.LocalDate endDate) {}
+
+    public record ManagerAiQuota(@Min(0) Long monthlyTokenLimit) {}
 
     public record StatusUpdate(@NotBlank String status) {}
 }

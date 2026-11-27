@@ -99,6 +99,7 @@ public class ManagerExplanationWorker {
     private final CodeTestCaseRepository codeTestCases;
     private final NotificationRepository notifications;
     private final UserNotificationRepository userNotifications;
+    private final ManagerAiQuotaService quotaService;
     private final AiClient aiClient;
     private final ObjectMapper json;
     private final PlatformTransactionManager transactionManager;
@@ -120,6 +121,8 @@ public class ManagerExplanationWorker {
     private record PromptEntry(Long itemId, Long questionId, ObjectNode itemJson) { }
 
     private record ClaimedJob(Long jobId, List<PromptEntry> entries) { }
+
+    private record LotUsage(int inputTokens, int outputTokens, String model) { }
 
     public void dispatch(Long jobId) {
         pool.execute(() -> run(jobId));
@@ -143,20 +146,36 @@ public class ManagerExplanationWorker {
     }
 
     private void run(Long jobId) {
+        long startedAt = System.currentTimeMillis();
         ClaimedJob claimed = claim(jobId);
         if (claimed == null) {
             return;
         }
         List<PromptEntry> entries = claimed.entries();
+        int totalInputTokens = 0;
+        int totalOutputTokens = 0;
+        String lastModel = null;
         try {
             for (int i = 0; i < entries.size(); i += LOT_SIZE) {
                 List<PromptEntry> lot = entries.subList(i, Math.min(i + LOT_SIZE, entries.size()));
-                processLot(lot);
+                LotUsage usage = processLot(lot);
+                totalInputTokens += usage.inputTokens();
+                totalOutputTokens += usage.outputTokens();
+                if (usage.model() != null && !usage.model().isBlank()) {
+                    lastModel = usage.model();
+                }
             }
-            tx().executeWithoutResult(status -> finalizeJob(jobId));
+            int finalInput = totalInputTokens;
+            int finalOutput = totalOutputTokens;
+            String finalModel = lastModel;
+            tx().executeWithoutResult(status -> finalizeJob(jobId, finalInput, finalOutput, finalModel, startedAt));
         } catch (RuntimeException ex) {
             log.warn("MANAGER_EXPLANATION_JOB_FAILED | jobId={} | {}", jobId, ex.getMessage());
-            tx().executeWithoutResult(status -> failRemainingAndFinalize(jobId, ex.getMessage()));
+            int finalInput = totalInputTokens;
+            int finalOutput = totalOutputTokens;
+            String finalModel = lastModel;
+            tx().executeWithoutResult(status ->
+                    failRemainingAndFinalize(jobId, ex.getMessage(), finalInput, finalOutput, finalModel, startedAt));
         }
     }
 
@@ -169,6 +188,7 @@ public class ManagerExplanationWorker {
             job.setStatus(JOB_PROCESSING);
             job.setUpdatedAt(Instant.now());
             jobs.save(job);
+            quotaService.markProcessing(job.getAiUsageLogId());
 
             List<ManagerExplanationJobItem> items = jobItems.findByJob_JobIdOrderByItemIdAsc(jobId);
             List<Long> qIds = items.stream().map(i -> i.getQuestion().getQuestionId()).toList();
@@ -215,13 +235,16 @@ public class ManagerExplanationWorker {
         });
     }
 
-    private void processLot(List<PromptEntry> lot) {
+    private LotUsage processLot(List<PromptEntry> lot) {
         ObjectNode prompt = json.createObjectNode();
         ArrayNode arr = prompt.putArray("questions");
         lot.forEach(e -> arr.add(e.itemJson()));
 
         Map<Long, String> generated = new HashMap<>();
         String lotError = null;
+        int inputTokens = 0;
+        int outputTokens = 0;
+        String model = null;
         try {
             AiResponse response = AiCalls.complete(aiClient, AiRequest.builder()
                     .systemPrompt(EXPLAIN_PROMPT)
@@ -229,6 +252,11 @@ public class ManagerExplanationWorker {
                     .maxTokens(lot.size() * 1024 + 8192)
                     .responseSchema(EXPLAIN_SCHEMA)
                     .build(), timeoutMillis);
+            if (response != null) {
+                inputTokens = response.getInputTokens() == null ? 0 : Math.max(0, response.getInputTokens());
+                outputTokens = response.getOutputTokens() == null ? 0 : Math.max(0, response.getOutputTokens());
+                model = response.getModel();
+            }
             parseLotResponse(response, generated);
             if (generated.isEmpty()) {
                 lotError = "AI_INCOMPLETE";
@@ -268,6 +296,7 @@ public class ManagerExplanationWorker {
                 jobItems.save(item);
             }
         });
+        return new LotUsage(inputTokens, outputTokens, model);
     }
 
     private void parseLotResponse(AiResponse response, Map<Long, String> out) {
@@ -295,7 +324,7 @@ public class ManagerExplanationWorker {
         }
     }
 
-    private void finalizeJob(Long jobId) {
+    private void finalizeJob(Long jobId, int totalInputTokens, int totalOutputTokens, String model, long startedAt) {
         ManagerExplanationJob job = jobs.lockById(jobId).orElse(null);
         if (job == null || !JOB_PROCESSING.equals(job.getStatus())) {
             return;
@@ -321,10 +350,17 @@ public class ManagerExplanationWorker {
         job.setUpdatedAt(now);
         jobs.save(job);
 
+        String logStatus = succeededCount > 0 ? (failedCount > 0 ? "PARTIAL" : "SUCCESS") : "FAILED";
+        long elapsed = startedAt > 0 ? Math.max(0L, System.currentTimeMillis() - startedAt) : 0L;
+        quotaService.settle(job.getAiUsageLogId(), logStatus, model, totalInputTokens, totalOutputTokens,
+                elapsed, job.getErrorMessage());
+
         sendCompletionNotification(job, succeededIds, allIds, succeededCount, failedCount);
     }
 
-    private void failRemainingAndFinalize(Long jobId, String errorMessage) {
+    private void failRemainingAndFinalize(Long jobId, String errorMessage,
+                                          int totalInputTokens, int totalOutputTokens,
+                                          String model, long startedAt) {
         ManagerExplanationJob job = jobs.lockById(jobId).orElse(null);
         if (job == null || JOB_COMPLETED.equals(job.getStatus()) || JOB_FAILED.equals(job.getStatus())) {
             return;
@@ -340,11 +376,11 @@ public class ManagerExplanationWorker {
             }
         }
         job.setErrorMessage(errorMessage);
-        finalizeJob(jobId);
+        finalizeJob(jobId, totalInputTokens, totalOutputTokens, model, startedAt);
     }
 
     private void timeoutStuckJob(Long jobId) {
-        failRemainingAndFinalize(jobId, "Explanation generation timed out");
+        failRemainingAndFinalize(jobId, "Explanation generation timed out", 0, 0, null, 0L);
     }
 
     private void sendCompletionNotification(ManagerExplanationJob job,

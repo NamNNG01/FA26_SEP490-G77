@@ -57,6 +57,7 @@ public class AdminUserServiceImpl implements AdminUserService {
     private final org.springframework.security.crypto.password.PasswordEncoder passwordEncoder;
     private final PasswordResetMailService mail;
     private final AiQuotaService quota;
+    private final ManagerAiQuotaService managerAiQuota;
 
     @Override
     public AdminUserPageResponse list(String search, String role, String status, int page, int size) {
@@ -111,6 +112,9 @@ public class AdminUserServiceImpl implements AdminUserService {
         AdminUserDetailResponse detail = AdminUserDetailResponse.from(user, stats, recent);
         if (User.ROLE_STUDENT.equals(user.getRoleName())) subscriptions.findLatestForUsers(List.of(id)).stream().findFirst()
                 .ifPresent(sub -> detail.setSubscription(com.examprep.dto.AdminSubscription.from(sub)));
+        if (User.ROLE_COURSE_MANAGER.equals(user.getRoleName())) {
+            detail.setManagerAiQuota(AdminUserDetailResponse.AdminManagerAiQuota.from(managerAiQuota.snapshotForUser(user)));
+        }
         return detail;
     }
 
@@ -210,6 +214,24 @@ public class AdminUserServiceImpl implements AdminUserService {
         var sub = subscriptions.save(com.examprep.entities.UserSubscription.builder().user(user).plan(plan).startDate(now)
                 .endDate(end).status("ACTIVE").paidAmount(BigDecimal.ZERO).build());
         return com.examprep.dto.AdminSubscription.from(sub);
+    }
+
+    @Override
+    @Transactional
+    public AdminUserDetailResponse.AdminManagerAiQuota setManagerAiQuota(Long id, AdminUserRequests.ManagerAiQuota request) {
+        User user = users.findForUpdate(id).orElseThrow(() -> new ResourceNotFoundException("User not found."));
+        if (!User.ROLE_COURSE_MANAGER.equals(user.getRoleName())) {
+            throw com.examprep.services.contest.ContestRules.invalid("userId",
+                    "Only content managers can have a monthly AI token quota override");
+        }
+        Long limit = request == null ? null : request.monthlyTokenLimit();
+        if (limit != null && limit < 0) {
+            throw com.examprep.services.contest.ContestRules.invalid("monthlyTokenLimit",
+                    "Monthly AI token limit must be a non-negative number");
+        }
+        user.setManagerMonthlyAiTokenLimit(limit);
+        users.save(user);
+        return AdminUserDetailResponse.AdminManagerAiQuota.from(managerAiQuota.snapshotForUser(user));
     }
 
     private static void requireKnownRole(String role) {

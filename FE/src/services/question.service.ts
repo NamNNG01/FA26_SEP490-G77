@@ -463,6 +463,8 @@ export interface ExplanationJobAccepted {
   jobId: number | null;
   queuedCount: number;
   skippedCount: number;
+  estimatedTokens?: number | null;
+  remainingTokens?: number | null;
 }
 
 /** `VITE_AI_MOCK=true` uses demo data for AI generation (no AI quota spent). */
