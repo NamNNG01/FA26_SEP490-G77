@@ -14,7 +14,8 @@ import type { PageResponse } from './course.service';
  *   POST /api/v1/student/attempts/{attemptId}/submit         (SA-04)
  *   GET  /api/v1/student/attempts/{attemptId}/result         (SA-05)
  *   GET  /api/v1/student/exams/{examId}/attempts             (SA-06) — history, newest first
- *   POST /api/v1/student/attempts/{attemptId}/explanations:batch (SE-01) — AI explanations
+ *   POST /api/v1/student/attempts/{attemptId}/explanations:batch (SE-01) — stored explanations (free) / AI for missing ones
+ *   POST /api/v1/student/attempts/{attemptId}/questions/{questionId}/deep-explanation (SE-03) — Deep AI Explanation, spends AI tokens
  */
 
 export type QuestionType =
@@ -161,6 +162,8 @@ export interface ResultQuestion {
   criteria: ResultCriterion[] | null;
   overallFeedback: string | null;
   explanation: { text: string; source: string | null } | null;
+  /** SE-03 answer already bought for this attempt — shown again without spending tokens. */
+  deepExplanation?: { text: string } | null;
   /**
    * Module the question belongs to — not sent by SA-05 yet
    * (docs/notes/student-result-module-be-gap.md); the per-module score shows once it is.
@@ -233,6 +236,18 @@ export interface StudentExamDetail {
 /** SE-01 */
 export interface ExplanationBatch {
   items: { questionId: number; explanation: string | null; source: string | null; reason: string | null }[];
+}
+
+/**
+ * SE-03 / MP-10 — Deep AI Explanation (Report-3 "Deep AI Explanation / Re-evaluation"): the AI looks at
+ * the student's own answer and explains it in depth. Spends AI tokens; 429 QUOTA_EXCEEDED when short.
+ */
+export interface DeepExplanation {
+  questionId: number;
+  explanation: string;
+  tokensUsed: number | null;
+  /** Tokens left after this call (free + plan); null when the BE does not say. */
+  remainingTokens: number | null;
 }
 
 /** SQ-01 — AI token quota (free monthly allowance + an active plan's balance). */
@@ -349,6 +364,17 @@ export const studentAttemptService = {
   async explain(attemptId: number | string, questionIds: number[]): Promise<ExplanationBatch> {
     const res = await api.post<ApiResponse<ExplanationBatch>>(`/student/attempts/${attemptId}/explanations:batch`, {
       questionIds,
+    });
+    return res.data;
+  },
+
+  /** SE-03 — the AI can take a while: give it the same room as other AI calls. */
+  async deepExplain(attemptId: number | string, questionId: number): Promise<DeepExplanation> {
+    const res = await api.request<ApiResponse<DeepExplanation>>({
+      method: 'post',
+      url: `/student/attempts/${attemptId}/questions/${questionId}/deep-explanation`,
+      data: {},
+      timeout: 60000,
     });
     return res.data;
   },

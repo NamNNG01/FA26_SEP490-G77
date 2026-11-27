@@ -4,6 +4,7 @@ import { Button } from '@/components/ui/Button';
 import { Icon } from '@/assets/icons';
 import { getApiErrorMessage } from '@/utils/apiError';
 import { modulePracticeService, type ExplanationSource, type PracticeExplanation as Explanation } from '@/services/modulePractice.service';
+import { DeepAiExplanation } from './DeepAiExplanation';
 
 const SOURCE_LABEL: Partial<Record<ExplanationSource, string>> = {
   GENERATED: 'AI',
@@ -12,8 +13,9 @@ const SOURCE_LABEL: Partial<Record<ExplanationSource, string>> = {
 };
 
 /**
- * MP-09: "Explain" for one practised question. Nothing is asked until the student presses the
- * button — a generated explanation spends AI quota. `practiceAnswerId` null = the latest attempt.
+ * MP-09: the explanation of one practised question, shown when the student asks. The stored one
+ * (manager-written or AI-cached) is free (Report-3: 0 AI tokens); only "Deep AI Explanation" (MP-10),
+ * in the same box, spends tokens. `practiceAnswerId` null = the latest attempt.
  * A new attempt (another `practiceAnswerId`) clears the shown explanation.
  */
 export function PracticeExplanation({
@@ -62,9 +64,9 @@ export function PracticeExplanation({
     return (
       <div className="flex flex-wrap items-center gap-3">
         <Button variant="outline" size="sm" icon={<Icon.Lightbulb className="w-4 h-4" />} loading={loading} disabled={loading} onClick={explain}>
-          Explain this question
+          Show explanation
         </Button>
-        {error ? <span className="text-xs text-danger">{error}</span> : <span className="text-xs text-content-subtle">May use your AI quota.</span>}
+        {error && <span className="text-xs text-danger">{error}</span>}
       </div>
     );
   }
@@ -78,14 +80,13 @@ export function PracticeExplanation({
             {SOURCE_LABEL[result.source]}
           </Badge>
         )}
-        {result.quota && (
-          <span className="ml-auto normal-case font-normal tracking-normal text-content-subtle">
-            AI tokens left: {result.quota.totalRemaining.toLocaleString()}
-          </span>
-        )}
       </div>
       {text ? (
-        <p className="text-sm leading-relaxed text-content-secondary whitespace-pre-line break-words">{text}</p>
+        <DeepAiExplanation
+          original={text}
+          request={() => modulePracticeService.deepExplain(questionId, { sessionId, sessionQuestionId, practiceAnswerId })}
+          resetKey={`${sessionQuestionId}-${practiceAnswerId ?? 'latest'}`}
+        />
       ) : (
         <div className="flex flex-wrap items-center gap-3">
           <p className="text-sm text-content-soft">{unavailable}</p>

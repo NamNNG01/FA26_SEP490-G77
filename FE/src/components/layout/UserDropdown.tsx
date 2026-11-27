@@ -168,7 +168,7 @@ export function UserDropdown({ avatarOnly = false }: { avatarOnly?: boolean }) {
                 className={menuItemClass}
               >
                 <Icon.Package className="w-4 h-4 text-muted-foreground" />
-                Subscription
+                My Pricing Plan
               </button>
               <button
                 type="button"

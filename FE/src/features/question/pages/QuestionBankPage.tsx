@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { useQuietRefresh } from '@/hooks/useAutoRefresh';
-import { useNavigate } from 'react-router';
+import { useNavigate, useSearchParams } from 'react-router';
 import { questionPlainText } from '@/components/common/QuestionContent';
 import { Button } from '@/components/ui/Button';
 import { Badge, type BadgeVariant } from '@/components/ui/Badge';
@@ -27,6 +27,7 @@ import { getUserRoleCode } from '@/auth/storage';
 import {
   QUESTION_STATUS_LABELS,
   questionService,
+  type ExplanationStatus,
   type QuestionListItem,
   type QuestionPage,
 } from '@/services/question.service';
@@ -37,6 +38,19 @@ import { groupLabel } from '../components/QuestionGroupPicker';
 import { NewGroupModal } from '../components/NewGroupModal';
 
 const PAGE_SIZE = 10;
+
+/** Only a known-missing or still-running explanation blocks publishing; older responses carry neither field. */
+function explanationBlocked(q: Pick<QuestionListItem, 'hasExplanation' | 'explanationStatus'>): boolean {
+  return q.hasExplanation === false || q.explanationStatus === 'PENDING';
+}
+
+/** Explanation state under the status badge: AI still writing, failed, or missing. */
+function ExplanationBadge({ status, hasExplanation }: { status?: ExplanationStatus; hasExplanation?: boolean }) {
+  if (status === 'PENDING') return <Badge variant="info" size="sm"><Icon.Clock className="w-3 h-3" /> AI writing…</Badge>;
+  if (status === 'FAILED') return <Badge variant="danger" size="sm">AI explanation failed</Badge>;
+  if (hasExplanation === false) return <Badge variant="warning" size="sm">No explanation</Badge>;
+  return null;
+}
 const ALL = 'all';
 
 type BankTab = 'questions' | 'groups';
@@ -136,6 +150,15 @@ const asRow = (r: Record<string, unknown>) => r as unknown as Row;
 export function QuestionBankPage() {
   const navigate = useNavigate();
   const toast = useToast();
+  // "Explanations ready" notification (AI-04) links here with ?ids= — show just those questions.
+  const [searchParams, setSearchParams] = useSearchParams();
+  const onlyIdsParam = searchParams.get('ids') ?? '';
+  const onlyIds = onlyIdsParam.split(',').map(Number).filter(n => Number.isInteger(n) && n > 0);
+  const clearOnlyIds = () => setSearchParams(prev => {
+    const next = new URLSearchParams(prev);
+    next.delete('ids');
+    return next;
+  }, { replace: true });
 
   const [activeTab, setActiveTab] = useState<BankTab>('questions');
 
@@ -234,6 +257,7 @@ export function QuestionBankPage() {
         questionType: optionalString(type),
         difficulty: optionalString(difficulty),
         status: optionalString(status),
+        ids: onlyIds.length ? onlyIds : undefined,
         page: page - 1,
         size: PAGE_SIZE,
       })
@@ -250,7 +274,7 @@ export function QuestionBankPage() {
       });
     return () => { cancelled = true; };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [activeTab, debouncedQuery, course, module, groupType, type, difficulty, status, page, reloadKey, notAssigned]);
+  }, [activeTab, debouncedQuery, course, module, groupType, type, difficulty, status, page, reloadKey, notAssigned, onlyIdsParam]);
 
   // Fetch Question Groups tab
   useEffect(() => {
@@ -354,15 +378,41 @@ export function QuestionBankPage() {
 
   const rows: Row[] = (result?.content ?? []).map(q => ({ ...q, id: q.questionId }));
   const selectedRows = rows.filter(r => selected.has(String(r.id)));
-  const selectedDrafts = selectedRows.filter(r => r.status === 'INACTIVE');
+  const allSelectedDrafts = selectedRows.filter(r => r.status === 'INACTIVE');
+  // A draft needs an explanation before it can be published (Report-3 6.2).
+  const selectedDrafts = allSelectedDrafts.filter(r => !explanationBlocked(r));
+  const selectedWithoutExplanation = selectedRows.filter(r => r.hasExplanation !== true && r.explanationStatus !== 'PENDING');
   const canBulkPublish = selectedDrafts.length > 0;
   const bulkHint = selectedRows.length === 0
     ? null
-    : selectedDrafts.length === 0
+    : allSelectedDrafts.length === 0
       ? 'All selected questions are already Published.'
-      : selectedDrafts.length < selectedRows.length
-        ? `${selectedDrafts.length} of ${selectedRows.length} selected are Drafts.`
-        : null;
+      : selectedDrafts.length < allSelectedDrafts.length
+        ? `${allSelectedDrafts.length - selectedDrafts.length} draft(s) need an explanation before publishing.`
+        : selectedDrafts.length < selectedRows.length
+          ? `${selectedDrafts.length} of ${selectedRows.length} selected are Drafts.`
+          : null;
+
+  /** AI-04: the backend writes the explanations in the background and notifies the manager when done. */
+  const generateExplanations = async (ids: number[]) => {
+    if (!ids.length) return;
+    setBulkBusy(true);
+    try {
+      const res = await questionService.queueAiExplanations(ids);
+      const queued = res?.queuedCount ?? ids.length;
+      toast.info('You will get a notification when they are ready — publishing unlocks then.', {
+        title: queued > 0
+          ? `AI is writing ${queued} explanation${queued === 1 ? '' : 's'} in the background`
+          : 'These questions already have explanations',
+      });
+      setSelected(new Set());
+      setReloadKey(k => k + 1);
+    } catch (err) {
+      toast.error(err instanceof Error && err.message ? err.message : 'Could not start the AI explanations.');
+    } finally {
+      setBulkBusy(false);
+    }
+  };
 
   const publishQuestions = async (ids: number[]) => {
     setBulkBusy(true);
@@ -493,8 +543,14 @@ export function QuestionBankPage() {
       key: 'status',
       label: 'Status',
       render: r => {
-        const s = asRow(r).status;
-        return <Badge variant={STATUS_VARIANT[s] ?? 'default'}>{STATUS_LABELS[s] ?? s}</Badge>;
+        const q = asRow(r);
+        const s = q.status;
+        return (
+          <div className="flex flex-col items-start gap-1">
+            <Badge variant={STATUS_VARIANT[s] ?? 'default'}>{STATUS_LABELS[s] ?? s}</Badge>
+            <ExplanationBadge status={q.explanationStatus} hasExplanation={q.hasExplanation} />
+          </div>
+        );
       },
     },
     {
@@ -517,8 +573,11 @@ export function QuestionBankPage() {
         const q = asRow(r);
         const items = [
           { label: 'Detail', icon: <Icon.Eye />, onClick: () => navigate(managerQuestionEditPath(q.questionId)) },
-          ...(q.status === 'INACTIVE'
+          ...(q.status === 'INACTIVE' && !explanationBlocked(q)
             ? [{ label: 'Publish', icon: <Icon.Upload />, onClick: () => setConfirmPublishIds([q.questionId]) }]
+            : []),
+          ...(q.hasExplanation !== true && q.explanationStatus !== 'PENDING'
+            ? [{ label: 'Generate AI Explanation', icon: <Icon.Zap />, onClick: () => generateExplanations([q.questionId]) }]
             : []),
           { label: 'Duplicate', icon: <Icon.Copy />, onClick: () => openCreateWithIntent(managerQuestionDuplicatePath(q.questionId)) },
         ];
@@ -700,6 +759,31 @@ export function QuestionBankPage() {
             </div>
           )}
 
+          {onlyIds.length > 0 && (() => {
+            const readyDrafts = rows.filter(r => r.status === 'INACTIVE' && !explanationBlocked(r));
+            return (
+              <div className="card flex flex-wrap items-center justify-between gap-3 px-4 py-3 bg-primary-light">
+                <div className="flex items-center gap-2 text-sm text-content">
+                  <Icon.Zap className="w-4 h-4 text-brand-ink" />
+                  Showing the {onlyIds.length} question{onlyIds.length === 1 ? '' : 's'} from your AI explanation batch — review them, then publish.
+                </div>
+                <div className="flex flex-wrap items-center gap-2">
+                  {readyDrafts.length > 0 && (
+                    <Button
+                      size="sm"
+                      icon={<Icon.Upload className="w-4 h-4" />}
+                      disabled={bulkBusy}
+                      onClick={() => setConfirmPublishIds(readyDrafts.map(r => r.questionId))}
+                    >
+                      Publish All ({readyDrafts.length})
+                    </Button>
+                  )}
+                  <Button size="sm" variant="ghost" onClick={clearOnlyIds}>Show all questions</Button>
+                </div>
+              </div>
+            );
+          })()}
+
           <div className={`card overflow-hidden transition-opacity ${loading && result ? 'opacity-60' : ''}`} aria-busy={loading}>
             {selectedRows.length > 0 && (
               <div className="flex flex-wrap items-center justify-between gap-3 px-4 py-3 border-b border-line-soft bg-primary-light">
@@ -709,6 +793,17 @@ export function QuestionBankPage() {
                 </div>
                 <div className="flex flex-wrap items-center justify-end gap-3">
                   {bulkHint && <span className="text-xs text-content-soft">{bulkHint}</span>}
+                  {selectedWithoutExplanation.length > 0 && (
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      icon={<Icon.Zap className="w-4 h-4" />}
+                      disabled={bulkBusy}
+                      onClick={() => generateExplanations(selectedWithoutExplanation.map(r => r.questionId))}
+                    >
+                      Generate AI Explanations ({selectedWithoutExplanation.length})
+                    </Button>
+                  )}
                   <Button
                     size="sm"
                     icon={<Icon.Upload className="w-4 h-4" />}

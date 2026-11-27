@@ -34,7 +34,7 @@ function matchesSearch(course: MyCourse, term: string) {
  *  - enrolled courses grid:      MC-01
  *  - search box:                 filters the enrolled courses only (title,
  *                                category, manager) — not the public catalog.
- *  - Material to Quiz Creator:   AI quiz generated from a file the student uploads (MaterialQuizModal, MQ-01..MQ-05).
+ *  - AI Quiz Generator (Report-3 #24):   AI quiz generated from a file the student uploads (MaterialQuizModal, MQ-01..MQ-05).
  *  - Weakness Analysis:          linked from each course card (personalized practice starts there).
  */
 export function MyCoursesPage() {
@@ -114,7 +114,7 @@ export function MyCoursesPage() {
         action={
           <div className="flex w-full flex-wrap items-center gap-2 sm:w-auto">
             <Button variant="outline" icon={<Icon.Brain className="w-4 h-4" />} onClick={() => setQuizModal('material')}>
-              Material to Quiz Creator
+              AI Quiz Generator
             </Button>
             <div role="search" className="w-full sm:w-auto">
               <SearchInput

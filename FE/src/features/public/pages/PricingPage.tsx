@@ -51,7 +51,7 @@ export function PricingPage() {
     <div className="min-h-[calc(100dvh-4rem)] bg-gradient-to-br from-surface-brand to-surface">
       <div className="mx-auto w-full max-w-[1280px] px-4 py-[clamp(2.5rem,6vw,4.5rem)] sm:px-6">
         <div className="mx-auto max-w-2xl text-center">
-          <p className="text-xs font-semibold tracking-[0.08em] text-brand-ink uppercase">Pricing</p>
+          <p className="text-xs font-semibold tracking-[0.08em] text-brand-ink uppercase">Pricing Plans</p>
           <h1 className="mt-3 text-[clamp(1.9rem,1.3rem+2.4vw,3rem)] leading-tight font-bold text-content">
             Pick the plan that fits your exam date
           </h1>

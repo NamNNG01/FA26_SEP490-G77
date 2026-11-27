@@ -206,7 +206,7 @@ export function SubscriptionPackagesPage() {
 
   return <div className="space-y-5 py-6">
     <header className="flex flex-wrap items-start justify-between gap-3">
-      <div><h1 className="text-2xl font-bold text-content">Subscription Packages</h1><p className="mt-1 text-sm text-content-soft">Configure plan prices, duration, AI token limits and the order students see them in.</p></div>
+      <div><h1 className="text-2xl font-bold text-content">Pricing Plan Config</h1><p className="mt-1 text-sm text-content-soft">Configure plan prices, duration, AI token limits and the order students see them in.</p></div>
       <div className="flex flex-wrap gap-2">
         <Button variant="outline" icon={<Icon.SortAsc className="h-4 w-4" />} loading={orderLoading} disabled={orderLoading} onClick={() => void openReorder()}>Reorder</Button>
         <Button icon={<Icon.Plus className="h-4 w-4" />} onClick={() => void openCreate()}>New plan</Button>

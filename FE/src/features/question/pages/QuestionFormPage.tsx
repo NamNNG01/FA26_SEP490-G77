@@ -7,7 +7,7 @@ import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
 import { Spinner } from '@/components/ui/Spinner';
 import { useToast } from '@/components/ui/ToastHost';
 import { ROUTES } from '@/app/routes';
-import { QUESTION_STATUS_LABELS, questionService, type QuestionDetail, type QuestionStatus } from '@/services/question.service';
+import { QUESTION_STATUS_LABELS, explanationMissing, questionService, type QuestionDetail, type QuestionStatus } from '@/services/question.service';
 import { questionGroupService, type QuestionGroup } from '@/services/questionGroup.service';
 import { QuestionForm as QuestionFormBlock } from '../components/QuestionForm';
 import { QuestionSidePanel } from '../components/QuestionSidePanel';
@@ -37,9 +37,12 @@ import {
 import { clearCreateDraft, hasUnsavedCreateWork, loadCreateDraft, saveCreateDraft, type CreateDraftSnapshot } from '../createDraft';
 import { Icon } from '@/assets/icons';
 import { describeSaveError, loadErrorMessage, type SaveError } from '../saveError';
+import { getApiErrorMessage } from '@/utils/apiError';
 
 /** Q-03 accepts 1..50 questions per request. */
 const MAX_BATCH = 50;
+/** How often saved questions whose explanation the AI is writing are re-read. */
+const EXPLANATION_POLL_MS = 10000;
 
 /** Publishing is final, so both publish buttons ask first: this question (edit) or the ticked drafts (create). */
 type Confirm = 'publishOne' | 'publishSaved' | null;
@@ -92,6 +95,12 @@ export function QuestionFormPage({ mode }: { mode: 'create' | 'edit' }) {
   const [courseId, setCourseId] = useState(() => (hasGroupIntent ? entryIntent?.courseId ?? '' : restored?.courseId || entryIntent?.courseId || ''));
   const [moduleId, setModuleId] = useState(() => (hasGroupIntent ? entryIntent?.moduleId ?? '' : restored?.moduleId || entryIntent?.moduleId || ''));
   const [status, setStatus] = useState<QuestionStatus>('INACTIVE');
+  /** Edit mode: the stored question has an explanation — publishing needs one. */
+  const [savedHasExplanation, setSavedHasExplanation] = useState(true);
+  /** Saved questions whose explanation the AI is writing in the background (AI-04). */
+  const [pendingExplanations, setPendingExplanations] = useState<Set<number>>(() => new Set());
+  /** Saved questions the AI could not write an explanation for. */
+  const [failedExplanations, setFailedExplanations] = useState<Set<number>>(() => new Set());
   /** Create mode: questions saved on this visit (manual and AI), in save order — they start as Draft. */
   const [saved, setSaved] = useState<SavedQuestion[]>([]);
   /** Saved drafts ticked for publishing. */
@@ -163,6 +172,8 @@ export function QuestionFormPage({ mode }: { mode: 'create' | 'edit' }) {
         setCourseId(detail.courseId != null ? String(detail.courseId) : '');
         setModuleId(detail.moduleId != null ? String(detail.moduleId) : '');
         setStatus(detail.status);
+        setSavedHasExplanation(!explanationMissing(detail.aiExplanation));
+        if (detail.explanationStatus === 'PENDING') setPendingExplanations(new Set([detail.questionId]));
         setDirty(false);
       })
       .catch(err => {
@@ -389,6 +400,95 @@ export function QuestionFormPage({ mode }: { mode: 'create' | 'edit' }) {
     setDirty(true);
   };
 
+  /** "Generate AI Explanation" on one question: only flags it — the AI runs after saving (AI-04). */
+  const requestExplanation = (i: number, requested: boolean) => {
+    const q = questions[i];
+    if (!q) return;
+    updateQuestion(i, { ...q, explanationRequested: requested || undefined });
+    if (requested) {
+      toast.info('You can save now — AI writes the explanation in the background and notifies you when it is ready.', {
+        title: 'AI explanation queued for after save',
+      });
+    }
+  };
+
+  /** Flags every question with a blank explanation at once. */
+  const blankExplanationCount = questions.filter(q => explanationMissing(q.explanation) && !q.explanationRequested).length;
+  const requestAllBlankExplanations = () => {
+    const count = blankExplanationCount;
+    if (!count) return;
+    setQuestions(prev => prev.map(q => (explanationMissing(q.explanation) ? { ...q, explanationRequested: true } : q)));
+    setDirty(true);
+    toast.info(`You can save now — AI writes the ${count} explanation${count === 1 ? '' : 's'} in the background and notifies you when they are ready.`, {
+      title: `AI explanations queued for ${count} question${count === 1 ? '' : 's'}`,
+    });
+  };
+
+  /**
+   * Hands saved questions to the AI (AI-04). The backend notifies the manager when done; while
+   * the page stays open the questions are also re-read here, so their cards update by themselves.
+   */
+  const queueExplanations = async (ids: number[], overwrite = false) => {
+    if (!ids.length) return;
+    try {
+      const res = await questionService.queueAiExplanations(ids, overwrite);
+      setPendingExplanations(prev => new Set([...prev, ...ids]));
+      setFailedExplanations(prev => {
+        const next = new Set(prev);
+        ids.forEach(id => next.delete(id));
+        return next;
+      });
+      const queued = res?.queuedCount ?? ids.length;
+      toast.info('You will get a notification when they are ready — publishing unlocks then.', {
+        title: `AI is writing ${queued} explanation${queued === 1 ? '' : 's'} in the background`,
+      });
+    } catch (err) {
+      toast.error(getApiErrorMessage(err, 'Could not start the AI explanations.'), {
+        title: 'AI explanations not started',
+        action: { label: 'Try again', onClick: () => { void queueExplanations(ids, overwrite); } },
+        duration: null,
+      });
+    }
+  };
+
+  // Re-read questions whose explanation is being written until the AI is done (or gave up).
+  const pendingKey = [...pendingExplanations].sort((a, b) => a - b).join(',');
+  useEffect(() => {
+    if (!pendingKey) return;
+    const ids = pendingKey.split(',').map(Number);
+    const id = window.setTimeout(async () => {
+      const details = await Promise.all(ids.map(qid => questionService.getQuestionById(qid).catch(() => null)));
+      const done = new Set<number>();
+      const failed = new Set<number>();
+      details.forEach(d => {
+        if (!d) return;
+        if (!explanationMissing(d.aiExplanation) && d.explanationStatus !== 'PENDING') done.add(d.questionId);
+        else if (d.explanationStatus === 'FAILED') failed.add(d.questionId);
+      });
+      const byId = new Map(details.filter((d): d is QuestionDetail => Boolean(d)).map(d => [d.questionId, d]));
+      setSaved(prev => prev.map(item => {
+        const d = byId.get(item.detail.questionId);
+        return d && (done.has(d.questionId) || failed.has(d.questionId)) ? { ...item, detail: d, draft: fromDetail(d) } : item;
+      }));
+      if (isEdit) {
+        const d = details[0];
+        if (d && done.has(d.questionId)) {
+          setSavedHasExplanation(true);
+          if (!dirty) setQuestions([fromDetail(d)]);
+        }
+      }
+      if (done.size || failed.size) {
+        setPendingExplanations(prev => new Set([...prev].filter(x => !done.has(x) && !failed.has(x))));
+        if (failed.size) setFailedExplanations(prev => new Set([...prev, ...failed]));
+      } else {
+        // Nothing finished yet: a new Set re-runs this effect for the next round.
+        setPendingExplanations(prev => new Set(prev));
+      }
+    }, EXPLANATION_POLL_MS);
+    return () => window.clearTimeout(id);
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- pendingKey stands in for pendingExplanations
+  }, [pendingKey, pendingExplanations]);
+
   /** Adds an unsaved copy right below question i. */
   const duplicateQuestion = (i: number) => {
     if (questions.length >= MAX_BATCH) {
@@ -524,6 +624,7 @@ export function QuestionFormPage({ mode }: { mode: 'create' | 'edit' }) {
       };
       toast.success(`Group “${groupMeta.title}” created with ${res.questions.length} draft question${res.questions.length === 1 ? '' : 's'}.`);
       setSaved(prev => [...prev, ...res.questions.map(detail => ({ detail, draft: fromDetail(detail), groupMeta }))]);
+      void queueRequested(drafts, res.questions);
       return res.questions.length;
     }
 
@@ -541,13 +642,28 @@ export function QuestionFormPage({ mode }: { mode: 'create' | 'edit' }) {
       : undefined;
     toast.success(`${created.length} question${created.length === 1 ? '' : 's'} saved as Draft${groupId != null ? ' to the question group' : ''}.`);
     setSaved(prev => [...prev, ...created.map(detail => ({ detail, draft: fromDetail(detail), groupMeta }))]);
+    void queueRequested(drafts, created);
     return created.length;
   };
 
+  /** Q-03 answers in request order: queue the AI for the drafts that asked for it (all-or-nothing batch). */
+  const queueRequested = (drafts: QuestionDraft[], created: QuestionDetail[]) => {
+    const requested = drafts.map((d, i) => (d.explanationRequested ? created[i] : undefined)).filter((d): d is QuestionDetail => Boolean(d));
+    if (!requested.length) return Promise.resolve();
+    // A filled explanation the manager asked to regenerate is overwritten; blank ones are just filled.
+    const overwrite = drafts.some(d => d.explanationRequested && !explanationMissing(d.explanation));
+    return queueExplanations(requested.map(d => d.questionId), overwrite);
+  };
+
+  /** Saved drafts without an explanation can't be published yet. */
+  const blockedFromPublish = (d: QuestionDetail) => explanationMissing(d.aiExplanation) || pendingExplanations.has(d.questionId);
+
   const savedDrafts = saved.filter(s => s.detail.status === 'INACTIVE');
+  /** Drafts that already have an explanation — the only ones that can be ticked for publishing. */
+  const publishableDrafts = savedDrafts.filter(s => !blockedFromPublish(s.detail));
   const savedPublished = saved.filter(s => s.detail.status === 'ACTIVE');
-  const pickedDrafts = savedDrafts.filter(s => toPublish.has(s.detail.questionId));
-  const allDraftsPicked = savedDrafts.length > 0 && pickedDrafts.length === savedDrafts.length;
+  const pickedDrafts = publishableDrafts.filter(s => toPublish.has(s.detail.questionId));
+  const allDraftsPicked = publishableDrafts.length > 0 && pickedDrafts.length === publishableDrafts.length;
   const togglePublish = (id: number) =>
     setToPublish(prev => {
       const n = new Set(prev);
@@ -555,7 +671,9 @@ export function QuestionFormPage({ mode }: { mode: 'create' | 'edit' }) {
       else n.add(id);
       return n;
     });
-  const toggleAllDrafts = () => setToPublish(allDraftsPicked ? new Set() : new Set(savedDrafts.map(s => s.detail.questionId)));
+  const toggleAllDrafts = () => setToPublish(allDraftsPicked ? new Set() : new Set(publishableDrafts.map(s => s.detail.questionId)));
+  /** Saved drafts with no explanation and nothing running for them yet. */
+  const savedWithoutExplanation = savedDrafts.filter(s => explanationMissing(s.detail.aiExplanation) && !pendingExplanations.has(s.detail.questionId));
 
   const applyPublished = (updated: QuestionDetail[]) => {
     const byId = new Map(updated.map(u => [u.questionId, u]));
@@ -575,8 +693,20 @@ export function QuestionFormPage({ mode }: { mode: 'create' | 'edit' }) {
     }
   };
 
-  const publishIds = async (ids: number[], successMsg?: string) => {
-    if (!ids.length) return;
+  const publishIds = async (allIds: number[], successMsg?: string) => {
+    const blocked = new Set(saved.filter(s => blockedFromPublish(s.detail)).map(s => s.detail.questionId));
+    const ids = allIds.filter(id => !blocked.has(id));
+    if (ids.length < allIds.length) {
+      const n = allIds.length - ids.length;
+      toast.warning(`${n} question${n === 1 ? ' has' : 's have'} no explanation yet and stay${n === 1 ? 's' : ''} as Draft.`, {
+        title: 'Explanation required to publish',
+      });
+      successMsg = undefined;
+    }
+    if (!ids.length) {
+      setConfirm(null);
+      return;
+    }
     setPublishing(true);
     try {
       const updated = await questionService.batchUpdateStatus(ids, 'ACTIVE');
@@ -637,8 +767,11 @@ export function QuestionFormPage({ mode }: { mode: 'create' | 'edit' }) {
     setSaving(true);
     try {
       if (isEdit) {
-        await questionService.updateQuestion(questions[0].questionId!, toUpdateRequest(questions[0], moduleId ? Number(moduleId) : null));
+        const q = questions[0];
+        await questionService.updateQuestion(q.questionId!, toUpdateRequest(q, moduleId ? Number(moduleId) : null));
         toast.success('Question updated.');
+        // Queued after the update so the AI reads the saved version; the notification brings the manager back.
+        if (q.explanationRequested) await queueExplanations([q.questionId!], !explanationMissing(q.explanation));
         setDirty(false);
         leave(goToBank);
         return;
@@ -689,9 +822,17 @@ export function QuestionFormPage({ mode }: { mode: 'create' | 'edit' }) {
 
   const save = !isEdit && createMode === 'ai' ? saveAi : saveManual;
 
+  /** Edit mode: Publish needs a stored explanation (an unsaved one in the box doesn't count yet). */
+  const editPublishBlocked = !savedHasExplanation || (questions[0]?.questionId != null && pendingExplanations.has(questions[0].questionId));
+
   const publishOne = async () => {
     const q = questions[0];
     if (!q?.questionId) return;
+    if (editPublishBlocked) {
+      setConfirm(null);
+      toast.warning('Save an explanation first, or let AI write one.', { title: 'Explanation required to publish' });
+      return;
+    }
     setStatusBusy(true);
     try {
       const [updated] = await questionService.batchUpdateStatus([q.questionId], 'ACTIVE');
@@ -837,6 +978,9 @@ export function QuestionFormPage({ mode }: { mode: 'create' | 'edit' }) {
             const renderSavedCard = (item: SavedQuestion, idx: number) => {
               const { detail, draft } = item;
               const isDraft = detail.status === 'INACTIVE';
+              const pending = pendingExplanations.has(detail.questionId);
+              const failed = failedExplanations.has(detail.questionId);
+              const blocked = blockedFromPublish(detail);
               return (
                 <QuestionFormBlock
                   key={draft.key}
@@ -845,11 +989,12 @@ export function QuestionFormPage({ mode }: { mode: 'create' | 'edit' }) {
                   onChange={() => {}}
                   showErrors={false}
                   readOnly
+                  explanationStatus={pending ? 'PENDING' : failed ? 'FAILED' : undefined}
                   leading={
                     <Checkbox
                       checked={toPublish.has(detail.questionId)}
                       onChange={() => togglePublish(detail.questionId)}
-                      disabled={!isDraft || publishing}
+                      disabled={!isDraft || publishing || blocked}
                     />
                   }
                   actions={
@@ -857,7 +1002,18 @@ export function QuestionFormPage({ mode }: { mode: 'create' | 'edit' }) {
                       <Badge variant={isDraft ? 'default' : 'success'} className="whitespace-nowrap">
                         {QUESTION_STATUS_LABELS[detail.status] ?? detail.status}
                       </Badge>
-                      {isDraft && (
+                      {isDraft && blocked && !pending && (
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          icon={<Icon.Zap className="w-3.5 h-3.5" />}
+                          onClick={() => queueExplanations([detail.questionId])}
+                          title="Publishing needs an explanation"
+                        >
+                          {failed ? 'Retry AI Explanation' : 'Generate AI Explanation'}
+                        </Button>
+                      )}
+                      {isDraft && !blocked && (
                         <Button
                           size="sm"
                           variant="outline"
@@ -883,9 +1039,22 @@ export function QuestionFormPage({ mode }: { mode: 'create' | 'edit' }) {
                     <Badge variant={savedDrafts.length > 0 ? 'warning' : 'default'}>{savedDrafts.length} Draft</Badge>
                   </div>
                   <div className="flex flex-wrap items-center gap-3">
-                    {savedDrafts.length > 0 && (
+                    {pendingExplanations.size > 0 && (
+                      <Badge variant="info"><Icon.Clock className="w-3 h-3" /> AI writing {pendingExplanations.size} explanation{pendingExplanations.size === 1 ? '' : 's'}</Badge>
+                    )}
+                    {savedWithoutExplanation.length > 0 && (
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        icon={<Icon.Zap className="w-3.5 h-3.5" />}
+                        onClick={() => queueExplanations(savedWithoutExplanation.map(s => s.detail.questionId))}
+                      >
+                        Generate AI Explanations ({savedWithoutExplanation.length})
+                      </Button>
+                    )}
+                    {publishableDrafts.length > 0 && (
                       <Checkbox
-                        label={`Select all drafts (${savedDrafts.length})`}
+                        label={`Select all drafts (${publishableDrafts.length})`}
                         checked={allDraftsPicked}
                         indeterminate={pickedDrafts.length > 0 && !allDraftsPicked}
                         onChange={toggleAllDrafts}
@@ -999,6 +1168,17 @@ export function QuestionFormPage({ mode }: { mode: 'create' | 'edit' }) {
 
                   {questions.length > 0 && (
                     <div className="flex flex-wrap items-center gap-2">
+                      {blankExplanationCount > 0 && (
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          icon={<Icon.Zap className="w-3.5 h-3.5" />}
+                          onClick={requestAllBlankExplanations}
+                          title="AI writes them in the background after you save"
+                        >
+                          AI Explanations for blanks ({blankExplanationCount})
+                        </Button>
+                      )}
                       <div className="inline-flex items-center rounded-[8px] border border-line bg-surface p-0.5 gap-0.5">
                         {([
                           { key: 'all', label: `All (${questions.length})` },
@@ -1093,6 +1273,7 @@ export function QuestionFormPage({ mode }: { mode: 'create' | 'edit' }) {
                           onMoveDown={isEdit ? undefined : () => move(idx, 1)}
                           allowedTypes={allowedTypes}
                           kindError={submitted || Boolean(q.importIssue) ? kindError(q) : undefined}
+                          onRequestExplanation={requested => requestExplanation(idx, requested)}
                         />
                       </div>
                     ))
@@ -1101,6 +1282,16 @@ export function QuestionFormPage({ mode }: { mode: 'create' | 'edit' }) {
               </>
             );
           })()}
+
+          {isEdit && status === 'INACTIVE' && editPublishBlocked && (
+            <Alert
+              type="info"
+              title="Explanation required to publish"
+              message={questions[0]?.questionId != null && pendingExplanations.has(questions[0].questionId)
+                ? 'AI is writing the explanation — you will get a notification, and Publish unlocks when it is ready.'
+                : 'Write an explanation and save, or click “Generate AI Explanation” and save — AI writes it in the background.'}
+            />
+          )}
 
           {isEdit && (
             <div ref={listRef} className="space-y-3 scroll-mt-5">
@@ -1118,6 +1309,8 @@ export function QuestionFormPage({ mode }: { mode: 'create' | 'edit' }) {
                     canMoveDown={false}
                     allowedTypes={allowedTypes}
                     kindError={submitted ? kindError(q) : undefined}
+                    onRequestExplanation={requested => requestExplanation(i, requested)}
+                    explanationStatus={q.questionId != null && pendingExplanations.has(q.questionId) ? 'PENDING' : undefined}
                   />
                 </div>
               ))}
@@ -1142,7 +1335,7 @@ export function QuestionFormPage({ mode }: { mode: 'create' | 'edit' }) {
           onSave={save}
           saveLabel={!isEdit && createMode === 'ai' ? `Save Accepted (${aiAccepted.length})` : undefined}
           onCancel={cancel}
-          onPublishOne={isEdit && status === 'INACTIVE' ? () => setConfirm('publishOne') : undefined}
+          onPublishOne={isEdit && status === 'INACTIVE' && !editPublishBlocked ? () => setConfirm('publishOne') : undefined}
           saving={saving}
           statusBusy={statusBusy}
         />

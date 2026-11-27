@@ -200,6 +200,11 @@ export interface QuestionDraft {
   code: CodeDraft;
   /** Drafted by AI-03 and accepted into the form. */
   fromAi?: boolean;
+  /**
+   * FE only: the manager asked the AI to write this explanation. It is queued (AI-04) right
+   * after the question is saved, so nobody waits on the AI while editing.
+   */
+  explanationRequested?: boolean;
   /** A Q-09 import block the backend couldn't read — shown on the question until dismissed. */
   importIssue?: ImportIssue;
 }

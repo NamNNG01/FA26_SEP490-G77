@@ -17,6 +17,10 @@ function typeIcon(type: string | null): React.ReactNode {
       return <Icon.XCircle className={cls} />;
     case 'CONTEST_REMINDER':
       return <Icon.Clock className={cls} />;
+    case 'AI_EXPLANATION_READY':
+      return <Icon.Zap className={cls} />;
+    case 'AI_EXPLANATION_FAILED':
+      return <Icon.AlertCircle className={cls} />;
     default:
       return <Icon.Bell className={cls} />;
   }

@@ -31,7 +31,8 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 
 /**
  * NT-01 … NT-03 (spec 23): the inbox only shows the caller's notifications, newest first, keeps an
- * accurate unread badge, and both read endpoints are owner-scoped and idempotent.
+ * accurate unread badge, and both read endpoints are owner-scoped and idempotent. Course managers use the
+ * same inbox for their own notifications (e.g. background AI explanation results); admins stay out.
  */
 @SpringBootTest
 @AutoConfigureMockMvc
@@ -45,29 +46,34 @@ public class StudentNotificationApiIntegrationTest {
     @Autowired ObjectMapper json;
     @Autowired EntityManager em;
 
-    User student, other, manager;
-    Notification readItem, unreadItem, newestItem, otherItem;
-    UserNotification readRow, unreadRow, newestRow, otherRow;
+    User student, other, manager, admin;
+    Notification readItem, unreadItem, newestItem, otherItem, managerItem;
+    UserNotification readRow, unreadRow, newestRow, otherRow, managerRow;
 
     @BeforeEach
     void fixtures() {
         student = account(User.ROLE_STUDENT);
         other = account(User.ROLE_STUDENT);
         manager = account(User.ROLE_COURSE_MANAGER);
+        admin = account(User.ROLE_ADMIN);
         readItem = notification("Old read", "You passed chapter 1", "SYSTEM", "/student/exams/1");
         unreadItem = notification("Midterm soon", "You have 3 days", "EXAM_REMINDER", "/student/exams/8");
         newestItem = notification("New tip", "Try spaced repetition", "TIP", null);
         otherItem = notification("Other inbox", "not yours", "SYSTEM", null);
+        managerItem = notification("AI explanations ready", "3 questions", "AI_EXPLANATION_READY",
+                "/manager/question-bank?ids=1,2,3");
         readRow = inbox(student, readItem, true);
         unreadRow = inbox(student, unreadItem, false);
         newestRow = inbox(student, newestItem, false);
         otherRow = inbox(other, otherItem, false);
+        managerRow = inbox(manager, managerItem, false);
         em.flush();
         // Auditing stamps created_at on insert, so pin the order afterwards.
         pin(readItem, BASE);
         pin(unreadItem, BASE.plusSeconds(60));
         pin(newestItem, BASE.plusSeconds(120));
         pin(otherItem, BASE.plusSeconds(180));
+        pin(managerItem, BASE.plusSeconds(240));
         em.clear();
     }
 
@@ -131,7 +137,16 @@ public class StudentNotificationApiIntegrationTest {
         assertEquals(1, otherInbox.path("unreadCount").asInt());
         assertEquals(otherItem.getNotificationId(), otherInbox.path("content").get(0).path("notificationId").asLong());
 
-        call(manager, get("/api/v1/student/notifications")).andExpect(status().isForbidden());
+        // A course manager reads their own inbox through the same endpoint — never the students' rows.
+        JsonNode managerInbox = data(call(manager, get("/api/v1/student/notifications")).andExpect(status().isOk()));
+        assertEquals(1, managerInbox.path("content").size());
+        assertEquals(1, managerInbox.path("unreadCount").asInt());
+        assertEquals(managerItem.getNotificationId(), managerInbox.path("content").get(0).path("notificationId").asLong());
+        assertEquals("/manager/question-bank?ids=1,2,3", managerInbox.path("content").get(0).path("link").asText());
+
+        call(admin, get("/api/v1/student/notifications")).andExpect(status().isForbidden());
+        // Opening the inbox does not open the rest of /student/** to managers.
+        call(manager, get("/api/v1/student/me/ai-quota")).andExpect(status().isForbidden());
         mvc.perform(get("/api/v1/student/notifications")).andExpect(status().isUnauthorized());
         call(student, get("/api/v1/student/notifications").param("page", "-1"))
                 .andExpect(status().isBadRequest());
@@ -178,7 +193,15 @@ public class StudentNotificationApiIntegrationTest {
 
         call(student, post("/api/v1/student/notifications/" + Long.MAX_VALUE + "/read"))
                 .andExpect(status().isNotFound());
+        // A manager cannot read a student's notification (not in their inbox) but can read their own.
         call(manager, post("/api/v1/student/notifications/" + unreadItem.getNotificationId() + "/read"))
+                .andExpect(status().isNotFound());
+        assertTrue(rowOf(unreadItem).getIsRead());
+        JsonNode managerRead = data(call(manager, post("/api/v1/student/notifications/"
+                + managerItem.getNotificationId() + "/read")).andExpect(status().isOk()));
+        assertTrue(managerRead.path("isRead").asBoolean());
+        assertEquals(0, managerRead.path("unreadCount").asInt());
+        call(admin, post("/api/v1/student/notifications/" + managerItem.getNotificationId() + "/read"))
                 .andExpect(status().isForbidden());
         mvc.perform(post("/api/v1/student/notifications/" + unreadItem.getNotificationId() + "/read"))
                 .andExpect(status().isUnauthorized());
@@ -213,7 +236,14 @@ public class StudentNotificationApiIntegrationTest {
         assertEquals(1, data(call(other, get("/api/v1/student/notifications")
                 .param("unreadOnly", "true")).andExpect(status().isOk())).path("content").size());
 
-        call(manager, post("/api/v1/student/notifications/read-all")).andExpect(status().isForbidden());
+        // The manager's read-all only clears the manager's own row.
+        JsonNode managerAll = data(call(manager, post("/api/v1/student/notifications/read-all"))
+                .andExpect(status().isOk()));
+        assertEquals(1, managerAll.path("markedCount").asInt());
+        assertEquals(0, managerAll.path("unreadCount").asInt());
+        assertTrue(rowOf(managerItem).getIsRead());
+        assertFalse(rowOf(otherItem).getIsRead());
+        call(admin, post("/api/v1/student/notifications/read-all")).andExpect(status().isForbidden());
         mvc.perform(post("/api/v1/student/notifications/read-all")).andExpect(status().isUnauthorized());
     }
 
