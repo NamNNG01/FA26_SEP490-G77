@@ -19,8 +19,10 @@ import {
   studentAttemptService,
   type AttemptHistoryItem,
   type AttemptResult,
+  type DeepExplanation,
   type ResultQuestion,
 } from '@/services/studentAttempt.service';
+import { DeepAiExplanation } from '../components/DeepAiExplanation';
 import { EmptyState } from '@/components/ui/Card';
 import { LoadError, STUDENT_PAGE_CLASS, formatDateTime } from '../components/studentUi';
 import { QUESTION_TYPE_LABEL, QuestionText, isAnswered } from '../components/QuestionAnswerInput';
@@ -660,6 +662,8 @@ export function StudentExamResultPage() {
                 explanationOpen={open.has(q.questionId)}
                 onToggleExplanation={() => toggle(q.questionId)}
                 onRetryExplanation={() => loadExplanations([q.questionId])}
+                onDeepExplain={() => studentAttemptService.deepExplain(result.attemptId, q.questionId)}
+                attemptKey={result.attemptId}
                 bookmarkAction={
                   <div className="flex flex-wrap gap-2"><Button size="sm" variant={bookmarkedQuestions.has(q.questionId) ? 'primary' : 'outline'} disabled={bookmarkBusy.has(q.questionId)} aria-pressed={bookmarkedQuestions.has(q.questionId)} aria-label={bookmarkedQuestions.has(q.questionId) ? 'Remove bookmark' : 'Bookmark question'} icon={<Icon.Star className={`w-4 h-4 ${bookmarkedQuestions.has(q.questionId) ? 'fill-current' : ''}`} />} onClick={() => toggleQuestionBookmark(q.questionId)}>
                     {bookmarkedQuestions.has(q.questionId) ? 'Bookmarked' : 'Bookmark'}
@@ -997,6 +1001,8 @@ function ResultQuestionCard({
   explanationOpen,
   onToggleExplanation,
   onRetryExplanation,
+  onDeepExplain,
+  attemptKey,
   nav,
   saveAction,
   bookmarkAction,
@@ -1011,6 +1017,10 @@ function ResultQuestionCard({
   explanationOpen: boolean;
   onToggleExplanation: () => void;
   onRetryExplanation: () => void;
+  /** SE-03 Deep AI Explanation of this question (spends AI tokens). */
+  onDeepExplain?: () => Promise<DeepExplanation>;
+  /** Changes with the attempt, so a deep answer of another attempt is dropped. */
+  attemptKey?: string | number;
   /** "Question 3 of 40" bar on top of the card. */
   nav?: React.ReactNode;
   /** "Save to flashcards" button, under the answer. */
@@ -1085,6 +1095,8 @@ function ResultQuestionCard({
                 open={explanationOpen}
                 onToggle={onToggleExplanation}
                 onRetry={onRetryExplanation}
+                onDeepExplain={onDeepExplain}
+                attemptKey={attemptKey}
               />
             </div>
           )}
@@ -1103,6 +1115,8 @@ function ResultQuestionCard({
             open={explanationOpen}
             onToggle={onToggleExplanation}
             onRetry={onRetryExplanation}
+            onDeepExplain={onDeepExplain}
+            attemptKey={attemptKey}
           />
         )}
         {saveAction && <div className="flex justify-end">{saveAction}</div>}
@@ -1195,8 +1209,9 @@ function RubricGrade({ question: q, outcome }: { question: ResultQuestion; outco
 }
 
 /**
- * Explanation, collapsed by default. Shows the SA-05 text when cached;
- * otherwise opening it has already asked the AI (SE-01, done by the page).
+ * Explanation, collapsed by default. The stored explanation (SA-05, manager-written or AI-cached) is
+ * free; a missing one is asked from the AI when the box opens (SE-01, done by the page). "Deep AI
+ * Explanation" lives in the same box and is the only part that spends AI tokens (SE-03).
  */
 function ExplanationBox({
   question: q,
@@ -1204,12 +1219,16 @@ function ExplanationBox({
   open,
   onToggle,
   onRetry,
+  onDeepExplain,
+  attemptKey,
 }: {
   question: ResultQuestion;
   state: ExplanationState | undefined;
   open: boolean;
   onToggle: () => void;
   onRetry: () => void;
+  onDeepExplain?: () => Promise<DeepExplanation>;
+  attemptKey?: string | number;
 }) {
   const text = q.explanation?.text ?? state?.text ?? null;
   const panelId = `explanation-${q.questionId}`;
@@ -1228,8 +1247,17 @@ function ExplanationBox({
       </button>
       {open && (
         <div id={panelId} className="px-3 pb-3">
-          {text ? (
-            <p className="text-sm text-content-secondary whitespace-pre-line">{text}</p>
+          {text || q.deepExplanation?.text ? (
+            onDeepExplain ? (
+              <DeepAiExplanation
+                original={text}
+                initialDeep={q.deepExplanation?.text}
+                request={onDeepExplain}
+                resetKey={`${attemptKey ?? ''}-${q.questionId}`}
+              />
+            ) : (
+              <p className="text-sm text-content-secondary whitespace-pre-line">{text}</p>
+            )
           ) : state?.error ? (
             <div className="flex flex-wrap items-center gap-3">
               <p className="text-sm text-danger">{state.error}</p>

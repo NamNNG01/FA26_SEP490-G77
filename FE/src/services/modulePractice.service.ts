@@ -1,7 +1,7 @@
 import { api } from './api';
 import type { ApiResponse } from '@/types/api';
 import type { PageResponse } from './course.service';
-import type { AnswerResponse, AttemptQuestion, QuestionType, ResultQuestion as ReviewQuestion } from './studentAttempt.service';
+import type { AnswerResponse, AttemptQuestion, DeepExplanation, QuestionType, ResultQuestion as ReviewQuestion } from './studentAttempt.service';
 
 /**
  * Module Practice — a student practices the question bank of one module, one question at a time.
@@ -17,6 +17,7 @@ import type { AnswerResponse, AttemptQuestion, QuestionType, ResultQuestion as R
  *   POST   /api/v1/student/practice/sessions/{sessionId}/complete                             (MP-07)
  *   GET    /api/v1/student/practice/sessions/{sessionId}/result                               (MP-08)
  *   POST   /api/v1/student/practice/questions/{questionId}/explanation                        (MP-09)
+ *   POST   /api/v1/student/practice/questions/{questionId}/deep-explanation                   (MP-10) — spends AI tokens
  *   GET    /api/v1/student/modules/{moduleId}/practice/review-questions                       (MP-11)
  *   DELETE /api/v1/student/modules/{moduleId}/practice/progress                               (MP-12)
  * MP-10 (bookmark) is the notebook's POST /api/v1/student/questions/{questionId}/bookmark.
@@ -483,6 +484,24 @@ export const modulePracticeService = {
       sessionId: body.sessionId,
       sessionQuestionId: body.sessionQuestionId,
       ...(body.practiceAnswerId != null ? { practiceAnswerId: body.practiceAnswerId } : {}),
+    });
+    return res.data;
+  },
+
+  /** MP-10: Deep AI Explanation of a practised question — same body as MP-09, spends AI tokens. */
+  async deepExplain(
+    questionId: number | string,
+    body: { sessionId: number; sessionQuestionId: number; practiceAnswerId?: number | null },
+  ): Promise<DeepExplanation> {
+    const res = await api.request<ApiResponse<DeepExplanation>>({
+      method: 'post',
+      url: `/student/practice/questions/${questionId}/deep-explanation`,
+      data: {
+        sessionId: body.sessionId,
+        sessionQuestionId: body.sessionQuestionId,
+        ...(body.practiceAnswerId != null ? { practiceAnswerId: body.practiceAnswerId } : {}),
+      },
+      timeout: 60000,
     });
     return res.data;
   },
