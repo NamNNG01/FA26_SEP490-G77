@@ -38,7 +38,6 @@ interface DiscussionPostsTabProps {
   onSortChange: (v: "oldest" | "latest") => void;
   search: string;
   onSearchChange: (v: string) => void;
-  onApplySearch: () => void;
   selectedIds: Set<number>;
   onToggleSelect: (id: number) => void;
   busy: boolean;
@@ -67,7 +66,6 @@ export function DiscussionPostsTab({
   onSortChange,
   search,
   onSearchChange,
-  onApplySearch,
   selectedIds,
   onToggleSelect,
   busy,
@@ -118,24 +116,15 @@ export function DiscussionPostsTab({
           />
         </div>
         <div className="flex flex-wrap items-center justify-between gap-3 border-t border-line pt-3">
-          <form
-            onSubmit={(event) => {
-              event.preventDefault();
-              onApplySearch();
-            }}
-            className="flex min-w-0 flex-1 items-center gap-2 sm:max-w-md"
-          >
+          <div className="min-w-0 flex-1 sm:max-w-md">
             <SearchInput
-              className="min-w-0 flex-1"
+              className="w-full"
               aria-label="Search discussions"
               placeholder="Search posts…"
               value={search}
               onChange={(event) => onSearchChange(event.target.value)}
             />
-            <Button type="submit" variant="outline">
-              Search
-            </Button>
-          </form>
+          </div>
           <div className="flex items-center gap-3 text-sm text-content-subtle">
             {selectedIds.size > 0 && (
               <>

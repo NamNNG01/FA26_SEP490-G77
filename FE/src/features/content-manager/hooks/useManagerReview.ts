@@ -72,6 +72,7 @@ export function useManagerReview() {
   const [notice, setNotice] = useState("");
   /** Last query the user applied — what the shared auto-refresh reads again. */
   const lastQueryUrl = useRef<string | null>(null);
+  const keywordMountedRef = useRef(false);
 
   const load = useCallback(
     async (nextPage = Number(params.get("page") || 0), quiet = false) => {
@@ -266,6 +267,18 @@ export function useManagerReview() {
     syncUrl(0);
     load(0);
   }, [kind, status]);
+
+  useEffect(() => {
+    if (!keywordMountedRef.current) {
+      keywordMountedRef.current = true;
+      return;
+    }
+    const timer = window.setTimeout(() => {
+      syncUrl(0);
+      void load(0);
+    }, 300);
+    return () => window.clearTimeout(timer);
+  }, [keyword]);
 
   useAutoRefresh(() => void load(0, true));
 

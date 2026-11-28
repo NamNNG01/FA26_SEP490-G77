@@ -29,7 +29,7 @@ export function useManagerDiscussion() {
   const [postStatus, setPostStatus] = useState<ManagerPostStatus>("ALL");
   const [tagFilter, setTagFilter] = useState<DiscussionTag | "ALL">("ALL");
   const [imageFilter, setImageFilter] = useState<"ALL" | "WITH_IMAGE" | "NO_IMAGE">("ALL");
-  const [sortOrder, setSortOrder] = useState<"oldest" | "latest">("oldest");
+  const [sortOrder, setSortOrder] = useState<"oldest" | "latest">("latest");
   const [search, setSearch] = useState("");
   const [appliedSearch, setAppliedSearch] = useState("");
   const [page, setPage] = useState(0);
@@ -125,6 +125,17 @@ export function useManagerDiscussion() {
     },
     [reportStatus, reportPage, toast],
   );
+
+  useEffect(() => {
+    const timer = window.setTimeout(() => {
+      const trimmed = search.trim();
+      setAppliedSearch((prev) => {
+        if (prev !== trimmed) setPage(0);
+        return trimmed;
+      });
+    }, 300);
+    return () => window.clearTimeout(timer);
+  }, [search]);
 
   useEffect(() => {
     void loadSummary();

@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState } from "react";
 import { useNavigate, useParams } from "react-router";
+import { useDebounce } from "@/hooks";
 import { useToast } from "@/components/ui/ToastHost";
 import {
   courseService,
@@ -111,6 +112,7 @@ export function useCourseDetail({
   const [studentPage, setStudentPage] = useState(1);
   const studentPageSize = 10;
   const [studentSearch, setStudentSearch] = useState("");
+  const debouncedStudentSearch = useDebounce(studentSearch.trim(), 300);
   const [studentStatus, setStudentStatus] = useState("all");
   const [loadingStudents, setLoadingStudents] = useState(false);
   const [studentsError, setStudentsError] = useState<string | null>(null);
@@ -223,7 +225,7 @@ export function useCourseDetail({
     setStudentsError(null);
     try {
       const res = await courseService.getCourseStudents(courseId, {
-        search: studentSearch.trim() || undefined,
+        search: debouncedStudentSearch || undefined,
         status: studentStatus !== "all" ? studentStatus : undefined,
         page: studentPage - 1,
         size: studentPageSize,
@@ -241,7 +243,7 @@ export function useCourseDetail({
     } finally {
       setLoadingStudents(false);
     }
-  }, [courseId, studentSearch, studentStatus, studentPage, studentPageSize, notification]);
+  }, [courseId, debouncedStudentSearch, studentStatus, studentPage, studentPageSize, notification]);
 
   useEffect(() => {
     if (tab === "Enrolled Students") {

@@ -73,10 +73,6 @@ export function ManagerDiscussionPage() {
           }}
           search={mod.search}
           onSearchChange={mod.setSearch}
-          onApplySearch={() => {
-            mod.setAppliedSearch(mod.search.trim());
-            mod.setPage(0);
-          }}
           selectedIds={mod.selectedIds}
           onToggleSelect={mod.toggleSelect}
           busy={mod.busy}
