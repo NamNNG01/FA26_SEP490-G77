@@ -16,7 +16,7 @@ import {
 import { getApiErrorMessage } from "@/utils/apiError";
 import { CourseThumbnailField } from "@/components/courses/CourseThumbnailField";
 import { uploadService } from "@/services/upload.service";
-import { useObjectUrl } from "@/utils/useObjectUrl";
+import { useObjectUrl } from "@/hooks/useObjectUrl";
 import { COURSE_PRICE_MAX, coursePriceError } from "../coursePrice";
 import { MoneyInput, moneyToDigits } from "@/components/ui/MoneyInput";
 
