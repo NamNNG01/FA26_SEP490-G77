@@ -1,546 +1,31 @@
-import React, { useCallback, useEffect, useRef, useState } from "react";
-import { useAutoRefresh } from "@/hooks/useAutoRefresh";
+import React from "react";
 import { Button } from "@/components/ui/Button";
-import { Badge } from "@/components/ui/Badge";
 import { Input } from "@/components/ui/Input";
-import { MoneyInput, moneyToDigits } from "@/components/ui/MoneyInput";
 import { Select } from "@/components/ui/Select";
-import { Modal } from "@/components/ui/Modal";
-import { ConfirmDialog } from "@/components/ui/ConfirmDialog";
-import { Spinner } from "@/components/ui/Spinner";
-import { Switch } from "@/components/ui/Switch";
-import { Table, type TableColumn } from "@/components/ui/Table";
-import { Dropdown } from "@/components/ui/Dropdown";
+import { Table } from "@/components/ui/Table";
 import { Icon } from "@/assets/icons";
-import { useToast } from "@/components/ui/ToastHost";
-import { getApiErrorMessage } from "@/utils/apiError";
-import {
-  adminDiscountService,
-  type AppliesTo,
-  type Discount,
-  type DiscountAccessType,
-  type DiscountAssignment,
-  type DiscountPayload,
-  type DiscountType,
-  type Page,
-} from "@/services/adminDiscount.service";
-import { formatVnd } from "../utils/dashboardFormat";
-
-const PAGE_SIZE = 10;
-const EMPTY_PAGE: Page<Discount> = {
-  content: [],
-  page: 0,
-  size: PAGE_SIZE,
-  totalElements: 0,
-  totalPages: 0,
-  first: true,
-  last: true,
-};
-const validityLabels: Record<string, string> = {
-  ACTIVE: "Active",
-  UPCOMING: "Upcoming",
-  EXPIRED: "Expired",
-  EXHAUSTED: "Exhausted",
-  INACTIVE: "Inactive",
-};
-
-type FormState = {
-  code: string;
-  name: string;
-  description: string;
-  discountType: DiscountType;
-  value: string;
-  maxDiscountAmount: string;
-  minOrderAmount: string;
-  appliesTo: AppliesTo;
-  accessType: DiscountAccessType;
-  usageLimit: string;
-  startAt: string;
-  expiredAt: string;
-  isActive: boolean;
-};
-const blankForm = (): FormState => ({
-  code: "",
-  name: "",
-  description: "",
-  discountType: "PERCENT",
-  value: "",
-  maxDiscountAmount: "",
-  minOrderAmount: "",
-  appliesTo: "ALL",
-  accessType: "PUBLIC",
-  usageLimit: "100",
-  startAt: "",
-  expiredAt: "",
-  isActive: true,
-});
-const toLocalInput = (value?: string | null) => {
-  if (!value) return "";
-  const parts = new Intl.DateTimeFormat("en-CA", {
-    timeZone: "Asia/Ho_Chi_Minh",
-    year: "numeric",
-    month: "2-digit",
-    day: "2-digit",
-    hour: "2-digit",
-    minute: "2-digit",
-    hourCycle: "h23",
-  }).formatToParts(new Date(value));
-  const part = (type: string) => parts.find((item) => item.type === type)?.value ?? "";
-  return `${part("year")}-${part("month")}-${part("day")}T${part("hour")}:${part("minute")}`;
-};
-const hcmInputToIso = (value: string) => {
-  if (!value) return null;
-  const [date, time] = value.split("T");
-  return new Date(`${date}T${time}:00+07:00`).toISOString();
-};
-const formFromDiscount = (d: Discount): FormState => ({
-  code: d.code,
-  name: d.name,
-  description: d.description ?? "",
-  discountType: d.discountType,
-  value: d.discountType === "FIXED_AMOUNT" ? moneyToDigits(d.value) : String(d.value),
-  maxDiscountAmount: moneyToDigits(d.maxDiscountAmount),
-  minOrderAmount: moneyToDigits(d.minOrderAmount),
-  appliesTo: d.appliesTo,
-  accessType: d.accessType ?? "PUBLIC",
-  usageLimit: String(d.usageLimit),
-  startAt: toLocalInput(d.startAt),
-  expiredAt: toLocalInput(d.expiredAt),
-  isActive: d.isActive,
-});
-const toPayload = (f: FormState): DiscountPayload => ({
-  code: f.code.trim(),
-  name: f.name.trim(),
-  description: f.description.trim(),
-  discountType: f.discountType,
-  value: Number(f.value),
-  maxDiscountAmount:
-    f.discountType === "PERCENT" && f.maxDiscountAmount ? Number(f.maxDiscountAmount) : null,
-  minOrderAmount: f.minOrderAmount ? Number(f.minOrderAmount) : null,
-  appliesTo: f.appliesTo,
-  accessType: f.accessType,
-  usageLimit: Number(f.usageLimit),
-  startAt: hcmInputToIso(f.startAt),
-  expiredAt: hcmInputToIso(f.expiredAt),
-  isActive: f.isActive,
-});
-const dateLabel = (value?: string | null) =>
-  value ? new Date(value).toLocaleString("en-US", { timeZone: "Asia/Ho_Chi_Minh" }) : "—";
-const badgeVariant = (status: string) =>
-  status === "ACTIVE"
-    ? "success"
-    : status === "UPCOMING"
-      ? "info"
-      : status === "INACTIVE"
-        ? "default"
-        : "warning";
+import type { Discount, DiscountAccessType } from "@/services/adminDiscount.service";
+import { useDiscounts } from "../hooks/useDiscounts";
+import { PAGE_SIZE, validityLabels } from "../utils/discountHelpers";
+import { buildDiscountColumns } from "../components/discounts/discountColumns";
+import { DiscountFormModal } from "../components/discounts/DiscountFormModal";
+import { DiscountDetailModal } from "../components/discounts/DiscountDetailModal";
+import { DiscountConfirmDialogs } from "../components/discounts/DiscountConfirmDialogs";
 
 export function DiscountsPage() {
-  const toast = useToast();
-  const [page, setPage] = useState<Page<Discount>>(EMPTY_PAGE);
-  const [pageIndex, setPageIndex] = useState(1);
-  const [keyword, setKeyword] = useState("");
-  const [debouncedKeyword, setDebouncedKeyword] = useState("");
-  const [typeFilter, setTypeFilter] = useState("");
-  const [activeFilter, setActiveFilter] = useState("");
-  const [validityFilter, setValidityFilter] = useState("");
-  const [accessTypeFilter, setAccessTypeFilter] = useState<DiscountAccessType | "">("");
-  const [loading, setLoading] = useState(true);
-  const [editing, setEditing] = useState<Discount | null>(null);
-  const [formOpen, setFormOpen] = useState(false);
-  const [form, setForm] = useState<FormState>(blankForm);
-  const [saving, setSaving] = useState(false);
-  const [detail, setDetail] = useState<Discount | null>(null);
-  const [detailLoading, setDetailLoading] = useState(false);
-  const [listError, setListError] = useState<string | null>(null);
-  const [assignments, setAssignments] = useState<Page<DiscountAssignment> | null>(null);
-  const [assignmentPage, setAssignmentPage] = useState(0);
-  const [assignmentKeyword, setAssignmentKeyword] = useState("");
-  const [debouncedAssignmentKeyword, setDebouncedAssignmentKeyword] = useState("");
-  const [assignmentUsed, setAssignmentUsed] = useState("");
-  const [assignmentLoading, setAssignmentLoading] = useState(false);
-  const [assignmentError, setAssignmentError] = useState<string | null>(null);
-  const [changingStatus, setChangingStatus] = useState<Discount | null>(null);
-  const [deleting, setDeleting] = useState<Discount | null>(null);
-  const [working, setWorking] = useState(false);
-  const [affected, setAffected] = useState<
-    { title: string; status: string; contestId: number }[] | null
-  >(null);
-  const listRequestId = useRef(0);
-  const detailRequestId = useRef(0);
-  const assignmentRequestId = useRef(0);
+  const d = useDiscounts();
 
-  useEffect(() => {
-    const timer = window.setTimeout(() => {
-      setDebouncedKeyword(keyword.trim());
-      setPageIndex(1);
-    }, 300);
-    return () => window.clearTimeout(timer);
-  }, [keyword]);
-  useEffect(() => {
-    const timer = window.setTimeout(() => {
-      setDebouncedAssignmentKeyword(assignmentKeyword.trim());
-      setAssignmentPage(0);
-    }, 300);
-    return () => window.clearTimeout(timer);
-  }, [assignmentKeyword]);
-
-  /** `'quiet'` = shared auto-refresh: no loader, no error toast. */
-  const load = useCallback(
-    async (mode?: "quiet") => {
-      const requestId = ++listRequestId.current;
-      const quiet = mode === "quiet";
-      if (!quiet) {
-        setLoading(true);
-        setListError(null);
-      }
-      try {
-        const result = await adminDiscountService.list({
-          keyword: debouncedKeyword,
-          discountType: typeFilter,
-          isActive: activeFilter,
-          validity: validityFilter,
-          accessType: accessTypeFilter,
-          page: pageIndex - 1,
-          size: PAGE_SIZE,
-        });
-        if (requestId === listRequestId.current) setPage(result);
-      } catch (error) {
-        if (requestId === listRequestId.current && !quiet) {
-          setListError(getApiErrorMessage(error, "Could not load discounts."));
-        }
-      } finally {
-        if (requestId === listRequestId.current) setLoading(false);
-      }
-    },
-    [
-      accessTypeFilter,
-      activeFilter,
-      debouncedKeyword,
-      pageIndex,
-      toast,
-      typeFilter,
-      validityFilter,
-    ],
-  );
-  useEffect(() => {
-    void load();
-  }, [load]);
-  useAutoRefresh(() => void load("quiet"));
-
-  const loadAssignments = useCallback(
-    async (discountId: number) => {
-      const requestId = ++assignmentRequestId.current;
-      setAssignmentLoading(true);
-      setAssignmentError(null);
-      try {
-        const result = await adminDiscountService.assignments(discountId, {
-          isUsed: assignmentUsed,
-          keyword: debouncedAssignmentKeyword,
-          page: assignmentPage,
-          size: PAGE_SIZE,
-        });
-        if (!result || !Array.isArray(result.content))
-          throw new Error("The server returned an invalid assignment list.");
-        if (requestId === assignmentRequestId.current) setAssignments(result);
-      } catch (error) {
-        if (requestId === assignmentRequestId.current) {
-          setAssignments(null);
-          setAssignmentError(getApiErrorMessage(error, "Could not load assigned users."));
-        }
-      } finally {
-        if (requestId === assignmentRequestId.current) setAssignmentLoading(false);
-      }
-    },
-    [assignmentPage, assignmentUsed, debouncedAssignmentKeyword],
-  );
-  useEffect(() => {
-    if (detail) void loadAssignments(detail.discountId);
-  }, [detail, loadAssignments]);
-
-  const openCreate = () => {
-    setEditing(null);
-    setForm(blankForm());
-    setFormOpen(true);
-  };
-  const openEdit = async (discount: Discount) => {
-    try {
-      const full = await adminDiscountService.get(discount.discountId);
-      setEditing(full);
-      setForm(formFromDiscount(full));
-      setFormOpen(true);
-    } catch (error) {
-      toast.error(getApiErrorMessage(error, "Could not load discount details."));
-    }
-  };
-  const openDetail = async (discount: Discount) => {
-    const requestId = ++detailRequestId.current;
-    assignmentRequestId.current++;
-    setDetail(null);
-    setDetailLoading(true);
-    setAssignments(null);
-    setAssignmentError(null);
-    setAssignmentPage(0);
-    setAssignmentKeyword("");
-    setDebouncedAssignmentKeyword("");
-    setAssignmentUsed("");
-    try {
-      const result = await adminDiscountService.get(discount.discountId);
-      if (requestId === detailRequestId.current) setDetail(result);
-    } catch (error) {
-      if (requestId === detailRequestId.current)
-        toast.error(getApiErrorMessage(error, "Could not load discount details."));
-    } finally {
-      if (requestId === detailRequestId.current) setDetailLoading(false);
-    }
-  };
-  const closeDetail = () => {
-    detailRequestId.current++;
-    assignmentRequestId.current++;
-    setDetail(null);
-    setDetailLoading(false);
-    setAssignmentLoading(false);
-    setAssignmentError(null);
-  };
-  const updateForm = <K extends keyof FormState>(key: K, value: FormState[K]) =>
-    setForm((prev) => ({ ...prev, [key]: value }));
-  const lockedFields = Boolean(
-    editing &&
-    ((editing.stats?.assignedCount ?? 0) > 0 ||
-      (editing.stats?.usedCount ?? editing.usedCount) > 0),
-  );
-  const minimumUsageLimit = editing
-    ? (editing.stats?.usedCount ?? editing.usedCount) + (editing.stats?.unusedAssignedCount ?? 0)
-    : 1;
-  const save = async (event: React.FormEvent) => {
-    event.preventDefault();
-    const payload = toPayload(form);
-    if (
-      !payload.code ||
-      payload.code.length < 4 ||
-      payload.code.length > 30 ||
-      !/^[A-Za-z0-9_-]+$/.test(payload.code)
-    ) {
-      toast.error("Code must be 4–30 characters using letters, numbers, _ or -.");
-      return;
-    }
-    if (!payload.name) {
-      toast.error("Name is required.");
-      return;
-    }
-    if (
-      payload.discountType === "PERCENT"
-        ? payload.value < 1 || payload.value > 100
-        : payload.value <= 0
-    ) {
-      toast.error(
-        payload.discountType === "PERCENT"
-          ? "Percent value must be from 1 to 100."
-          : "Discount amount must be greater than zero.",
-      );
-      return;
-    }
-    if (payload.usageLimit < minimumUsageLimit) {
-      toast.error(
-        `Usage limit cannot be lower than ${minimumUsageLimit} used or assigned vouchers.`,
-      );
-      return;
-    }
-    if (
-      payload.startAt &&
-      payload.expiredAt &&
-      new Date(payload.expiredAt) <= new Date(payload.startAt)
-    ) {
-      toast.error("Expiry must be after the start date.");
-      return;
-    }
-    setSaving(true);
-    try {
-      if (editing) await adminDiscountService.update(editing.discountId, payload);
-      else await adminDiscountService.create(payload);
-      toast.success(editing ? "Discount updated." : "Discount created.");
-      setFormOpen(false);
-      await load();
-    } catch (error) {
-      toast.error(getApiErrorMessage(error, "Could not save discount."));
-    } finally {
-      setSaving(false);
-    }
-  };
-  const confirmStatus = async () => {
-    if (!changingStatus) return;
-    setWorking(true);
-    try {
-      const result = await adminDiscountService.setStatus(
-        changingStatus.discountId,
-        !changingStatus.isActive,
-      );
-      setChangingStatus(null);
-      setAffected(result.affectedContests ?? []);
-      await load();
-    } catch (error) {
-      toast.error(getApiErrorMessage(error, "Could not change discount status."));
-    } finally {
-      setWorking(false);
-    }
-  };
-  const confirmDelete = async () => {
-    if (!deleting) return;
-    setWorking(true);
-    try {
-      await adminDiscountService.remove(deleting.discountId);
-      toast.success("Discount deleted.");
-      setDeleting(null);
-      await load();
-    } catch (error) {
-      toast.error(getApiErrorMessage(error, "Could not delete discount."));
-    } finally {
-      setWorking(false);
-    }
-  };
-
-  const rows = page.content.map((discount) => ({
+  const rows = d.page.content.map((discount) => ({
     ...discount,
     id: discount.discountId,
   }));
-  const columns: TableColumn[] = [
-    {
-      key: "code",
-      label: "Code / name",
-      width: "24%",
-      render: (row) => (
-        <div>
-          <p className="font-semibold text-content">{String(row.code)}</p>
-          <p className="text-xs text-content-soft">{String(row.name)}</p>
-        </div>
-      ),
-    },
-    {
-      key: "value",
-      label: "Discount",
-      render: (row) => {
-        const d = row as unknown as Discount;
-        return (
-          <span className="font-medium text-content-secondary">
-            {d.discountType === "PERCENT" ? `${d.value}%` : formatVnd(d.value)}
-          </span>
-        );
-      },
-    },
-    {
-      key: "appliesTo",
-      label: "Applies to",
-      render: (row) => <Badge variant="info">{String(row.appliesTo)}</Badge>,
-    },
-    {
-      key: "accessType",
-      label: "Access",
-      render: (row) => (
-        <Badge variant={row.accessType === "CLAIM_REQUIRED" ? "warning" : "default"}>
-          {row.accessType === "CLAIM_REQUIRED" ? "Claim required" : "Public"}
-        </Badge>
-      ),
-    },
-    {
-      key: "usageLimit",
-      label: "Usage",
-      render: (row) => {
-        const d = row as unknown as Discount;
-        return (
-          <div className="whitespace-nowrap tabular-nums">
-            <span className="font-medium text-content-secondary">
-              {d.usedCount.toLocaleString()} / {d.usageLimit.toLocaleString()}
-            </span>
-            <p className="mt-1 text-xs text-content-soft">
-              {d.remaining.toLocaleString()} remaining
-            </p>
-          </div>
-        );
-      },
-    },
-    {
-      key: "validity",
-      label: "Validity",
-      render: (row) => (
-        <Badge variant={badgeVariant(String(row.validity))}>
-          {validityLabels[String(row.validity)] ?? String(row.validity)}
-        </Badge>
-      ),
-    },
-    {
-      key: "isActive",
-      label: "Status",
-      render: (row) => {
-        const d = row as unknown as Discount;
-        return (
-          <div onClick={(event) => event.stopPropagation()}>
-            <Switch
-              checked={d.isActive}
-              onChange={() => setChangingStatus(d)}
-              size="sm"
-              label={d.isActive ? "On" : "Off"}
-            />
-          </div>
-        );
-      },
-    },
-    {
-      key: "actions",
-      label: "",
-      width: "48px",
-      render: (row) => {
-        const d = row as unknown as Discount;
-        return (
-          <div onClick={(event) => event.stopPropagation()}>
-            <Dropdown
-              trigger={
-                <button
-                  type="button"
-                  aria-label={`Actions for ${d.code}`}
-                  className="rounded-[6px] p-1.5 hover:bg-accent"
-                >
-                  <Icon.MoreHorizontal className="h-4 w-4 text-content-soft" />
-                </button>
-              }
-              items={[
-                {
-                  label: "Details and assignments",
-                  icon: <Icon.Eye className="h-4 w-4" />,
-                  onClick: () => void openDetail(d),
-                },
-                {
-                  label: "Edit",
-                  icon: <Icon.Edit className="h-4 w-4" />,
-                  onClick: () => void openEdit(d),
-                },
-                {
-                  label: "Delete",
-                  icon: <Icon.Trash className="h-4 w-4" />,
-                  danger: true,
-                  onClick: () => setDeleting(d),
-                },
-              ]}
-            />
-          </div>
-        );
-      },
-    },
-  ];
-  const filtersActive =
-    keyword !== "" ||
-    typeFilter !== "" ||
-    activeFilter !== "" ||
-    validityFilter !== "" ||
-    accessTypeFilter !== "";
-  const resetFilters = () => {
-    setKeyword("");
-    setDebouncedKeyword("");
-    setTypeFilter("");
-    setActiveFilter("");
-    setValidityFilter("");
-    setAccessTypeFilter("");
-    setPageIndex(1);
-  };
+
+  const columns = buildDiscountColumns({
+    onToggleStatus: d.setChangingStatus,
+    onOpenDetail: (item) => void d.openDetail(item),
+    onOpenEdit: (item) => void d.openEdit(item),
+    onDelete: d.setDeleting,
+  });
 
   return (
     <div className="space-y-5 py-6">
@@ -551,7 +36,7 @@ export function DiscountsPage() {
             Create and manage discount codes, eligibility, and assigned vouchers.
           </p>
         </div>
-        <Button icon={<Icon.Plus className="h-4 w-4" />} onClick={openCreate}>
+        <Button icon={<Icon.Plus className="h-4 w-4" />} onClick={d.openCreate}>
           New discount
         </Button>
       </header>
@@ -562,17 +47,15 @@ export function DiscountsPage() {
             aria-label="Search discounts"
             placeholder="Search code or name"
             icon={<Icon.Search className="h-4 w-4" />}
-            value={keyword}
-            onChange={(e) => {
-              setKeyword(e.target.value);
-            }}
+            value={d.keyword}
+            onChange={(e) => d.setKeyword(e.target.value)}
           />
           <Select
             aria-label="Discount type"
-            value={typeFilter}
+            value={d.typeFilter}
             onChange={(v) => {
-              setTypeFilter(v);
-              setPageIndex(1);
+              d.setTypeFilter(v);
+              d.setPageIndex(1);
             }}
             options={[
               { label: "All types", value: "" },
@@ -582,10 +65,10 @@ export function DiscountsPage() {
           />
           <Select
             aria-label="Active status"
-            value={activeFilter}
+            value={d.activeFilter}
             onChange={(v) => {
-              setActiveFilter(v);
-              setPageIndex(1);
+              d.setActiveFilter(v);
+              d.setPageIndex(1);
             }}
             options={[
               { label: "Any status", value: "" },
@@ -595,25 +78,22 @@ export function DiscountsPage() {
           />
           <Select
             aria-label="Validity"
-            value={validityFilter}
+            value={d.validityFilter}
             onChange={(v) => {
-              setValidityFilter(v);
-              setPageIndex(1);
+              d.setValidityFilter(v);
+              d.setPageIndex(1);
             }}
             options={[
               { label: "Any validity", value: "" },
-              ...Object.entries(validityLabels).map(([value, label]) => ({
-                value,
-                label,
-              })),
+              ...Object.entries(validityLabels).map(([value, label]) => ({ value, label })),
             ]}
           />
           <Select
             aria-label="Discount access"
-            value={accessTypeFilter}
+            value={d.accessTypeFilter}
             onChange={(v) => {
-              setAccessTypeFilter(v as DiscountAccessType | "");
-              setPageIndex(1);
+              d.setAccessTypeFilter(v as DiscountAccessType | "");
+              d.setPageIndex(1);
             }}
             options={[
               { label: "Any access", value: "" },
@@ -621,11 +101,11 @@ export function DiscountsPage() {
               { label: "Claim required", value: "CLAIM_REQUIRED" },
             ]}
           />
-          {filtersActive ? (
+          {d.filtersActive ? (
             <div className="flex justify-end">
               <button
                 type="button"
-                onClick={resetFilters}
+                onClick={d.resetFilters}
                 className="inline-flex items-center gap-1 whitespace-nowrap text-sm font-medium text-brand-ink hover:underline"
               >
                 <Icon.X className="h-3.5 w-3.5" /> Clear filters
@@ -638,16 +118,16 @@ export function DiscountsPage() {
       </section>
 
       <div
-        className={`card overflow-hidden transition-opacity ${loading && page.content.length ? "opacity-60" : ""}`}
-        aria-busy={loading}
+        className={`card overflow-hidden transition-opacity ${d.loading && d.page.content.length ? "opacity-60" : ""}`}
+        aria-busy={d.loading}
       >
-        {listError ? (
+        {d.listError ? (
           <div
             role="alert"
             className="flex flex-wrap items-center justify-between gap-3 p-5 text-sm text-danger"
           >
-            <span>{listError}</span>
-            <Button size="sm" variant="outline" onClick={() => void load()}>
+            <span>{d.listError}</span>
+            <Button size="sm" variant="outline" onClick={() => void d.load()}>
               Retry
             </Button>
           </div>
@@ -658,15 +138,15 @@ export function DiscountsPage() {
             perPage={PAGE_SIZE}
             unit="discounts"
             serverPagination={{
-              page: pageIndex,
-              total: page.totalElements,
-              onChange: setPageIndex,
+              page: d.pageIndex,
+              total: d.page.totalElements,
+              onChange: d.setPageIndex,
             }}
-            onRowClick={(row) => void openDetail(row as unknown as Discount)}
+            onRowClick={(row) => void d.openDetail(row as unknown as Discount)}
             emptyState={
-              loading
+              d.loading
                 ? "Loading discounts…"
-                : filtersActive
+                : d.filtersActive
                   ? "No discounts match your filters."
                   : "No discounts yet. Click “New discount” to add one."
             }
@@ -674,407 +154,48 @@ export function DiscountsPage() {
         )}
       </div>
 
-      <Modal
-        open={formOpen}
-        onClose={() => setFormOpen(false)}
-        title={editing ? `Edit ${editing.code}` : "Create discount"}
-        size="xl"
-        footer={
-          <>
-            <Button variant="outline" disabled={saving} onClick={() => setFormOpen(false)}>
-              Cancel
-            </Button>
-            <Button
-              loading={saving}
-              disabled={saving}
-              onClick={() => document.getElementById("discount-form-submit")?.click()}
-            >
-              {editing ? "Save changes" : "Create discount"}
-            </Button>
-          </>
-        }
-      >
-        <form id="discount-form" onSubmit={save} className="space-y-4">
-          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-            <Input
-              label="Code"
-              required
-              minLength={4}
-              maxLength={30}
-              disabled={lockedFields}
-              value={form.code}
-              onChange={(e) => updateForm("code", e.target.value)}
-              hint={
-                lockedFields
-                  ? "Locked because this discount has been assigned."
-                  : "4–30 letters, numbers, underscores, or hyphens."
-              }
-            />
-            <Input
-              label="Name"
-              required
-              maxLength={255}
-              value={form.name}
-              onChange={(e) => updateForm("name", e.target.value)}
-            />
-            <Select
-              label="Discount type"
-              disabled={lockedFields}
-              value={form.discountType}
-              onChange={(v) => {
-                if (v === "PERCENT" || v === "FIXED_AMOUNT") {
-                  updateForm("discountType", v);
-                  if (v === "FIXED_AMOUNT") {
-                    updateForm("maxDiscountAmount", "");
-                    updateForm("value", moneyToDigits(form.value));
-                  }
-                }
-              }}
-              options={[
-                { label: "Percent", value: "PERCENT" },
-                { label: "Fixed amount", value: "FIXED_AMOUNT" },
-              ]}
-            />
-            {form.discountType === "PERCENT" ? (
-              <Input
-                label="Value (%)"
-                type="number"
-                min={1}
-                max={100}
-                required
-                disabled={lockedFields}
-                value={form.value}
-                onChange={(e) => updateForm("value", e.target.value)}
-              />
-            ) : (
-              <MoneyInput
-                label="Value (VND)"
-                required
-                disabled={lockedFields}
-                value={form.value}
-                onValueChange={(v) => updateForm("value", v)}
-              />
-            )}
-            {form.discountType === "PERCENT" && (
-              <MoneyInput
-                label="Maximum discount (VND)"
-                value={form.maxDiscountAmount}
-                onValueChange={(v) => updateForm("maxDiscountAmount", v)}
-              />
-            )}
-            <MoneyInput
-              label="Minimum order (VND)"
-              value={form.minOrderAmount}
-              onValueChange={(v) => updateForm("minOrderAmount", v)}
-            />
-            <Select
-              label="Applies to"
-              disabled={lockedFields}
-              value={form.appliesTo}
-              onChange={(v) => {
-                if (v === "COURSE" || v === "SUBSCRIPTION" || v === "ALL") {
-                  updateForm("appliesTo", v);
-                }
-              }}
-              options={[
-                { label: "All", value: "ALL" },
-                { label: "Courses", value: "COURSE" },
-                { label: "Subscriptions", value: "SUBSCRIPTION" },
-              ]}
-            />
-            <Select
-              label="Access type"
-              value={form.accessType}
-              onChange={(v) => updateForm("accessType", v as DiscountAccessType)}
-              options={[
-                { label: "Public", value: "PUBLIC" },
-                { label: "Claim required", value: "CLAIM_REQUIRED" },
-              ]}
-            />
-            <Input
-              label="Total usage limit"
-              type="number"
-              min={minimumUsageLimit}
-              required
-              value={form.usageLimit}
-              onChange={(e) => updateForm("usageLimit", e.target.value)}
-              hint={
-                editing?.stats?.assignedCount
-                  ? `Must be at least ${minimumUsageLimit} for used and assigned vouchers.`
-                  : undefined
-              }
-            />
-            <Input
-              label="Starts at (Ho Chi Minh City time)"
-              type="datetime-local"
-              value={form.startAt}
-              onChange={(e) => updateForm("startAt", e.target.value)}
-            />
-            <Input
-              label="Expires at (Ho Chi Minh City time)"
-              type="datetime-local"
-              value={form.expiredAt}
-              onChange={(e) => updateForm("expiredAt", e.target.value)}
-            />
-          </div>
-          <label className="flex items-center gap-2 text-sm text-content-secondary">
-            <input
-              type="checkbox"
-              checked={form.isActive}
-              onChange={(e) => updateForm("isActive", e.target.checked)}
-            />{" "}
-            Active
-          </label>
-          <label className="flex flex-col gap-1.5 text-sm font-medium text-content-secondary">
-            Description
-            <textarea
-              className="min-h-20 rounded-[10px] border border-line bg-surface px-3 py-2 text-sm font-normal text-content focus:border-brand-600 focus:outline-none focus:ring-2 focus:ring-brand-600/20"
-              maxLength={2000}
-              value={form.description}
-              onChange={(e) => updateForm("description", e.target.value)}
-            />
-          </label>
-          <button id="discount-form-submit" className="hidden" type="submit" />
-        </form>
-      </Modal>
-
-      <Modal
-        open={detailLoading || !!detail}
-        onClose={closeDetail}
-        title={detail ? `${detail.code} · ${detail.name}` : "Discount details"}
-        size="2xl"
-      >
-        {detailLoading || !detail ? (
-          <div className="flex justify-center py-12">
-            <Spinner />
-          </div>
-        ) : (
-          <div className="space-y-6">
-            <div className="grid grid-cols-2 gap-4 sm:grid-cols-4">
-              <Info
-                label="Discount"
-                value={
-                  detail.discountType === "PERCENT" ? `${detail.value}%` : formatVnd(detail.value)
-                }
-              />
-              <Info label="Applies to" value={detail.appliesTo} />
-              <Info
-                label="Access type"
-                value={detail.accessType === "CLAIM_REQUIRED" ? "Claim required" : "Public"}
-              />
-              <Info label="Validity" value={validityLabels[detail.validity] ?? detail.validity} />
-              <Info label="Status" value={detail.isActive ? "Active" : "Inactive"} />
-              <Info label="Usage" value={`${detail.usedCount} / ${detail.usageLimit}`} />
-              <Info label="Assigned" value={String(detail.stats?.assignedCount ?? "—")} />
-              <Info
-                label="Unused assigned"
-                value={String(detail.stats?.unusedAssignedCount ?? "—")}
-              />
-              <Info
-                label="Remaining capacity"
-                value={String(detail.stats?.remaining ?? detail.remaining)}
-              />
-              <Info label="Starts" value={dateLabel(detail.startAt)} />
-              <Info label="Expires" value={dateLabel(detail.expiredAt)} />
-              <Info label="Created" value={dateLabel(detail.createdAt)} />
-              <Info label="Updated" value={dateLabel(detail.updatedAt)} />
-            </div>
-            {detail.description && (
-              <p className="text-sm text-content-secondary">{detail.description}</p>
-            )}
-            <div>
-              <h3 className="mb-2 font-semibold text-content">Contests using this discount</h3>
-              {detail.usedInContests?.length ? (
-                <ul className="space-y-2">
-                  {detail.usedInContests.map((contest) => (
-                    <li
-                      key={`${contest.contestId}-${contest.rankPosition}`}
-                      className="flex justify-between rounded-lg border border-line-soft px-3 py-2 text-sm"
-                    >
-                      <span>
-                        {contest.title} · rank {contest.rankPosition}
-                      </span>
-                      <Badge variant="info">{contest.status}</Badge>
-                    </li>
-                  ))}
-                </ul>
-              ) : (
-                <p className="text-sm text-content-soft">No contests use this discount.</p>
-              )}
-            </div>
-            <div className="space-y-3 border-t border-line-soft pt-4">
-              <div className="flex flex-wrap items-center justify-between gap-3">
-                <h3 className="font-semibold text-content">Assigned users</h3>
-                <div className="flex flex-wrap gap-2">
-                  <Input
-                    aria-label="Search assigned users"
-                    placeholder="Name or email"
-                    value={assignmentKeyword}
-                    onChange={(e) => {
-                      setAssignmentKeyword(e.target.value);
-                    }}
-                  />
-                  <Select
-                    aria-label="Assignment use status"
-                    value={assignmentUsed}
-                    onChange={(v) => {
-                      setAssignmentUsed(v);
-                      setAssignmentPage(0);
-                    }}
-                    options={[
-                      { label: "Used or unused", value: "" },
-                      { label: "Unused", value: "false" },
-                      { label: "Used", value: "true" },
-                    ]}
-                  />
-                </div>
-              </div>
-              {assignmentError ? (
-                <div
-                  role="alert"
-                  className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-danger-line bg-danger-light p-4 text-sm text-danger"
-                >
-                  <span>{assignmentError}</span>
-                  <Button
-                    size="sm"
-                    variant="outline"
-                    onClick={() => detail && void loadAssignments(detail.discountId)}
-                  >
-                    Retry
-                  </Button>
-                </div>
-              ) : assignmentLoading ? (
-                <div className="flex justify-center py-6">
-                  <Spinner size="sm" />
-                </div>
-              ) : assignments?.content.length ? (
-                <div className="overflow-x-auto">
-                  <table className="w-full min-w-[620px] text-left text-sm">
-                    <thead>
-                      <tr className="border-b border-line-soft text-xs uppercase text-content-soft">
-                        <th className="py-2 pr-3">User</th>
-                        <th className="py-2 pr-3">Status</th>
-                        <th className="py-2 pr-3">Assigned</th>
-                        <th className="py-2 pr-3">Used</th>
-                        <th className="py-2">Source</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {assignments.content.map((a) => (
-                        <tr key={a.userDiscountId} className="border-b border-line-faint">
-                          <td className="py-2 pr-3">
-                            <p className="font-medium text-content">{a.user.fullName}</p>
-                            <p className="text-xs text-content-soft">{a.user.email}</p>
-                          </td>
-                          <td className="py-2 pr-3">
-                            <Badge variant={a.isUsed ? "default" : "success"}>
-                              {a.isUsed ? "Used" : "Unused"}
-                            </Badge>
-                          </td>
-                          <td className="py-2 pr-3 whitespace-nowrap">{dateLabel(a.assignedAt)}</td>
-                          <td className="py-2 pr-3 whitespace-nowrap">{dateLabel(a.usedAt)}</td>
-                          <td className="py-2">{a.source?.title ?? a.source?.type ?? "—"}</td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                  <div className="flex justify-end gap-2 pt-3">
-                    <Button
-                      size="sm"
-                      variant="outline"
-                      disabled={!assignments || assignments.first || assignmentLoading}
-                      onClick={() => setAssignmentPage((v) => Math.max(0, v - 1))}
-                    >
-                      Previous
-                    </Button>
-                    <span className="self-center text-xs text-content-soft">
-                      {assignments.totalElements} users ·{" "}
-                      {assignments.totalPages ? assignmentPage + 1 : 0}/{assignments.totalPages}
-                    </span>
-                    <Button
-                      size="sm"
-                      variant="outline"
-                      disabled={!assignments || assignments.last || assignmentLoading}
-                      onClick={() => setAssignmentPage((v) => v + 1)}
-                    >
-                      Next
-                    </Button>
-                  </div>
-                </div>
-              ) : (
-                <p className="text-sm text-content-soft">
-                  No users have been assigned this discount.
-                </p>
-              )}
-            </div>
-          </div>
-        )}
-      </Modal>
-
-      <ConfirmDialog
-        open={!!changingStatus}
-        onClose={() => setChangingStatus(null)}
-        onConfirm={() => void confirmStatus()}
-        loading={working}
-        tone={changingStatus?.isActive ? "danger" : "warning"}
-        title={changingStatus?.isActive ? "Deactivate discount?" : "Activate discount?"}
-        description={
-          changingStatus?.isActive
-            ? `Deactivating ${changingStatus?.code} will prevent redemption and block reward payments in contests that use it.`
-            : `Activate ${changingStatus?.code} for future use?`
-        }
-        confirmLabel={changingStatus?.isActive ? "Deactivate" : "Activate"}
+      <DiscountFormModal
+        open={d.formOpen}
+        editing={d.editing}
+        form={d.form}
+        saving={d.saving}
+        lockedFields={d.lockedFields}
+        minimumUsageLimit={d.minimumUsageLimit}
+        onClose={() => d.setFormOpen(false)}
+        onUpdateForm={d.updateForm}
+        onSave={(e) => void d.save(e)}
       />
-      <Modal
-        open={affected !== null}
-        onClose={() => setAffected(null)}
-        title="Discount status updated"
-      >
-        {affected?.length ? (
-          <div className="space-y-3">
-            <p className="text-sm text-content-secondary">
-              This discount is attached to contests that may be affected:
-            </p>
-            <ul className="space-y-2">
-              {affected.map((c) => (
-                <li
-                  key={c.contestId}
-                  className="flex items-center justify-between rounded-lg border border-line-soft px-3 py-2 text-sm"
-                >
-                  <span>{c.title}</span>
-                  <Badge variant="warning">{c.status}</Badge>
-                </li>
-              ))}
-            </ul>
-          </div>
-        ) : (
-          <p className="text-sm text-content-secondary">No active contests are affected.</p>
-        )}
-      </Modal>
-      <ConfirmDialog
-        open={!!deleting}
-        onClose={() => setDeleting(null)}
-        onConfirm={() => void confirmDelete()}
-        loading={working}
-        tone="danger"
-        title="Delete discount?"
-        description={
-          <>
-            Delete <strong>{deleting?.code}</strong>? Discounts with active contest usage or
-            assigned vouchers cannot be deleted.
-          </>
-        }
-        confirmLabel="Delete"
-      />
-    </div>
-  );
-}
 
-function Info({ label, value }: { label: string; value: string }) {
-  return (
-    <div className="min-w-0">
-      <p className="text-xs text-content-soft">{label}</p>
-      <p className="mt-1 break-words text-sm font-medium text-content">{value}</p>
+      <DiscountDetailModal
+        detail={d.detail}
+        detailLoading={d.detailLoading}
+        assignments={d.assignments}
+        assignmentPage={d.assignmentPage}
+        assignmentKeyword={d.assignmentKeyword}
+        assignmentUsed={d.assignmentUsed}
+        assignmentLoading={d.assignmentLoading}
+        assignmentError={d.assignmentError}
+        onClose={d.closeDetail}
+        onAssignmentKeywordChange={d.setAssignmentKeyword}
+        onAssignmentUsedChange={(v) => {
+          d.setAssignmentUsed(v);
+          d.setAssignmentPage(0);
+        }}
+        onAssignmentPageChange={d.setAssignmentPage}
+        onRetryAssignments={(discountId) => void d.loadAssignments(discountId)}
+      />
+
+      <DiscountConfirmDialogs
+        working={d.working}
+        changingStatus={d.changingStatus}
+        onCloseStatus={() => d.setChangingStatus(null)}
+        onConfirmStatus={() => void d.confirmStatus()}
+        affected={d.affected}
+        onCloseAffected={() => d.setAffected(null)}
+        deleting={d.deleting}
+        onCloseDelete={() => d.setDeleting(null)}
+        onConfirmDelete={() => void d.confirmDelete()}
+      />
     </div>
   );
 }
