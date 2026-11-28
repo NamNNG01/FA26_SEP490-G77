@@ -1,16 +1,20 @@
-import React, { useEffect, useRef, useState } from 'react';
-import { Badge } from '@/components/ui/Badge';
-import { Button } from '@/components/ui/Button';
-import { Input } from '@/components/ui/Input';
-import { Select } from '@/components/ui/Select';
-import { SearchableSelect } from '@/components/ui/SearchableSelect';
-import { useToast } from '@/components/ui/ToastHost';
-import { Icon } from '@/assets/icons';
-import { courseService, type CourseModuleResponse, type CourseSummaryItem } from '@/services/course.service';
-import { deckService, type DeckCard } from '@/services/deck.service';
-import { ImagePickButton } from '@/components/common/ImagePickButton';
-import { uploadService } from '@/services/upload.service';
-import { getApiErrorMessage } from '@/utils/apiError';
+import React, { useEffect, useRef, useState } from "react";
+import { Badge } from "@/components/ui/Badge";
+import { Button } from "@/components/ui/Button";
+import { Input } from "@/components/ui/Input";
+import { Select } from "@/components/ui/Select";
+import { SearchableSelect } from "@/components/ui/SearchableSelect";
+import { useToast } from "@/components/ui/ToastHost";
+import { Icon } from "@/assets/icons";
+import {
+  courseService,
+  type CourseModuleResponse,
+  type CourseSummaryItem,
+} from "@/services/course.service";
+import { deckService, type DeckCard } from "@/services/deck.service";
+import { ImagePickButton } from "@/components/common/ImagePickButton";
+import { uploadService } from "@/services/upload.service";
+import { getApiErrorMessage } from "@/utils/apiError";
 
 /**
  * Building blocks shared by the Flashcard Detail page and the New Flashcard
@@ -23,16 +27,21 @@ export const NAME_MAX = 255;
 export const DESCRIPTION_MAX = 500;
 
 export const textareaClass =
-  'w-full px-3 py-2.5 rounded-[10px] border bg-surface text-base text-content leading-relaxed resize-none placeholder:text-content-placeholder focus:outline-none focus:ring-2 focus:ring-brand-600/20 focus:border-brand-600';
+  "w-full px-3 py-2.5 rounded-[10px] border bg-surface text-base text-content leading-relaxed resize-none placeholder:text-content-placeholder focus:outline-none focus:ring-2 focus:ring-brand-600/20 focus:border-brand-600";
 
 export function VisibilityBadge({ isPublic }: { isPublic: boolean }) {
-  return <Badge variant={isPublic ? 'success' : 'default'}>{isPublic ? 'Public' : 'Private'}</Badge>;
+  return (
+    <Badge variant={isPublic ? "success" : "default"}>
+      {isPublic ? "Public" : "Private"}
+    </Badge>
+  );
 }
 
 /** Select value for "no course" — a personal deck only its owner can see. */
-export const NO_COURSE = '';
+export const NO_COURSE = "";
 
-export const errorMessage = (err: unknown, fallback: string) => (err instanceof Error && err.message ? err.message : fallback);
+export const errorMessage = (err: unknown, fallback: string) =>
+  err instanceof Error && err.message ? err.message : fallback;
 
 /**
  * Courses the signed-in Course Manager manages — GET /manager/courses is
@@ -43,17 +52,26 @@ export function useManagedCourses() {
   const [loading, setLoading] = useState(true);
   useEffect(() => {
     let cancelled = false;
-    courseService.getCourses({ size: 100, sort: 'title,asc' })
-      .then(res => { if (!cancelled) setCourses(res.content); })
-      .catch(() => { if (!cancelled) setCourses([]); })
-      .finally(() => { if (!cancelled) setLoading(false); });
-    return () => { cancelled = true; };
+    courseService
+      .getCourses({ size: 100, sort: "title,asc" })
+      .then((res) => {
+        if (!cancelled) setCourses(res.content);
+      })
+      .catch(() => {
+        if (!cancelled) setCourses([]);
+      })
+      .finally(() => {
+        if (!cancelled) setLoading(false);
+      });
+    return () => {
+      cancelled = true;
+    };
   }, []);
   return { courses, loading };
 }
 
 /** Select value for "no module" — the deck sits under its course only. */
-export const NO_MODULE = '';
+export const NO_MODULE = "";
 
 /** The modules of one course (GET /manager/courses/{courseId}/modules), in course order; none for NO_COURSE. */
 export function useCourseModules(courseId: string) {
@@ -64,11 +82,21 @@ export function useCourseModules(courseId: string) {
     if (courseId === NO_COURSE) return;
     let cancelled = false;
     setLoading(true);
-    courseService.getCourseModules(courseId)
-      .then(list => { if (!cancelled) setModules([...list].sort((a, b) => a.orderIndex - b.orderIndex)); })
-      .catch(() => { if (!cancelled) setModules([]); })
-      .finally(() => { if (!cancelled) setLoading(false); });
-    return () => { cancelled = true; };
+    courseService
+      .getCourseModules(courseId)
+      .then((list) => {
+        if (!cancelled)
+          setModules([...list].sort((a, b) => a.orderIndex - b.orderIndex));
+      })
+      .catch(() => {
+        if (!cancelled) setModules([]);
+      })
+      .finally(() => {
+        if (!cancelled) setLoading(false);
+      });
+    return () => {
+      cancelled = true;
+    };
   }, [courseId]);
   return { modules, loading };
 }
@@ -85,37 +113,65 @@ export interface DeckInfo {
   description: string;
 }
 
-export type DeckInfoErrors = Partial<Record<'title' | 'courseId' | 'description', string>>;
+export type DeckInfoErrors = Partial<
+  Record<"title" | "courseId" | "description", string>
+>;
 
-export function validateDeckInfo(info: DeckInfo, { requireCourse = false } = {}): DeckInfoErrors {
+export function validateDeckInfo(
+  info: DeckInfo,
+  { requireCourse = false } = {},
+): DeckInfoErrors {
   const errors: DeckInfoErrors = {};
   const title = info.title.trim();
-  if (!title) errors.title = 'Deck name is required.';
-  else if (title.length > NAME_MAX) errors.title = `Deck name must be ${NAME_MAX} characters or fewer.`;
-  if (requireCourse && info.courseId === NO_COURSE) errors.courseId = 'Select a course for this deck.';
-  if (info.description.length > DESCRIPTION_MAX) errors.description = `Description must be ${DESCRIPTION_MAX} characters or fewer.`;
+  if (!title) errors.title = "Deck name is required.";
+  else if (title.length > NAME_MAX)
+    errors.title = `Deck name must be ${NAME_MAX} characters or fewer.`;
+  if (requireCourse && info.courseId === NO_COURSE)
+    errors.courseId = "Select a course for this deck.";
+  if (info.description.length > DESCRIPTION_MAX)
+    errors.description = `Description must be ${DESCRIPTION_MAX} characters or fewer.`;
   return errors;
 }
 
-export const DUPLICATE_TITLE_MESSAGE = 'A deck with this name already exists in this course.';
+export const DUPLICATE_TITLE_MESSAGE =
+  "A deck with this name already exists in this course.";
 
 /**
  * Is another deck in the course already called `title` (ignoring case and
  * surrounding spaces)? F-02/F-04 reject that too; checking first keeps the
  * error on the name field. A failed lookup returns false and leaves it to the API.
  */
-export async function hasDuplicateTitle(title: string, courseId: string, excludeDeckId?: number): Promise<boolean> {
+export async function hasDuplicateTitle(
+  title: string,
+  courseId: string,
+  excludeDeckId?: number,
+): Promise<boolean> {
   if (courseId === NO_COURSE) return false;
   const wanted = title.trim().toLowerCase();
   try {
-    const res = await deckService.getDecks({ courseId: Number(courseId), search: title.trim(), size: 100 });
-    return res.content.some(d => d.deckId !== excludeDeckId && d.title.trim().toLowerCase() === wanted);
+    const res = await deckService.getDecks({
+      courseId: Number(courseId),
+      search: title.trim(),
+      size: 100,
+    });
+    return res.content.some(
+      (d) =>
+        d.deckId !== excludeDeckId && d.title.trim().toLowerCase() === wanted,
+    );
   } catch {
     return false;
   }
 }
 
-export function DeckInfoFields({ value, onChange, errors = {}, courses, coursesLoading, allowNoCourse, idPrefix }: {
+export function DeckInfoFields({
+  value,
+  onChange,
+  errors = {},
+  courses,
+  coursesLoading,
+  allowNoCourse,
+  idPrefix,
+}: {
   value: DeckInfo;
   onChange: (patch: Partial<DeckInfo>) => void;
   errors?: DeckInfoErrors;
@@ -126,49 +182,111 @@ export function DeckInfoFields({ value, onChange, errors = {}, courses, coursesL
   idPrefix: string;
 }) {
   const courseOptions = [
-    ...(allowNoCourse ? [{ label: 'No course (personal deck)', value: NO_COURSE }]
-      // No course picked yet on a deck that needs one.
-      : value.courseId === NO_COURSE ? [{ label: 'Select a course', value: NO_COURSE }] : []),
-    ...courses.map(c => ({ label: c.title, value: c.id })),
+    ...(allowNoCourse
+      ? [{ label: "No course (personal deck)", value: NO_COURSE }]
+      : // No course picked yet on a deck that needs one.
+        value.courseId === NO_COURSE
+        ? [{ label: "Select a course", value: NO_COURSE }]
+        : []),
+    ...courses.map((c) => ({ label: c.title, value: c.id })),
   ];
   const { modules, loading: modulesLoading } = useCourseModules(value.courseId);
   const noCourse = value.courseId === NO_COURSE;
   const moduleOptions = noCourse
-    ? [{ label: 'Pick a course first', value: NO_MODULE }]
+    ? [{ label: "Pick a course first", value: NO_MODULE }]
     : modulesLoading
-      ? [{ label: 'Loading modules…', value: value.moduleId }]
+      ? [{ label: "Loading modules…", value: value.moduleId }]
       : [
-          { label: modules.length > 0 ? 'No module' : 'This course has no module', value: NO_MODULE },
-          ...modules.map(m => ({ label: m.status === 'HIDDEN' ? `${m.title} (hidden)` : m.title, value: String(m.moduleId) })),
+          {
+            label:
+              modules.length > 0 ? "No module" : "This course has no module",
+            value: NO_MODULE,
+          },
+          ...modules.map((m) => ({
+            label: m.status === "HIDDEN" ? `${m.title} (hidden)` : m.title,
+            value: String(m.moduleId),
+          })),
         ];
   return (
     <div className="space-y-4">
-      <Input label="Deck name *" placeholder="e.g. Gradient Descent Essentials" value={value.title} maxLength={NAME_MAX}
-        error={errors.title} onChange={e => onChange({ title: e.target.value })} />
+      <Input
+        label="Deck name *"
+        placeholder="e.g. Gradient Descent Essentials"
+        value={value.title}
+        maxLength={NAME_MAX}
+        error={errors.title}
+        onChange={(e) => onChange({ title: e.target.value })}
+      />
       <div className="grid gap-4 sm:grid-cols-2">
         <div>
           {/* A module belongs to one course: changing the course clears it. */}
-          <SearchableSelect label={allowNoCourse ? 'Course' : 'Course *'} value={value.courseId}
-            onChange={v => onChange(v === value.courseId ? { courseId: v } : { courseId: v, moduleId: NO_MODULE })} disabled={coursesLoading} invalid={Boolean(errors.courseId)}
-            options={coursesLoading ? [{ label: 'Loading courses…', value: value.courseId }] : courseOptions}
-            placeholder="Choose a course" searchPlaceholder="Search courses…" emptyText="No courses found" />
-          {errors.courseId && <p className="text-xs text-danger mt-1">{errors.courseId}</p>}
+          <SearchableSelect
+            label={allowNoCourse ? "Course" : "Course *"}
+            value={value.courseId}
+            onChange={(v) =>
+              onChange(
+                v === value.courseId
+                  ? { courseId: v }
+                  : { courseId: v, moduleId: NO_MODULE },
+              )
+            }
+            disabled={coursesLoading}
+            invalid={Boolean(errors.courseId)}
+            options={
+              coursesLoading
+                ? [{ label: "Loading courses…", value: value.courseId }]
+                : courseOptions
+            }
+            placeholder="Choose a course"
+            searchPlaceholder="Search courses…"
+            emptyText="No courses found"
+          />
+          {errors.courseId && (
+            <p className="text-xs text-danger mt-1">{errors.courseId}</p>
+          )}
         </div>
-        <SearchableSelect label="Module" value={value.moduleId} onChange={v => onChange({ moduleId: v })}
-          disabled={noCourse || modulesLoading || modules.length === 0} options={moduleOptions}
-          placeholder={noCourse ? 'Pick a course first' : 'No module'} searchPlaceholder="Search modules…" emptyText="No modules found" />
-        <Select label="Visibility" value={value.isPublic ? 'public' : 'private'} onChange={v => onChange({ isPublic: v === 'public' })}
-          options={[{ label: 'Private', value: 'private' }, { label: 'Public', value: 'public' }]} />
+        <SearchableSelect
+          label="Module"
+          value={value.moduleId}
+          onChange={(v) => onChange({ moduleId: v })}
+          disabled={noCourse || modulesLoading || modules.length === 0}
+          options={moduleOptions}
+          placeholder={noCourse ? "Pick a course first" : "No module"}
+          searchPlaceholder="Search modules…"
+          emptyText="No modules found"
+        />
+        <Select
+          label="Visibility"
+          value={value.isPublic ? "public" : "private"}
+          onChange={(v) => onChange({ isPublic: v === "public" })}
+          options={[
+            { label: "Private", value: "private" },
+            { label: "Public", value: "public" },
+          ]}
+        />
       </div>
       <div>
-        <label htmlFor={`${idPrefix}-description`} className="block text-sm font-medium text-content-secondary mb-1.5">Description</label>
-        <textarea id={`${idPrefix}-description`} rows={3} maxLength={DESCRIPTION_MAX} value={value.description}
-          onChange={e => onChange({ description: e.target.value })} aria-invalid={errors.description ? true : undefined}
+        <label
+          htmlFor={`${idPrefix}-description`}
+          className="block text-sm font-medium text-content-secondary mb-1.5"
+        >
+          Description
+        </label>
+        <textarea
+          id={`${idPrefix}-description`}
+          rows={3}
+          maxLength={DESCRIPTION_MAX}
+          value={value.description}
+          onChange={(e) => onChange({ description: e.target.value })}
+          aria-invalid={errors.description ? true : undefined}
           placeholder="What does this deck cover?"
-          className={`${textareaClass} ${errors.description ? 'border-danger-solid' : 'border-line'}`} />
+          className={`${textareaClass} ${errors.description ? "border-danger-solid" : "border-line"}`}
+        />
         <div className="mt-1 flex justify-between gap-2 text-2xs">
           <span className="text-danger">{errors.description}</span>
-          <span className="text-content-subtle">{value.description.length}/{DESCRIPTION_MAX}</span>
+          <span className="text-content-subtle">
+            {value.description.length}/{DESCRIPTION_MAX}
+          </span>
         </div>
       </div>
     </div>
@@ -189,8 +307,11 @@ export interface EditableCard {
 }
 
 export const toEditableCard = (c: DeckCard): EditableCard => ({
-  id: String(c.cardId), frontText: c.frontText ?? '', backText: c.backText ?? '',
-  frontImageUrl: c.frontImageUrl ?? null, backImageUrl: c.backImageUrl ?? null,
+  id: String(c.cardId),
+  frontText: c.frontText ?? "",
+  backText: c.backText ?? "",
+  frontImageUrl: c.frontImageUrl ?? null,
+  backImageUrl: c.backImageUrl ?? null,
 });
 
 /**
@@ -198,13 +319,23 @@ export const toEditableCard = (c: DeckCard): EditableCard => ({
  * detail page sends them to the card API. Throw to keep the editor's input.
  */
 export interface CardActions {
-  add: (frontText: string, backText: string, images: { frontImageUrl: string | null; backImageUrl: string | null }) => Promise<void> | void;
-  update: (card: EditableCard, frontText: string, backText: string, images: { frontImageUrl: string | null; backImageUrl: string | null }) => Promise<void> | void;
+  add: (
+    frontText: string,
+    backText: string,
+    images: { frontImageUrl: string | null; backImageUrl: string | null },
+  ) => Promise<void> | void;
+  update: (
+    card: EditableCard,
+    frontText: string,
+    backText: string,
+    images: { frontImageUrl: string | null; backImageUrl: string | null },
+  ) => Promise<void> | void;
   remove: (card: EditableCard) => Promise<void> | void;
 }
 
 /** Message for a failed card call (F-06..F-08). */
-export const cardErrorMessage = (err: unknown, fallback: string) => errorMessage(err, fallback);
+export const cardErrorMessage = (err: unknown, fallback: string) =>
+  errorMessage(err, fallback);
 
 export interface CardEditor {
   editingId: string | null;
@@ -213,7 +344,7 @@ export interface CardEditor {
   back: string;
   frontImageUrl: string | null;
   backImageUrl: string | null;
-  uploading: 'front' | 'back' | null;
+  uploading: "front" | "back" | null;
   errors: { front?: string; back?: string };
   /** True when either side has text that has not been added to the list. */
   hasInput: boolean;
@@ -224,8 +355,8 @@ export interface CardEditor {
   frontRef: React.RefObject<HTMLTextAreaElement | null>;
   setFront: (v: string) => void;
   setBack: (v: string) => void;
-  setImage: (side: 'front' | 'back', file: File) => void;
-  removeImage: (side: 'front' | 'back') => void;
+  setImage: (side: "front" | "back", file: File) => void;
+  removeImage: (side: "front" | "back") => void;
   clear: () => void;
   load: (card: EditableCard) => void;
   submit: () => void;
@@ -235,25 +366,31 @@ export interface CardEditor {
 }
 
 /** Authoring state for one deck's cards; `actions` decides where edits are written. */
-export function useCardEditor(cards: EditableCard[], actions: CardActions, options: { confirmRemove?: boolean } = {}): CardEditor {
+export function useCardEditor(
+  cards: EditableCard[],
+  actions: CardActions,
+  options: { confirmRemove?: boolean } = {},
+): CardEditor {
   const toast = useToast();
   const [editingId, setEditingId] = useState<string | null>(null);
-  const [front, setFrontRaw] = useState('');
-  const [back, setBackRaw] = useState('');
+  const [front, setFrontRaw] = useState("");
+  const [back, setBackRaw] = useState("");
   const [frontImageUrl, setFrontImageUrl] = useState<string | null>(null);
   const [backImageUrl, setBackImageUrl] = useState<string | null>(null);
-  const [uploading, setUploading] = useState<'front' | 'back' | null>(null);
+  const [uploading, setUploading] = useState<"front" | "back" | null>(null);
   const [errors, setErrors] = useState<{ front?: string; back?: string }>({});
   const [busy, setBusy] = useState(false);
   const [pendingRemoveId, setPendingRemoveId] = useState<string | null>(null);
   const frontRef = useRef<HTMLTextAreaElement>(null);
 
-  const editingIndex = editingId ? cards.findIndex(c => c.id === editingId) : -1;
+  const editingIndex = editingId
+    ? cards.findIndex((c) => c.id === editingId)
+    : -1;
 
   const clear = () => {
     setEditingId(null);
-    setFrontRaw('');
-    setBackRaw('');
+    setFrontRaw("");
+    setBackRaw("");
     setFrontImageUrl(null);
     setBackImageUrl(null);
     setErrors({});
@@ -274,17 +411,30 @@ export function useCardEditor(cards: EditableCard[], actions: CardActions, optio
     const f = front.trim();
     const b = back.trim();
     const next: { front?: string; back?: string } = {};
-    if (!f && !frontImageUrl) next.front = 'Add text or an image for the front side.';
-    else if (f.length > SIDE_MAX) next.front = `Front side must be ${SIDE_MAX} characters or fewer.`;
-    else if (f && cards.some(c => c.id !== editingId && c.frontText.trim().toLowerCase() === f.toLowerCase())) {
-      next.front = 'Another card in this deck already has this front text.';
+    if (!f && !frontImageUrl)
+      next.front = "Add text or an image for the front side.";
+    else if (f.length > SIDE_MAX)
+      next.front = `Front side must be ${SIDE_MAX} characters or fewer.`;
+    else if (
+      f &&
+      cards.some(
+        (c) =>
+          c.id !== editingId &&
+          c.frontText.trim().toLowerCase() === f.toLowerCase(),
+      )
+    ) {
+      next.front = "Another card in this deck already has this front text.";
     }
-    if (!b && !backImageUrl) next.back = 'Add text or an image for the back side.';
-    else if (b.length > SIDE_MAX) next.back = `Back side must be ${SIDE_MAX} characters or fewer.`;
+    if (!b && !backImageUrl)
+      next.back = "Add text or an image for the back side.";
+    else if (b.length > SIDE_MAX)
+      next.back = `Back side must be ${SIDE_MAX} characters or fewer.`;
     setErrors(next);
     if (next.front || next.back) return;
 
-    const editing = editingId ? cards.find(c => c.id === editingId) : undefined;
+    const editing = editingId
+      ? cards.find((c) => c.id === editingId)
+      : undefined;
     setBusy(true);
     try {
       if (editing) {
@@ -292,24 +442,29 @@ export function useCardEditor(cards: EditableCard[], actions: CardActions, optio
         toast.success(`Card #${editingIndex + 1} updated.`);
       } else {
         await actions.add(f, b, { frontImageUrl, backImageUrl });
-        toast.success('Card added to the deck.');
+        toast.success("Card added to the deck.");
       }
       clear();
     } catch (err) {
-      toast.error(cardErrorMessage(err, editing ? 'Could not update the card.' : 'Could not add the card.'));
+      toast.error(
+        cardErrorMessage(
+          err,
+          editing ? "Could not update the card." : "Could not add the card.",
+        ),
+      );
     } finally {
       setBusy(false);
     }
   };
 
-  const setImage = async (side: 'front' | 'back', file: File) => {
+  const setImage = async (side: "front" | "back", file: File) => {
     setUploading(side);
     try {
       const image = await uploadService.uploadMedia(file);
-      (side === 'front' ? setFrontImageUrl : setBackImageUrl)(image.url);
-      setErrors(previous => ({ ...previous, [side]: undefined }));
+      (side === "front" ? setFrontImageUrl : setBackImageUrl)(image.url);
+      setErrors((previous) => ({ ...previous, [side]: undefined }));
     } catch (err) {
-      toast.error(getApiErrorMessage(err, 'Could not upload the image.'));
+      toast.error(getApiErrorMessage(err, "Could not upload the image."));
     } finally {
       setUploading(null);
     }
@@ -323,7 +478,7 @@ export function useCardEditor(cards: EditableCard[], actions: CardActions, optio
       setPendingRemoveId(null);
       toast.info(`Card #${index + 1} removed.`);
     } catch (err) {
-      toast.error(cardErrorMessage(err, 'Could not delete the card.'));
+      toast.error(cardErrorMessage(err, "Could not delete the card."));
     } finally {
       setBusy(false);
     }
@@ -335,29 +490,51 @@ export function useCardEditor(cards: EditableCard[], actions: CardActions, optio
     front,
     back,
     errors,
-    hasInput: front.trim() !== '' || back.trim() !== '' || !!frontImageUrl || !!backImageUrl || uploading != null,
+    hasInput:
+      front.trim() !== "" ||
+      back.trim() !== "" ||
+      !!frontImageUrl ||
+      !!backImageUrl ||
+      uploading != null,
     busy: busy || uploading != null,
     pendingRemoveId,
     frontRef,
-    setFront: v => { setFrontRaw(v); if (errors.front) setErrors(p => ({ ...p, front: undefined })); },
-    setBack: v => { setBackRaw(v); if (errors.back) setErrors(p => ({ ...p, back: undefined })); },
+    setFront: (v) => {
+      setFrontRaw(v);
+      if (errors.front) setErrors((p) => ({ ...p, front: undefined }));
+    },
+    setBack: (v) => {
+      setBackRaw(v);
+      if (errors.back) setErrors((p) => ({ ...p, back: undefined }));
+    },
     frontImageUrl,
     backImageUrl,
     uploading,
     setImage,
-    removeImage: side => (side === 'front' ? setFrontImageUrl : setBackImageUrl)(null),
+    removeImage: (side) =>
+      (side === "front" ? setFrontImageUrl : setBackImageUrl)(null),
     clear,
     load,
     submit,
-    remove: (card, index) => { if (options.confirmRemove) setPendingRemoveId(card.id); else void doRemove(card, index); },
-    confirmRemove: (card, index) => { void doRemove(card, index); },
+    remove: (card, index) => {
+      if (options.confirmRemove) setPendingRemoveId(card.id);
+      else void doRemove(card, index);
+    },
+    confirmRemove: (card, index) => {
+      void doRemove(card, index);
+    },
     cancelRemove: () => setPendingRemoveId(null),
   };
 }
 
 // ── Card list ────────────────────────────────────────────────────────────────
 
-export function CardList({ cards, editor, emptyHint = 'Use the card editor to add the first one.', actions }: {
+export function CardList({
+  cards,
+  editor,
+  emptyHint = "Use the card editor to add the first one.",
+  actions,
+}: {
   cards: EditableCard[];
   editor: CardEditor;
   emptyHint?: string;
@@ -367,9 +544,13 @@ export function CardList({ cards, editor, emptyHint = 'Use the card editor to ad
   return (
     <section aria-label="Flashcards in this deck" className="space-y-3">
       <div className="flex flex-wrap items-center justify-between gap-2">
-        <h3 className="text-lg font-semibold text-content">Flashcards in this Deck</h3>
+        <h3 className="text-lg font-semibold text-content">
+          Flashcards in this Deck
+        </h3>
         <div className="flex items-center gap-3">
-          <span className="text-sm text-content-soft">{cards.length} card{cards.length === 1 ? '' : 's'}</span>
+          <span className="text-sm text-content-soft">
+            {cards.length} card{cards.length === 1 ? "" : "s"}
+          </span>
           {actions}
         </div>
       </div>
@@ -377,7 +558,9 @@ export function CardList({ cards, editor, emptyHint = 'Use the card editor to ad
       {cards.length === 0 ? (
         <div className="card px-4 py-12 text-center">
           <Icon.Layers className="w-10 h-10 mx-auto text-content-faint" />
-          <p className="mt-3 text-base font-medium text-content-secondary">This deck has no cards yet</p>
+          <p className="mt-3 text-base font-medium text-content-secondary">
+            This deck has no cards yet
+          </p>
           <p className="text-sm text-content-subtle">{emptyHint}</p>
         </div>
       ) : (
@@ -386,40 +569,97 @@ export function CardList({ cards, editor, emptyHint = 'Use the card editor to ad
             const active = card.id === editor.editingId;
             const confirming = card.id === editor.pendingRemoveId;
             return (
-              <li key={card.id} className={`card p-4 transition-colors ${active ? '!border-brand-600 ring-2 ring-brand-600/15' : ''}`}>
+              <li
+                key={card.id}
+                className={`card p-4 transition-colors ${active ? "!border-brand-600 ring-2 ring-brand-600/15" : ""}`}
+              >
                 <div className="flex items-start gap-3">
-                  <span className="mt-0.5 flex h-6 min-w-6 flex-shrink-0 items-center justify-center rounded-full bg-surface-muted px-1.5 text-2xs font-semibold text-content-soft">{i + 1}</span>
+                  <span className="mt-0.5 flex h-6 min-w-6 flex-shrink-0 items-center justify-center rounded-full bg-surface-muted px-1.5 text-2xs font-semibold text-content-soft">
+                    {i + 1}
+                  </span>
                   {/* Front | Back side by side, split by a divider (stacked on narrow screens) */}
                   <div className="min-w-0 flex-1 grid grid-cols-1 sm:grid-cols-2 divide-y sm:divide-y-0 sm:divide-x divide-line">
                     <div className="min-w-0 pb-2 sm:pb-0 sm:pr-4">
-                      <p className="text-2xs font-semibold uppercase tracking-wider text-brand-ink">Front</p>
-                      {card.frontImageUrl && <img src={card.frontImageUrl} alt={card.frontText || 'Front of flashcard'} className="mt-2 max-h-36 max-w-full rounded-lg border border-line object-contain" loading="lazy" />}
-                      <p className="mt-0.5 text-base font-semibold text-content break-words whitespace-pre-line">{card.frontText}</p>
+                      <p className="text-2xs font-semibold uppercase tracking-wider text-brand-ink">
+                        Front
+                      </p>
+                      {card.frontImageUrl && (
+                        <img
+                          src={card.frontImageUrl}
+                          alt={card.frontText || "Front of flashcard"}
+                          className="mt-2 max-h-36 max-w-full rounded-lg border border-line object-contain"
+                          loading="lazy"
+                        />
+                      )}
+                      <p className="mt-0.5 text-base font-semibold text-content break-words whitespace-pre-line">
+                        {card.frontText}
+                      </p>
                     </div>
                     <div className="min-w-0 pt-2 sm:pt-0 sm:pl-4">
-                      <p className="text-2xs font-semibold uppercase tracking-wider text-success">Back</p>
-                      {card.backImageUrl && <img src={card.backImageUrl} alt={card.backText || 'Back of flashcard'} className="mt-2 max-h-36 max-w-full rounded-lg border border-line object-contain" loading="lazy" />}
-                      <p className="mt-0.5 text-sm text-content-secondary break-words whitespace-pre-line">{card.backText}</p>
+                      <p className="text-2xs font-semibold uppercase tracking-wider text-success">
+                        Back
+                      </p>
+                      {card.backImageUrl && (
+                        <img
+                          src={card.backImageUrl}
+                          alt={card.backText || "Back of flashcard"}
+                          className="mt-2 max-h-36 max-w-full rounded-lg border border-line object-contain"
+                          loading="lazy"
+                        />
+                      )}
+                      <p className="mt-0.5 text-sm text-content-secondary break-words whitespace-pre-line">
+                        {card.backText}
+                      </p>
                     </div>
                   </div>
                   <div className="flex flex-shrink-0 items-center gap-0.5">
-                    {active && <Badge variant="info" className="mr-1">Editing</Badge>}
-                    <button type="button" onClick={() => editor.load(card)} disabled={editor.busy} aria-label={`Edit card ${i + 1}`} title="Edit card"
-                      className="p-1.5 rounded-[6px] text-content-soft hover:bg-primary-hover-tint hover:text-brand-ink disabled:opacity-50">
+                    {active && (
+                      <Badge variant="info" className="mr-1">
+                        Editing
+                      </Badge>
+                    )}
+                    <button
+                      type="button"
+                      onClick={() => editor.load(card)}
+                      disabled={editor.busy}
+                      aria-label={`Edit card ${i + 1}`}
+                      title="Edit card"
+                      className="p-1.5 rounded-[6px] text-content-soft hover:bg-primary-hover-tint hover:text-brand-ink disabled:opacity-50"
+                    >
                       <Icon.Edit className="w-4 h-4" />
                     </button>
-                    <button type="button" onClick={() => editor.remove(card, i)} disabled={editor.busy} aria-label={`Delete card ${i + 1}`} title="Delete card"
-                      className="p-1.5 rounded-[6px] text-content-soft hover:bg-danger-light hover:text-danger disabled:opacity-50">
+                    <button
+                      type="button"
+                      onClick={() => editor.remove(card, i)}
+                      disabled={editor.busy}
+                      aria-label={`Delete card ${i + 1}`}
+                      title="Delete card"
+                      className="p-1.5 rounded-[6px] text-content-soft hover:bg-danger-light hover:text-danger disabled:opacity-50"
+                    >
                       <Icon.Trash className="w-4 h-4" />
                     </button>
                   </div>
                 </div>
                 {confirming && (
                   <div className="mt-3 flex flex-wrap items-center justify-end gap-2 border-t border-line-soft pt-3">
-                    <span className="mr-auto text-sm text-content-secondary">Delete this card permanently?</span>
-                    <Button size="sm" variant="outline" onClick={editor.cancelRemove} disabled={editor.busy}>Keep</Button>
-                    <Button size="sm" variant="danger" onClick={() => editor.confirmRemove(card, i)} disabled={editor.busy}>
-                      {editor.busy ? 'Deleting…' : 'Delete'}
+                    <span className="mr-auto text-sm text-content-secondary">
+                      Delete this card permanently?
+                    </span>
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      onClick={editor.cancelRemove}
+                      disabled={editor.busy}
+                    >
+                      Keep
+                    </Button>
+                    <Button
+                      size="sm"
+                      variant="danger"
+                      onClick={() => editor.confirmRemove(card, i)}
+                      disabled={editor.busy}
+                    >
+                      {editor.busy ? "Deleting…" : "Delete"}
                     </Button>
                   </div>
                 )}
@@ -434,7 +674,12 @@ export function CardList({ cards, editor, emptyHint = 'Use the card editor to ad
 
 // ── Card editor panel ────────────────────────────────────────────────────────
 
-export function CardEditorPanel({ editor, idPrefix, footnote, className = '' }: {
+export function CardEditorPanel({
+  editor,
+  idPrefix,
+  footnote,
+  className = "",
+}: {
   editor: CardEditor;
   idPrefix: string;
   footnote?: React.ReactNode;
@@ -442,51 +687,140 @@ export function CardEditorPanel({ editor, idPrefix, footnote, className = '' }: 
 }) {
   const toast = useToast();
   return (
-    <aside className={`card p-5 space-y-4 ${className}`} aria-labelledby={`${idPrefix}-editor-title`}>
+    <aside
+      className={`card p-5 space-y-4 ${className}`}
+      aria-labelledby={`${idPrefix}-editor-title`}
+    >
       <div className="flex items-center justify-between gap-2">
-        <h3 id={`${idPrefix}-editor-title`} className="text-lg font-semibold text-content">
-          {editor.editingId ? `Edit Card #${editor.editingIndex + 1}` : 'Card Editor'}
+        <h3
+          id={`${idPrefix}-editor-title`}
+          className="text-lg font-semibold text-content"
+        >
+          {editor.editingId
+            ? `Edit Card #${editor.editingIndex + 1}`
+            : "Card Editor"}
         </h3>
-        {!editor.editingId && <span className="text-xs text-content-subtle">New card</span>}
+        {!editor.editingId && (
+          <span className="text-xs text-content-subtle">New card</span>
+        )}
       </div>
 
       {/* A div, not a form: the editor also lives inside the create-deck modal. */}
-      <div className="space-y-4" onKeyDown={e => { if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) { e.preventDefault(); editor.submit(); } }}>
-        <EditorField id={`${idPrefix}-front`} label="Front Side text (optional)" hint="Text or image" ref={editor.frontRef}
-          value={editor.front} error={editor.errors.front} placeholder="e.g. What is gradient descent?" onChange={editor.setFront} />
+      <div
+        className="space-y-4"
+        onKeyDown={(e) => {
+          if (e.key === "Enter" && (e.ctrlKey || e.metaKey)) {
+            e.preventDefault();
+            editor.submit();
+          }
+        }}
+      >
+        <EditorField
+          id={`${idPrefix}-front`}
+          label="Front Side text"
+          hint="Text or image"
+          ref={editor.frontRef}
+          value={editor.front}
+          error={editor.errors.front}
+          placeholder="e.g. What is gradient descent?"
+          onChange={editor.setFront}
+        />
         <div className="-mt-2 space-y-2">
-          <ImagePickButton variant="outline" loading={editor.uploading === 'front'} disabled={editor.busy}
-            onPick={file => editor.setImage('front', file)} onError={message => toast.error(message)}>
-            {editor.frontImageUrl ? 'Replace front image' : 'Add front image'}
+          <ImagePickButton
+            variant="outline"
+            loading={editor.uploading === "front"}
+            disabled={editor.busy}
+            onPick={(file) => editor.setImage("front", file)}
+            onError={(message) => toast.error(message)}
+          >
+            {editor.frontImageUrl ? "Replace front image" : "Add front image"}
           </ImagePickButton>
-          {editor.frontImageUrl && <div className="relative w-fit">
-            <img src={editor.frontImageUrl} alt={editor.front.trim() || 'Front side preview'} className="max-h-36 max-w-full rounded-lg border border-line object-contain" />
-            <Button size="sm" variant="outline" className="absolute right-1 top-1" disabled={editor.busy}
-              onClick={() => editor.removeImage('front')}>Remove</Button>
-          </div>}
+          {editor.frontImageUrl && (
+            <div className="relative w-fit">
+              <img
+                src={editor.frontImageUrl}
+                alt={editor.front.trim() || "Front side preview"}
+                className="max-h-36 max-w-full rounded-lg border border-line object-contain"
+              />
+              <Button
+                size="sm"
+                variant="outline"
+                className="absolute right-1 top-1"
+                disabled={editor.busy}
+                onClick={() => editor.removeImage("front")}
+              >
+                Remove
+              </Button>
+            </div>
+          )}
         </div>
-        <EditorField id={`${idPrefix}-back`} label="Back Side text (optional)" hint="Text or image"
-          value={editor.back} error={editor.errors.back} placeholder="e.g. An optimisation algorithm that…" onChange={editor.setBack} />
+        <EditorField
+          id={`${idPrefix}-back`}
+          label="Back Side text"
+          hint="Text or image"
+          value={editor.back}
+          error={editor.errors.back}
+          placeholder="e.g. An optimisation algorithm that…"
+          onChange={editor.setBack}
+        />
         <div className="-mt-2 space-y-2">
-          <ImagePickButton variant="outline" loading={editor.uploading === 'back'} disabled={editor.busy}
-            onPick={file => editor.setImage('back', file)} onError={message => toast.error(message)}>
-            {editor.backImageUrl ? 'Replace back image' : 'Add back image'}
+          <ImagePickButton
+            variant="outline"
+            loading={editor.uploading === "back"}
+            disabled={editor.busy}
+            onPick={(file) => editor.setImage("back", file)}
+            onError={(message) => toast.error(message)}
+          >
+            {editor.backImageUrl ? "Replace back image" : "Add back image"}
           </ImagePickButton>
-          {editor.backImageUrl && <div className="relative w-fit">
-            <img src={editor.backImageUrl} alt={editor.back.trim() || 'Back side preview'} className="max-h-36 max-w-full rounded-lg border border-line object-contain" />
-            <Button size="sm" variant="outline" className="absolute right-1 top-1" disabled={editor.busy}
-              onClick={() => editor.removeImage('back')}>Remove</Button>
-          </div>}
+          {editor.backImageUrl && (
+            <div className="relative w-fit">
+              <img
+                src={editor.backImageUrl}
+                alt={editor.back.trim() || "Back side preview"}
+                className="max-h-36 max-w-full rounded-lg border border-line object-contain"
+              />
+              <Button
+                size="sm"
+                variant="outline"
+                className="absolute right-1 top-1"
+                disabled={editor.busy}
+                onClick={() => editor.removeImage("back")}
+              >
+                Remove
+              </Button>
+            </div>
+          )}
         </div>
 
         <div className="space-y-2 pt-1">
-          <Button type="button" className="w-full" onClick={editor.submit} disabled={editor.busy}
-            icon={editor.editingId ? <Icon.Check className="w-4 h-4" /> : <Icon.Plus className="w-4 h-4" />}>
-            {editor.busy ? 'Saving…' : editor.editingId ? 'Update Card' : 'Add Card'}
+          <Button
+            type="button"
+            className="w-full"
+            onClick={editor.submit}
+            disabled={editor.busy}
+            icon={
+              editor.editingId ? (
+                <Icon.Check className="w-4 h-4" />
+              ) : (
+                <Icon.Plus className="w-4 h-4" />
+              )
+            }
+          >
+            {editor.busy
+              ? "Saving…"
+              : editor.editingId
+                ? "Update Card"
+                : "Add Card"}
           </Button>
-          <Button type="button" variant="outline" className="w-full" onClick={editor.clear}
-            disabled={editor.busy || (!editor.editingId && !editor.hasInput)}>
-            {editor.editingId ? 'Cancel Editing' : 'Clear Editor'}
+          <Button
+            type="button"
+            variant="outline"
+            className="w-full"
+            onClick={editor.clear}
+            disabled={editor.busy || (!editor.editingId && !editor.hasInput)}
+          >
+            {editor.editingId ? "Cancel Editing" : "Clear Editor"}
           </Button>
         </div>
       </div>
@@ -495,28 +829,51 @@ export function CardEditorPanel({ editor, idPrefix, footnote, className = '' }: 
   );
 }
 
-const EditorField = React.forwardRef<HTMLTextAreaElement, {
-  id: string;
-  label: string;
-  hint: string;
-  value: string;
-  placeholder: string;
-  error?: string;
-  onChange: (value: string) => void;
-}>(function EditorField({ id, label, hint, value, placeholder, error, onChange }, ref) {
+const EditorField = React.forwardRef<
+  HTMLTextAreaElement,
+  {
+    id: string;
+    label: string;
+    hint: string;
+    value: string;
+    placeholder: string;
+    error?: string;
+    onChange: (value: string) => void;
+  }
+>(function EditorField(
+  { id, label, hint, value, placeholder, error, onChange },
+  ref,
+) {
   return (
     <div>
       <div className="flex items-baseline justify-between gap-2 mb-1.5">
-        <label htmlFor={id} className="text-sm font-semibold text-content-secondary">{label}</label>
+        <label
+          htmlFor={id}
+          className="text-sm font-semibold text-content-secondary"
+        >
+          {label}
+        </label>
         <span className="text-2xs text-content-subtle">{hint}</span>
       </div>
-      <textarea ref={ref} id={id} rows={4} value={value} placeholder={placeholder} maxLength={SIDE_MAX}
-        aria-invalid={!!error} aria-describedby={error ? `${id}-error` : undefined}
-        onChange={e => onChange(e.target.value)}
-        className={`${textareaClass} ${error ? 'border-danger-solid focus:border-danger-solid focus:ring-danger-solid/20' : 'border-line'}`} />
+      <textarea
+        ref={ref}
+        id={id}
+        rows={4}
+        value={value}
+        placeholder={placeholder}
+        maxLength={SIDE_MAX}
+        aria-invalid={!!error}
+        aria-describedby={error ? `${id}-error` : undefined}
+        onChange={(e) => onChange(e.target.value)}
+        className={`${textareaClass} ${error ? "border-danger-solid focus:border-danger-solid focus:ring-danger-solid/20" : "border-line"}`}
+      />
       <div className="mt-1 flex justify-between gap-2 text-2xs">
-        <span id={`${id}-error`} className="text-danger">{error}</span>
-        <span className="text-content-subtle">{value.length}/{SIDE_MAX}</span>
+        <span id={`${id}-error`} className="text-danger">
+          {error}
+        </span>
+        <span className="text-content-subtle">
+          {value.length}/{SIDE_MAX}
+        </span>
       </div>
     </div>
   );

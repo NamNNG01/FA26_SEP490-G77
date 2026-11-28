@@ -1,0 +1,80 @@
+{
+  "model": "gemini-2.5-flash",
+  "runDate": "2026-11-24",
+  "status": "COMPLETED",
+  "note": "All 6 Golden Dataset cases (ESSAY + DIAGRAM) evaluated against live Gemini API.",
+  "results": [
+    {
+      "id": "AI-ESSAY-01-EXCELLENT",
+      "repeats": 2,
+      "avgScore": 10.0,
+      "stdev": 0.0,
+      "expectedRange": [
+        8.5,
+        10.0
+      ],
+      "status": "PASS"
+    },
+    {
+      "id": "AI-ESSAY-01-PARTIAL",
+      "repeats": 2,
+      "avgScore": 2.75,
+      "stdev": 0.354,
+      "expectedRange": [
+        3.5,
+        6.5
+      ],
+      "status": "FAIL (stricter than expected range by 0.75)"
+    },
+    {
+      "id": "AI-ESSAY-01-POOR",
+      "repeats": 2,
+      "avgScore": 0.0,
+      "stdev": 0.0,
+      "expectedRange": [
+        0.0,
+        1.0
+      ],
+      "status": "PASS"
+    },
+    {
+      "id": "AI-ESSAY-01-INJECTION",
+      "repeats": 2,
+      "avgScore": 0.0,
+      "stdev": 0.0,
+      "expectedRange": [
+        0.0,
+        0.5
+      ],
+      "status": "PASS"
+    },
+    {
+      "id": "AI-DIAGRAM-01-EXCELLENT",
+      "repeats": 1,
+      "avgScore": 5.5,
+      "stdev": 0.0,
+      "expectedRange": [
+        5.0,
+        6.0
+      ],
+      "status": "PASS",
+      "schemaErrors": []
+    },
+    {
+      "id": "AI-DIAGRAM-01-PARTIAL",
+      "repeats": 1,
+      "avgScore": 1.5,
+      "stdev": 0.0,
+      "expectedRange": [
+        1.5,
+        3.5
+      ],
+      "status": "PASS",
+      "schemaErrors": []
+    }
+  ],
+  "monotonicity": {
+    "ESSAY-01: EXCELLENT > PARTIAL > POOR": true,
+    "DIAGRAM-01: EXCELLENT > PARTIAL": true
+  }
+}

@@ -1,10 +1,10 @@
 import React, { useEffect, useRef, useState, useMemo } from "react";
-import { useAutoRefresh } from '@/hooks/useAutoRefresh';
+import { useAutoRefresh } from "@/hooks/useAutoRefresh";
 import { useSearchParams, useNavigate } from "react-router";
 import { Button } from "@/components/ui/Button";
 import { Badge } from "@/components/ui/Badge";
 import { Select } from "@/components/ui/Select";
-import { SearchableSelect } from '@/components/ui/SearchableSelect';
+import { SearchableSelect } from "@/components/ui/SearchableSelect";
 import { Dropdown } from "@/components/ui/Dropdown";
 import { Modal } from "@/components/ui/Modal";
 import { ConfirmDialog } from "@/components/ui/ConfirmDialog";
@@ -147,8 +147,8 @@ export function ExamListPage() {
   };
 
   /** `'quiet'` = shared auto-refresh: no loader; a failure keeps the list and shows no toast. */
-  const fetchExams = async (mode?: 'quiet') => {
-    const quiet = mode === 'quiet';
+  const fetchExams = async (mode?: "quiet") => {
+    const quiet = mode === "quiet";
     if (abortControllerRef.current) {
       abortControllerRef.current.abort();
     }
@@ -249,7 +249,7 @@ export function ExamListPage() {
     selectedStatus,
     page,
   ]);
-  useAutoRefresh(() => void fetchExams('quiet'));
+  useAutoRefresh(() => void fetchExams("quiet"));
 
   const handleTabChange = (tab: ExamListTab) => {
     setActiveTab(tab);
@@ -444,56 +444,182 @@ export function ExamListPage() {
   };
 
   const columns: TableColumn[] = [
-    { key: 'title', label: 'Exam title', render: value => <span className="line-clamp-2 whitespace-normal font-medium text-content" title={asExam(value).title}>{asExam(value).title}</span> },
-    { key: 'courseName', label: 'Course', render: value => <span className="block truncate" title={asExam(value).courseName}>{asExam(value).courseName}</span> },
-    { key: 'moduleName', label: 'Module', render: value => asExam(value).moduleName || '—' },
-    { key: 'examKind', label: 'Kind', render: value => {
-      const kind = asExam(value).examKind;
-      return <Badge variant={kind === 'QUIZ' ? 'purple' : kind === 'CODE' ? 'warning' : 'default'} className="whitespace-nowrap text-2xs">{kind === 'DIAGRAM' || !kind ? 'ESSAY' : kind}</Badge>;
-    } },
-    { key: 'questionCount', label: 'Questions', className: 'whitespace-nowrap', render: value => asExam(value).questionCount },
-    { key: 'maxScore', label: 'Max score', className: 'whitespace-nowrap', render: value => {
-      const exam = asExam(value);
-      return exam.maxScore ?? exam.totalPoints ?? 0;
-    } },
-    { key: 'durationMinutes', label: 'Duration', className: 'whitespace-nowrap', render: value => `${asExam(value).durationMinutes}m` },
-    { key: 'status', label: 'Status', render: value => {
-      const status = asExam(value).status;
-      return <Badge variant={status === 'PUBLISHED' ? 'success' : status === 'ARCHIVED' ? 'default' : 'warning'} className="whitespace-nowrap text-2xs">{status.charAt(0) + status.slice(1).toLowerCase()}</Badge>;
-    } },
-    { key: 'createdAt', label: 'Created', className: 'whitespace-nowrap', render: value => new Date(asExam(value).createdAt).toLocaleDateString() },
-    { key: 'actions', label: 'Actions', className: 'whitespace-nowrap', render: value => {
-      const exam = asExam(value);
-      return <div onClick={event => event.stopPropagation()}><Dropdown
-        trigger={<button type="button" aria-label={`Actions for ${exam.title}`} className="rounded-[6px] p-1.5 text-content-subtle hover:bg-surface-hover hover:text-content"><Icon.MoreHorizontal className="h-4 w-4" /></button>}
-        items={[
-          { label: 'Edit', icon: <Icon.Edit className="h-4 w-4" />, onClick: () => handleEditExam(exam) },
-          ...(exam.status === 'DRAFT'
-            ? [
+    {
+      key: "title",
+      label: "Exam title",
+      render: (value) => (
+        <span
+          className="line-clamp-2 whitespace-normal font-medium text-content"
+          title={asExam(value).title}
+        >
+          {asExam(value).title}
+        </span>
+      ),
+    },
+    {
+      key: "courseName",
+      label: "Course",
+      render: (value) => (
+        <span className="block truncate" title={asExam(value).courseName}>
+          {asExam(value).courseName}
+        </span>
+      ),
+    },
+    {
+      key: "moduleName",
+      label: "Module",
+      render: (value) => asExam(value).moduleName || "—",
+    },
+    {
+      key: "examKind",
+      label: "Kind",
+      render: (value) => {
+        const kind = asExam(value).examKind;
+        return (
+          <Badge
+            variant={
+              kind === "QUIZ"
+                ? "purple"
+                : kind === "CODE"
+                  ? "warning"
+                  : "default"
+            }
+            className="whitespace-nowrap text-2xs"
+          >
+            {kind === "DIAGRAM" || !kind ? "ESSAY" : kind}
+          </Badge>
+        );
+      },
+    },
+    {
+      key: "questionCount",
+      label: "Questions",
+      className: "whitespace-nowrap",
+      render: (value) => asExam(value).questionCount,
+    },
+    {
+      key: "maxScore",
+      label: "Max score",
+      className: "whitespace-nowrap",
+      render: (value) => {
+        const exam = asExam(value);
+        return exam.maxScore ?? exam.totalPoints ?? 0;
+      },
+    },
+    {
+      key: "durationMinutes",
+      label: "Duration",
+      className: "whitespace-nowrap",
+      render: (value) => `${asExam(value).durationMinutes}m`,
+    },
+    {
+      key: "status",
+      label: "Status",
+      render: (value) => {
+        const status = asExam(value).status;
+        return (
+          <Badge
+            variant={
+              status === "PUBLISHED"
+                ? "success"
+                : status === "ARCHIVED"
+                  ? "default"
+                  : "warning"
+            }
+            className="whitespace-nowrap text-2xs"
+          >
+            {status.charAt(0) + status.slice(1).toLowerCase()}
+          </Badge>
+        );
+      },
+    },
+    {
+      key: "createdAt",
+      label: "Created",
+      className: "whitespace-nowrap",
+      render: (value) => new Date(asExam(value).createdAt).toLocaleDateString(),
+    },
+    {
+      key: "actions",
+      label: "Actions",
+      className: "whitespace-nowrap",
+      render: (value) => {
+        const exam = asExam(value);
+        return (
+          <div onClick={(event) => event.stopPropagation()}>
+            <Dropdown
+              trigger={
+                <button
+                  type="button"
+                  aria-label={`Actions for ${exam.title}`}
+                  className="rounded-[6px] p-1.5 text-content-subtle hover:bg-surface-hover hover:text-content"
+                >
+                  <Icon.MoreHorizontal className="h-4 w-4" />
+                </button>
+              }
+              items={[
                 {
-                  label: 'Publish',
-                  icon: <Icon.CheckCircle className="h-4 w-4" />,
-                  disabled: exam.questionCount === 0 && exam.generationType === 'STATIC',
-                  onClick: () => setStatusDialogTarget({ exam, targetStatus: 'PUBLISHED' as const }),
+                  label: "Edit",
+                  icon: <Icon.Edit className="h-4 w-4" />,
+                  onClick: () => handleEditExam(exam),
                 },
-              ]
-            : []),
-          { label: 'Archive', icon: <Icon.Archive className="h-4 w-4" />, disabled: exam.status === 'ARCHIVED', onClick: () => setStatusDialogTarget({ exam, targetStatus: 'ARCHIVED' }) },
-          { divider: true } as { label: string; divider: true },
-          { label: 'Delete', icon: <Icon.Trash className="h-4 w-4" />, danger: true, onClick: () => { setDeleteConflict409(false); setDeleteDialogTarget(exam); } },
-        ]}
-      /></div>;
-    } },
+                ...(exam.status === "DRAFT"
+                  ? [
+                      {
+                        label: "Publish",
+                        icon: <Icon.CheckCircle className="h-4 w-4" />,
+                        disabled:
+                          exam.questionCount === 0 &&
+                          exam.generationType === "STATIC",
+                        onClick: () =>
+                          setStatusDialogTarget({
+                            exam,
+                            targetStatus: "PUBLISHED" as const,
+                          }),
+                      },
+                    ]
+                  : []),
+                {
+                  label: "Archive",
+                  icon: <Icon.Archive className="h-4 w-4" />,
+                  disabled: exam.status === "ARCHIVED",
+                  onClick: () =>
+                    setStatusDialogTarget({ exam, targetStatus: "ARCHIVED" }),
+                },
+                { divider: true } as { label: string; divider: true },
+                {
+                  label: "Delete",
+                  icon: <Icon.Trash className="h-4 w-4" />,
+                  danger: true,
+                  onClick: () => {
+                    setDeleteConflict409(false);
+                    setDeleteDialogTarget(exam);
+                  },
+                },
+              ]}
+            />
+          </div>
+        );
+      },
+    },
   ];
-  const tableRows = exams.map(exam => ({ ...exam, id: exam.examId }));
-  const filtersActive = Boolean(searchTerm || selectedCourse || selectedModule || selectedStatus !== 'all');
+  const tableRows = exams.map((exam) => ({ ...exam, id: exam.examId }));
+  const filtersActive = Boolean(
+    searchTerm || selectedCourse || selectedModule || selectedStatus !== "all",
+  );
   const clearFilters = () => {
-    setSearchTerm('');
-    setSelectedCourse('');
-    setSelectedModule('');
-    setSelectedStatus('all');
+    setSearchTerm("");
+    setSelectedCourse("");
+    setSelectedModule("");
+    setSelectedStatus("all");
     setPage(0);
-    updateUrlParams({ search: '', courseId: '', moduleId: '', status: 'all', page: 0 });
+    updateUrlParams({
+      search: "",
+      courseId: "",
+      moduleId: "",
+      status: "all",
+      page: 0,
+    });
   };
 
   return (
@@ -610,7 +736,7 @@ export function ExamListPage() {
           className="w-full"
           placeholder="Search exams…"
           value={searchTerm}
-          onChange={e => handleSearchChange(e.target.value)}
+          onChange={(e) => handleSearchChange(e.target.value)}
           aria-label="Search exams"
         />
         <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
@@ -621,36 +747,77 @@ export function ExamListPage() {
             placeholder="All courses"
             searchPlaceholder="Search courses…"
             emptyText="No courses found"
-            options={[{ label: 'All courses', value: '' }, ...courses.map(course => ({ label: course.title, value: String(course.courseId) }))]}
+            options={[
+              { label: "All courses", value: "" },
+              ...courses.map((course) => ({
+                label: course.title,
+                value: String(course.courseId),
+              })),
+            ]}
           />
           <SearchableSelect
             label="Module"
             value={selectedModule}
             disabled={!selectedCourse}
             onChange={handleModuleChange}
-            placeholder={selectedCourse ? 'All modules' : 'Select a course first'}
+            placeholder={
+              selectedCourse ? "All modules" : "Select a course first"
+            }
             searchPlaceholder="Search modules…"
             emptyText="No modules found"
-            options={[{ label: selectedCourse ? 'All modules' : 'Select a course first', value: '' }, ...modules.map(module => ({ label: module.title, value: String(module.moduleId) }))]}
+            options={[
+              {
+                label: selectedCourse ? "All modules" : "Select a course first",
+                value: "",
+              },
+              ...modules.map((module) => ({
+                label: module.title,
+                value: String(module.moduleId),
+              })),
+            ]}
           />
           <Select
             label="Status"
             value={selectedStatus}
             onChange={handleStatusChange}
-            options={[{ label: 'All statuses', value: 'all' }, { label: 'Draft', value: 'DRAFT' }, { label: 'Published', value: 'PUBLISHED' }, { label: 'Archived', value: 'ARCHIVED' }]}
+            options={[
+              { label: "All statuses", value: "all" },
+              { label: "Draft", value: "DRAFT" },
+              { label: "Published", value: "PUBLISHED" },
+              { label: "Archived", value: "ARCHIVED" },
+            ]}
           />
         </div>
         <div className="flex flex-wrap items-center justify-end gap-3">
-          {filtersActive && <button type="button" onClick={clearFilters} className="inline-flex items-center gap-1 whitespace-nowrap text-sm font-medium text-brand-ink hover:underline"><Icon.X className="h-3.5 w-3.5" />Clear filters</button>}
-          <Badge variant="default" className="font-semibold text-xs">{totalElements} exams</Badge>
+          {filtersActive && (
+            <button
+              type="button"
+              onClick={clearFilters}
+              className="inline-flex items-center gap-1 whitespace-nowrap text-sm font-medium text-brand-ink hover:underline"
+            >
+              <Icon.X className="h-3.5 w-3.5" />
+              Clear filters
+            </button>
+          )}
+          <Badge variant="default" className="font-semibold text-xs">
+            {totalElements} exams
+          </Badge>
         </div>
       </div>
 
       <div className="card overflow-hidden">
         {error ? (
           <div className="space-y-3 p-12 text-center">
-            <p className="text-sm font-medium text-danger">Exam list could not be loaded. See the notification for details.</p>
-            <Button size="sm" variant="outline" onClick={() => void fetchExams()}>Retry</Button>
+            <p className="text-sm font-medium text-danger">
+              Exam list could not be loaded. See the notification for details.
+            </p>
+            <Button
+              size="sm"
+              variant="outline"
+              onClick={() => void fetchExams()}
+            >
+              Retry
+            </Button>
           </div>
         ) : loading ? (
           <div className="space-y-4 p-6">
@@ -662,12 +829,36 @@ export function ExamListPage() {
         ) : exams.length === 0 ? (
           <div className="space-y-3 p-16 text-center">
             <Icon.ClipboardList className="mx-auto h-10 w-10 text-content-subtle" />
-            <h4 className="text-base font-semibold text-content">No exams found</h4>
-            <p className="mx-auto max-w-sm text-xs text-content-subtle">There are no exams matching your search criteria. Create a quiz or assessment to get started.</p>
+            <h4 className="text-base font-semibold text-content">
+              No exams found
+            </h4>
+            <p className="mx-auto max-w-sm text-xs text-content-subtle">
+              There are no exams matching your search criteria. Create a quiz or
+              assessment to get started.
+            </p>
             <div className="flex justify-center pt-2">
-              {activeTab === 'ASSESSMENT' ? <Button onClick={() => handleNewExam('ESSAY')} icon={<Icon.Plus className="h-4 w-4" />}>New Assessment</Button>
-                : activeTab === 'CODE' ? <Button onClick={() => handleNewExam('CODE')} icon={<Icon.Plus className="h-4 w-4" />}>New Code Exam</Button>
-                  : <Button onClick={() => handleNewExam('QUIZ')} icon={<Icon.Plus className="h-4 w-4" />}>New Exam</Button>}
+              {activeTab === "ASSESSMENT" ? (
+                <Button
+                  onClick={() => handleNewExam("ESSAY")}
+                  icon={<Icon.Plus className="h-4 w-4" />}
+                >
+                  New Assessment
+                </Button>
+              ) : activeTab === "CODE" ? (
+                <Button
+                  onClick={() => handleNewExam("CODE")}
+                  icon={<Icon.Plus className="h-4 w-4" />}
+                >
+                  New Code Exam
+                </Button>
+              ) : (
+                <Button
+                  onClick={() => handleNewExam("QUIZ")}
+                  icon={<Icon.Plus className="h-4 w-4" />}
+                >
+                  New Exam
+                </Button>
+              )}
             </div>
           </div>
         ) : (
@@ -676,12 +867,22 @@ export function ExamListPage() {
             data={tableRows}
             selectable
             selectedKeys={new Set([...selectedExamIds].map(String))}
-            onSelectionChange={keys => setSelectedExamIds(new Set([...keys].map(Number)))}
-            onRowClick={row => handleEditExam(row as unknown as ExamListItem)}
-            isRowActive={row => selectedExamIds.has(Number(row.examId))}
+            onSelectionChange={(keys) =>
+              setSelectedExamIds(new Set([...keys].map(Number)))
+            }
+            onRowClick={(row) => handleEditExam(row as unknown as ExamListItem)}
+            isRowActive={(row) => selectedExamIds.has(Number(row.examId))}
             perPage={15}
             unit="exams"
-            serverPagination={{ page: page + 1, total: totalElements, onChange: value => { const nextPage = value - 1; setPage(nextPage); updateUrlParams({ page: nextPage }); } }}
+            serverPagination={{
+              page: page + 1,
+              total: totalElements,
+              onChange: (value) => {
+                const nextPage = value - 1;
+                setPage(nextPage);
+                updateUrlParams({ page: nextPage });
+              },
+            }}
           />
         )}
       </div>
@@ -693,9 +894,14 @@ export function ExamListPage() {
         title={`Change status to ${statusDialogTarget?.targetStatus}?`}
         description={
           <>
-            <strong className="text-content">"{statusDialogTarget?.exam.title}"</strong>{" "}
+            <strong className="text-content">
+              "{statusDialogTarget?.exam.title}"
+            </strong>{" "}
             will be moved to{" "}
-            <strong className="text-brand-ink">{statusDialogTarget?.targetStatus}</strong>.
+            <strong className="text-brand-ink">
+              {statusDialogTarget?.targetStatus}
+            </strong>
+            .
           </>
         }
         confirmLabel="Confirm"
@@ -723,9 +929,7 @@ export function ExamListPage() {
         }
       >
         <div className="p-3 bg-warning-light/40 border border-warning-line rounded-[8px] space-y-1 text-xs text-warning-strong">
-          <p className="font-semibold">
-            Published successfully with warnings:
-          </p>
+          <p className="font-semibold">Published successfully with warnings:</p>
           {statusWarnings.map((w, idx) => (
             <p key={idx}>• {w}</p>
           ))}
@@ -741,7 +945,9 @@ export function ExamListPage() {
         title="Delete this exam?"
         description={
           <>
-            <strong className="text-content">"{deleteDialogTarget?.title}"</strong>{" "}
+            <strong className="text-content">
+              "{deleteDialogTarget?.title}"
+            </strong>{" "}
             will be permanently deleted. Only drafts with no submissions can be
             deleted — archive an exam to keep its attempt history.
           </>
