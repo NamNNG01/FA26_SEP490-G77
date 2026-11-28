@@ -76,14 +76,9 @@ export function RubricDetailModal({
       });
   }, [open, questionId, toast]);
 
-  const totalWeight = criteria.reduce(
-    (sum, c) => sum + (Number(c.weight) || 0),
-    0,
-  );
+  const totalWeight = criteria.reduce((sum, c) => sum + (Number(c.weight) || 0), 0);
   const pointsForWeight = (weight: number) =>
-    totalWeight > 0
-      ? Number(((questionPoints * weight) / totalWeight).toFixed(2))
-      : 0;
+    totalWeight > 0 ? Number(((questionPoints * weight) / totalWeight).toFixed(2)) : 0;
 
   const addCriterion = () => {
     setCriteria((prev) => [...prev, { name: "", weight: 1, descriptors: "" }]);
@@ -94,11 +89,7 @@ export function RubricDetailModal({
     setCriteria((prev) => prev.filter((_, i) => i !== index));
   };
 
-  const updateCriterion = (
-    index: number,
-    field: keyof RubricCriterion,
-    val: string | number,
-  ) => {
+  const updateCriterion = (index: number, field: keyof RubricCriterion, val: string | number) => {
     setCriteria((prev) => {
       const next = [...prev];
       next[index] = { ...next[index], [field]: val };
@@ -117,12 +108,20 @@ export function RubricDetailModal({
     if (!questionId) return;
     for (let i = 0; i < criteria.length; i++) {
       const c = criteria[i];
-      const field = !c.name.trim() ? "name" : !Number.isFinite(Number(c.weight)) || Number(c.weight) <= 0 ? "weight" : null;
+      const field = !c.name.trim()
+        ? "name"
+        : !Number.isFinite(Number(c.weight)) || Number(c.weight) <= 0
+          ? "weight"
+          : null;
       if (field) {
         focusFirstInvalidAfter(() => {
           setInvalidRowIdx(i);
           setInvalidField(field);
-          setErrorMsg(field === "name" ? `Criterion #${i + 1} name is required.` : `Criterion #${i + 1} weight must be greater than 0.`);
+          setErrorMsg(
+            field === "name"
+              ? `Criterion #${i + 1} name is required.`
+              : `Criterion #${i + 1} weight must be greater than 0.`,
+          );
         });
         return;
       }
@@ -155,7 +154,11 @@ export function RubricDetailModal({
       onClose={onClose}
       title="Essay Grading Rubric Detail"
       size="xl"
-      error={saveError && <Alert type="error" title="Could not save grading rubric" message={saveError} />}
+      error={
+        saveError && (
+          <Alert type="error" title="Could not save grading rubric" message={saveError} />
+        )
+      }
       footer={
         <div className="flex items-center justify-end w-full">
           <div className="flex items-center gap-2">
@@ -164,9 +167,7 @@ export function RubricDetailModal({
             </Button>
             <Button
               onClick={handleSave}
-              disabled={
-                criteria.length === 0 || saving || loading || loadFailed
-              }
+              disabled={criteria.length === 0 || saving || loading || loadFailed}
               loading={saving}
               icon={<Icon.Check className="w-4 h-4" />}
             >
@@ -182,22 +183,18 @@ export function RubricDetailModal({
             <span className="text-2xs uppercase tracking-wider text-content-subtle font-semibold block mb-1">
               Question Prompt
             </span>
-            <p className="text-sm text-content font-medium leading-relaxed">
-              {questionContent}
-            </p>
+            <p className="text-sm text-content font-medium leading-relaxed">{questionContent}</p>
           </div>
         )}
 
         <div className="text-xs text-content-subtle bg-info-light/40 border border-info-line/50 p-2.5 rounded-[8px]">
-          Note: Rubric belongs to the question entity in Question Bank. Editing
-          it affects all exams referencing this question.
+          Note: Rubric belongs to the question entity in Question Bank. Editing it affects all exams
+          referencing this question.
         </div>
 
         <div className="space-y-3">
           <div className="flex items-center justify-between">
-            <h4 className="text-sm font-semibold text-content">
-              Evaluation Criteria
-            </h4>
+            <h4 className="text-sm font-semibold text-content">Evaluation Criteria</h4>
             <Button
               variant="secondary"
               size="sm"
@@ -224,10 +221,10 @@ export function RubricDetailModal({
                       label={`Criterion #${idx + 1} Name *`}
                       placeholder="e.g. Content Relevance & Argumentation"
                       value={c.name}
-                      error={invalidRowIdx === idx && invalidField === "name" ? errorMsg : undefined}
-                      onChange={(e) =>
-                        updateCriterion(idx, "name", e.target.value)
+                      error={
+                        invalidRowIdx === idx && invalidField === "name" ? errorMsg : undefined
                       }
+                      onChange={(e) => updateCriterion(idx, "name", e.target.value)}
                     />
                   </div>
                   <div className="w-24">
@@ -238,28 +235,22 @@ export function RubricDetailModal({
                       type="number"
                       min={0.01}
                       step="any"
-                      aria-invalid={invalidRowIdx === idx && invalidField === "weight" ? true : undefined}
+                      aria-invalid={
+                        invalidRowIdx === idx && invalidField === "weight" ? true : undefined
+                      }
                       className={`w-full px-2.5 py-1.5 text-sm rounded-[8px] border bg-surface focus:outline-none focus:ring-1 focus:ring-brand-ink ${
-                        invalidRowIdx === idx && invalidField === "weight" ? "border-danger-solid" : "border-line"
+                        invalidRowIdx === idx && invalidField === "weight"
+                          ? "border-danger-solid"
+                          : "border-line"
                       }`}
                       value={c.weight ?? ""}
-                      onChange={(e) =>
-                        updateCriterion(
-                          idx,
-                          "weight",
-                          Number(e.target.value) || 0,
-                        )
-                      }
+                      onChange={(e) => updateCriterion(idx, "weight", Number(e.target.value) || 0)}
                     />
                   </div>
                   <div className="w-24 text-right">
-                    <span className="text-xs text-content-subtle block">
-                      Points
-                    </span>
+                    <span className="text-xs text-content-subtle block">Points</span>
                     <span className="text-sm font-semibold text-brand-ink">
-                      {Number.isFinite(Number(c.weight))
-                        ? pointsForWeight(Number(c.weight))
-                        : 0}{" "}
+                      {Number.isFinite(Number(c.weight)) ? pointsForWeight(Number(c.weight)) : 0}{" "}
                       pts
                     </span>
                   </div>
@@ -288,9 +279,7 @@ export function RubricDetailModal({
                     className="w-full px-3 py-1.5 text-xs rounded-[8px] border border-line bg-surface focus:outline-none focus:ring-1 focus:ring-brand-ink"
                     placeholder="Describe expectations for full, partial, and minimal credit..."
                     value={c.descriptors || ""}
-                    onChange={(e) =>
-                      updateCriterion(idx, "descriptors", e.target.value)
-                    }
+                    onChange={(e) => updateCriterion(idx, "descriptors", e.target.value)}
                   />
                 </div>
               </div>

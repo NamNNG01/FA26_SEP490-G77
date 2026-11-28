@@ -51,10 +51,7 @@ import {
   type EditableQuestionType,
   type QuestionDraft,
 } from "@/features/question/model";
-import {
-  questionService,
-  type QuestionDetail,
-} from "@/services/question.service";
+import { questionService, type QuestionDetail } from "@/services/question.service";
 import { getApiErrorMessage } from "@/utils/apiError";
 import { focusFirstInvalidAfter } from "@/utils/focusFirstInvalid";
 
@@ -74,13 +71,10 @@ export function ExamFormPage({
   const isEssayFromPath = location.pathname.includes("/essay");
   const isCodeFromPath = location.pathname.includes("/exams/code");
   const requestedFormKind =
-    propFormKind ||
-    (isCodeFromPath ? "CODE" : isEssayFromPath ? "ESSAY" : "QUIZ");
-  const formKind =
-    requestedFormKind === "DIAGRAM" ? "ESSAY" : requestedFormKind;
+    propFormKind || (isCodeFromPath ? "CODE" : isEssayFromPath ? "ESSAY" : "QUIZ");
+  const formKind = requestedFormKind === "DIAGRAM" ? "ESSAY" : requestedFormKind;
   const isAssessment = formKind !== "QUIZ";
-  const formLabel =
-    formKind === "QUIZ" ? "Quiz" : formKind === "CODE" ? "Code" : "Essay";
+  const formLabel = formKind === "QUIZ" ? "Quiz" : formKind === "CODE" ? "Code" : "Essay";
   const examPathKind = formKind.toLowerCase();
   const isEssayQuestion = (question: ExamQuestion) =>
     ["ESSAY", "DIAGRAM", "DIAGRAM_ESSAY"].includes(question.questionType);
@@ -101,8 +95,7 @@ export function ExamFormPage({
   const [durationMinutes, setDurationMinutes] = useState<number>(60);
   const [maxScore, setMaxScore] = useState<number>(100);
   const [mode, setMode] = useState<ExamMode>("EXAM");
-  const [generationType, setGenerationType] =
-    useState<GenerationType>("STATIC");
+  const [generationType, setGenerationType] = useState<GenerationType>("STATIC");
   const [questionOrder, setQuestionOrder] = useState<QuestionOrder>("MANUAL");
   const [status, setStatus] = useState<ExamStatus>("DRAFT");
   const [orderSaving, setOrderSaving] = useState(false);
@@ -113,11 +106,8 @@ export function ExamFormPage({
   const [importedQuestionDrafts, setImportedQuestionDrafts] = useState<
     { draft: QuestionDraft; weight: number; orderIndex: number }[]
   >([]);
-  const [importedQuestionsSubmitted, setImportedQuestionsSubmitted] =
-    useState(false);
-  const [expandedGroupIds, setExpandedGroupIds] = useState<Set<number>>(
-    () => new Set(),
-  );
+  const [importedQuestionsSubmitted, setImportedQuestionsSubmitted] = useState(false);
+  const [expandedGroupIds, setExpandedGroupIds] = useState<Set<number>>(() => new Set());
   const [configs, setConfigs] = useState<ExamConfig[]>([]);
 
   const [bankModalOpen, setBankModalOpen] = useState(false);
@@ -127,10 +117,8 @@ export function ExamFormPage({
     id: number;
     content: string;
   } | null>(null);
-  const [questionEditTarget, setQuestionEditTarget] =
-    useState<ExamQuestion | null>(null);
-  const [questionEditDraft, setQuestionEditDraft] =
-    useState<QuestionDraft | null>(null);
+  const [questionEditTarget, setQuestionEditTarget] = useState<ExamQuestion | null>(null);
+  const [questionEditDraft, setQuestionEditDraft] = useState<QuestionDraft | null>(null);
   const [questionEditLoading, setQuestionEditLoading] = useState(false);
   const [questionEditSaving, setQuestionEditSaving] = useState(false);
   const [questionEditSubmitted, setQuestionEditSubmitted] = useState(false);
@@ -156,14 +144,7 @@ export function ExamFormPage({
 
   const allowedQuestionTypes =
     formKind === "QUIZ"
-      ? [
-          "SINGLE_CHOICE",
-          "MULTIPLE_CHOICE",
-          "TRUE_FALSE",
-          "FILL_BLANK",
-          "MATCHING",
-          "ORDERING",
-        ]
+      ? ["SINGLE_CHOICE", "MULTIPLE_CHOICE", "TRUE_FALSE", "FILL_BLANK", "MATCHING", "ORDERING"]
       : formKind === "CODE"
         ? ["CODE"]
         : ["ESSAY", "DIAGRAM", "DIAGRAM_ESSAY"];
@@ -184,10 +165,7 @@ export function ExamFormPage({
         if (active) setQuestionEditDraft(fromDetail(detail));
       })
       .catch((err) => {
-        if (active)
-          setQuestionEditError(
-            getApiErrorMessage(err, "Could not load this question."),
-          );
+        if (active) setQuestionEditError(getApiErrorMessage(err, "Could not load this question."));
       })
       .finally(() => {
         if (active) setQuestionEditLoading(false);
@@ -207,9 +185,7 @@ export function ExamFormPage({
     setQuestionEditSubmitted(true);
     setQuestionEditSaving(true);
     try {
-      const detail = await questionService.getQuestionById(
-        questionEditTarget.questionId,
-      );
+      const detail = await questionService.getQuestionById(questionEditTarget.questionId);
       const updated = await questionService.updateQuestion(
         questionEditTarget.questionId,
         toUpdateRequest(
@@ -233,9 +209,7 @@ export function ExamFormPage({
       setQuestionEditTarget(null);
       setQuestionEditSubmitted(false);
     } catch (err) {
-      setQuestionEditError(
-        getApiErrorMessage(err, "Could not save this question."),
-      );
+      setQuestionEditError(getApiErrorMessage(err, "Could not save this question."));
     } finally {
       setQuestionEditSaving(false);
     }
@@ -245,8 +219,7 @@ export function ExamFormPage({
     questions.length +
     importedQuestionDrafts.length +
     configs.reduce((sum, config) => sum + config.numberOfQuestions, 0);
-  const hasAddedQuestions =
-    questions.length > 0 || importedQuestionDrafts.length > 0;
+  const hasAddedQuestions = questions.length > 0 || importedQuestionDrafts.length > 0;
   const standaloneQuestions = questions.filter((question) => !question.groupId);
 
   const QUESTION_ORDER_OPTIONS: { label: string; value: QuestionOrder }[] = [
@@ -282,62 +255,39 @@ export function ExamFormPage({
       };
 
   const unifiedItems: UnifiedExamItem[] = [
-    ...standaloneQuestions.map(
-      (q): UnifiedExamItem => ({
-        kind: "question",
-        key: `q-${q.examQuestionId}`,
-        orderIndex: q.orderIndex,
-        typeRank: 0,
-        idNum: q.examQuestionId,
-        question: q,
-      }),
-    ),
-    ...importedQuestionDrafts.map(
-      (item, idx): UnifiedExamItem => ({
-        kind: "imported",
-        key: `imp-${item.draft.key}`,
-        orderIndex: item.orderIndex,
-        typeRank: 1,
-        idNum: idx,
-        item,
-      }),
-    ),
-    ...groups.map(
-      (g): UnifiedExamItem => ({
-        kind: "group",
-        key: `g-${g.examGroupId}`,
-        orderIndex: g.orderIndex,
-        typeRank: 2,
-        idNum: g.examGroupId,
-        group: g,
-        groupQuestions: questions
-          .filter((q) => q.groupId === g.groupId)
-          .sort(
-            (a, b) =>
-              a.orderIndex - b.orderIndex || a.questionId - b.questionId,
-          ),
-      }),
-    ),
-  ].sort(
-    (a, b) =>
-      a.orderIndex - b.orderIndex ||
-      a.typeRank - b.typeRank ||
-      a.idNum - b.idNum,
-  );
+    ...standaloneQuestions.map((q): UnifiedExamItem => ({
+      kind: "question",
+      key: `q-${q.examQuestionId}`,
+      orderIndex: q.orderIndex,
+      typeRank: 0,
+      idNum: q.examQuestionId,
+      question: q,
+    })),
+    ...importedQuestionDrafts.map((item, idx): UnifiedExamItem => ({
+      kind: "imported",
+      key: `imp-${item.draft.key}`,
+      orderIndex: item.orderIndex,
+      typeRank: 1,
+      idNum: idx,
+      item,
+    })),
+    ...groups.map((g): UnifiedExamItem => ({
+      kind: "group",
+      key: `g-${g.examGroupId}`,
+      orderIndex: g.orderIndex,
+      typeRank: 2,
+      idNum: g.examGroupId,
+      group: g,
+      groupQuestions: questions
+        .filter((q) => q.groupId === g.groupId)
+        .sort((a, b) => a.orderIndex - b.orderIndex || a.questionId - b.questionId),
+    })),
+  ].sort((a, b) => a.orderIndex - b.orderIndex || a.typeRank - b.typeRank || a.idNum - b.idNum);
 
   const nextTopOrder = () => {
-    const maxStandalone = standaloneQuestions.reduce(
-      (max, q) => Math.max(max, q.orderIndex),
-      -1,
-    );
-    const maxImported = importedQuestionDrafts.reduce(
-      (max, i) => Math.max(max, i.orderIndex),
-      -1,
-    );
-    const maxGroups = groups.reduce(
-      (max, g) => Math.max(max, g.orderIndex),
-      -1,
-    );
+    const maxStandalone = standaloneQuestions.reduce((max, q) => Math.max(max, q.orderIndex), -1);
+    const maxImported = importedQuestionDrafts.reduce((max, i) => Math.max(max, i.orderIndex), -1);
+    const maxGroups = groups.reduce((max, g) => Math.max(max, g.orderIndex), -1);
     return Math.max(maxStandalone, maxImported, maxGroups) + 1;
   };
 
@@ -351,9 +301,7 @@ export function ExamFormPage({
     try {
       const payloadItems = nextItems.flatMap<ExamOrderEntry>((entry) => {
         if (entry.kind === "question") {
-          return [
-            { itemType: "QUESTION", linkId: entry.question.examQuestionId },
-          ];
+          return [{ itemType: "QUESTION", linkId: entry.question.examQuestionId }];
         }
         if (entry.kind === "group") {
           const childIds = nextQuestions
@@ -388,10 +336,7 @@ export function ExamFormPage({
     const target = index + delta;
     if (target < 0 || target >= unifiedItems.length) return;
     const reordered = [...unifiedItems];
-    [reordered[index], reordered[target]] = [
-      reordered[target],
-      reordered[index],
-    ];
+    [reordered[index], reordered[target]] = [reordered[target], reordered[index]];
 
     const orderByKey = new Map<string, number>();
     reordered.forEach((entry, idx) => orderByKey.set(entry.key, idx));
@@ -422,17 +367,11 @@ export function ExamFormPage({
     }
   };
 
-  const moveGroupQuestion = async (
-    groupId: number,
-    childIndex: number,
-    delta: -1 | 1,
-  ) => {
+  const moveGroupQuestion = async (groupId: number, childIndex: number, delta: -1 | 1) => {
     if (isReadOnly || orderSaving) return;
     const groupQs = questions
       .filter((q) => q.groupId === groupId)
-      .sort(
-        (a, b) => a.orderIndex - b.orderIndex || a.questionId - b.questionId,
-      );
+      .sort((a, b) => a.orderIndex - b.orderIndex || a.questionId - b.questionId);
     const target = childIndex + delta;
     if (target < 0 || target >= groupQs.length) return;
 
@@ -442,9 +381,7 @@ export function ExamFormPage({
       reorderedChildren[childIndex],
     ];
     const childOrderByQuestionId = new Map<number, number>();
-    reorderedChildren.forEach((cq, idx) =>
-      childOrderByQuestionId.set(cq.questionId, idx),
-    );
+    reorderedChildren.forEach((cq, idx) => childOrderByQuestionId.set(cq.questionId, idx));
 
     const nextQuestions = questions.map((q) =>
       q.groupId === groupId && childOrderByQuestionId.has(q.questionId)
@@ -462,16 +399,13 @@ export function ExamFormPage({
   const totalWeight =
     generationType === "RANDOM"
       ? configs.reduce(
-          (sum, config) =>
-            sum + config.numberOfQuestions * (config.weightEach ?? 1),
+          (sum, config) => sum + config.numberOfQuestions * (config.weightEach ?? 1),
           0,
         )
       : questions.reduce((acc, q) => acc + (q.weight ?? q.points ?? 1), 0) +
         importedQuestionDrafts.reduce((sum, item) => sum + item.weight, 0);
   const scoreForWeight = (weight: number) =>
-    totalWeight > 0
-      ? Number(((maxScore * weight) / totalWeight).toFixed(2))
-      : 0;
+    totalWeight > 0 ? Number(((maxScore * weight) / totalWeight).toFixed(2)) : 0;
   const formatScore = (score: number) => Number(score.toFixed(2)).toString();
   const withoutRubricWarnings = (warnings: string[]) =>
     warnings.filter((warning) => !/\b(?:no|missing) rubrics?\b/i.test(warning));
@@ -502,10 +436,7 @@ export function ExamFormPage({
         })
         .catch((err) => {
           setModules([]);
-          const message = getApiErrorMessage(
-            err,
-            "Failed to load course modules.",
-          );
+          const message = getApiErrorMessage(err, "Failed to load course modules.");
           toast.error(message, {
             title: "Could not load course modules",
             duration: null,
@@ -539,9 +470,7 @@ export function ExamFormPage({
       setMaxScore(data.maxScore || 100);
       setMode(data.mode === "CONTEST" ? "CONTEST" : "EXAM");
       setGenerationType(
-        data.generationType === "MIXED"
-          ? "STATIC"
-          : data.generationType || "STATIC",
+        data.generationType === "MIXED" ? "STATIC" : data.generationType || "STATIC",
       );
       setQuestionOrder(data.questionOrder || "RANDOM");
       setStatus(data.status || "DRAFT");
@@ -574,9 +503,7 @@ export function ExamFormPage({
             setQuestions((prev) =>
               prev.map((pq) => {
                 const foundRes = results.find(
-                  (r) =>
-                    r.status === "fulfilled" &&
-                    r.value.questionId === pq.questionId,
+                  (r) => r.status === "fulfilled" && r.value.questionId === pq.questionId,
                 );
                 if (foundRes && foundRes.status === "fulfilled") {
                   return {
@@ -598,10 +525,7 @@ export function ExamFormPage({
         navigate(ROUTES.managerExams);
       } else {
         reportExamError(
-          getApiErrorMessage(
-            err,
-            "Failed to load exam details. Please try again.",
-          ),
+          getApiErrorMessage(err, "Failed to load exam details. Please try again."),
           "Could not load exam details",
         );
       }
@@ -655,9 +579,7 @@ export function ExamFormPage({
             "Exam cannot be published. Ensure questions are attached.",
         );
       } else {
-        toast.error(
-          getApiErrorMessage(err, "Failed to update exam publish status."),
-        );
+        toast.error(getApiErrorMessage(err, "Failed to update exam publish status."));
       }
     } finally {
       setSaving(false);
@@ -715,14 +637,9 @@ export function ExamFormPage({
 
     if (generationType === "RANDOM") {
       if (configs.length === 0) {
-        errors.configs =
-          "Random exam requires at least one question draw configuration rule.";
+        errors.configs = "Random exam requires at least one question draw configuration rule.";
       }
-      if (
-        questions.length > 0 ||
-        groups.length > 0 ||
-        importedQuestionDrafts.length > 0
-      ) {
+      if (questions.length > 0 || groups.length > 0 || importedQuestionDrafts.length > 0) {
         errors.configs =
           "Random exams use draw rules only. Remove attached questions and groups first.";
       }
@@ -741,8 +658,7 @@ export function ExamFormPage({
           "Each random question weight must be greater than 0, no more than 1,000, and have up to 2 decimal places.";
       }
     } else if (configs.length > 0) {
-      errors.configs =
-        "Static exams use attached questions and groups, not draw rules.";
+      errors.configs = "Static exams use attached questions and groups, not draw rules.";
     }
 
     setFieldErrors(errors);
@@ -753,9 +669,7 @@ export function ExamFormPage({
     if (!validateForm()) return;
     if (
       !isEdit &&
-      importedQuestionDrafts.some(
-        ({ draft }) => !isDraftValid(draft) || draft.importIssue,
-      )
+      importedQuestionDrafts.some(({ draft }) => !isDraftValid(draft) || draft.importIssue)
     ) {
       setImportedQuestionsSubmitted(true);
       reportExamError(
@@ -777,20 +691,14 @@ export function ExamFormPage({
             orderIndex: q.orderIndex,
           }));
         // E-02 saves (or reuses) these and attaches them in the same transaction as the exam.
-        const importedQuestions = importedQuestionDrafts.map(
-          ({ draft, weight, orderIndex }) => ({
-            question: {
-              ...toCreateRequest(
-                draft,
-                Number(courseId),
-                moduleId ? Number(moduleId) : null,
-              ),
-              status: "ACTIVE" as const,
-            },
-            weight,
-            orderIndex,
-          }),
-        );
+        const importedQuestions = importedQuestionDrafts.map(({ draft, weight, orderIndex }) => ({
+          question: {
+            ...toCreateRequest(draft, Number(courseId), moduleId ? Number(moduleId) : null),
+            status: "ACTIVE" as const,
+          },
+          weight,
+          orderIndex,
+        }));
 
         const payloadGroupIds = [...groups]
           .sort((a, b) => a.orderIndex - b.orderIndex)
@@ -928,12 +836,7 @@ export function ExamFormPage({
           : `/manager/exams/${examPathKind}/${cloned.examId}`;
       navigate(targetRoute, { replace: true });
     } catch (err) {
-      toast.error(
-        getApiErrorMessage(
-          err,
-          "Failed to execute Archive and Clone workflow.",
-        ),
-      );
+      toast.error(getApiErrorMessage(err, "Failed to execute Archive and Clone workflow."));
     } finally {
       setArchiveCloning(false);
     }
@@ -996,9 +899,7 @@ export function ExamFormPage({
             response?: { status?: number; data?: { message?: string } };
           };
           if (errObj?.response?.status === 409) {
-            failures.push(
-              `Question #${item.question.questionId} already in exam.`,
-            );
+            failures.push(`Question #${item.question.questionId} already in exam.`);
           } else {
             failures.push(
               `Question #${item.question.questionId}: ${getApiErrorMessage(err, "Request failed.")}`,
@@ -1021,9 +922,7 @@ export function ExamFormPage({
   };
 
   const handleImportedDrafts = (drafts: QuestionDraft[]) => {
-    const supported = drafts.filter((draft) =>
-      allowedQuestionTypes.includes(draft.type),
-    );
+    const supported = drafts.filter((draft) => allowedQuestionTypes.includes(draft.type));
     const unsupportedCount = drafts.length - supported.length;
     const remaining = Math.max(0, 50 - importedQuestionDrafts.length);
     const startOrder = nextTopOrder();
@@ -1062,17 +961,13 @@ export function ExamFormPage({
   };
 
   const removeImportedDraft = (key: string) => {
-    setImportedQuestionDrafts((prev) =>
-      prev.filter((item) => item.draft.key !== key),
-    );
+    setImportedQuestionDrafts((prev) => prev.filter((item) => item.draft.key !== key));
     setIsDirty(true);
   };
 
   const handleRemoveQuestion = async (examQuestionId: number) => {
     if (!isEdit) {
-      setQuestions((prev) =>
-        prev.filter((q) => q.examQuestionId !== examQuestionId),
-      );
+      setQuestions((prev) => prev.filter((q) => q.examQuestionId !== examQuestionId));
       setIsDirty(true);
       setRemoveConfirmTarget(null);
     } else {
@@ -1202,9 +1097,7 @@ export function ExamFormPage({
             weight: 1,
           })),
         });
-        setExpandedGroupIds(
-          (curr) => new Set([...curr, createdGroup.examGroupId]),
-        );
+        setExpandedGroupIds((curr) => new Set([...curr, createdGroup.examGroupId]));
         toast.success("Reading passage group attached to exam.");
         loadExamDetail(Number(id));
       }
@@ -1215,9 +1108,7 @@ export function ExamFormPage({
       if (errorObj?.response?.status === 409) {
         toast.error("This question group is already attached to this exam.");
       } else {
-        toast.error(
-          getApiErrorMessage(err, "Failed to attach question group."),
-        );
+        toast.error(getApiErrorMessage(err, "Failed to attach question group."));
       }
     } finally {
       setLoading(false);
@@ -1226,12 +1117,9 @@ export function ExamFormPage({
 
   const handleRemoveGroup = async (examGroupId: number) => {
     if (!isEdit) {
-      const groupId = groups.find(
-        (g) => g.examGroupId === examGroupId,
-      )?.groupId;
+      const groupId = groups.find((g) => g.examGroupId === examGroupId)?.groupId;
       setGroups((prev) => prev.filter((g) => g.examGroupId !== examGroupId));
-      if (groupId)
-        setQuestions((prev) => prev.filter((q) => q.groupId !== groupId));
+      if (groupId) setQuestions((prev) => prev.filter((q) => q.groupId !== groupId));
       setIsDirty(true);
       setRemoveConfirmTarget(null);
     } else {
@@ -1278,11 +1166,7 @@ export function ExamFormPage({
           </h2>
           <Badge
             variant={
-              status === "PUBLISHED"
-                ? "success"
-                : status === "ARCHIVED"
-                  ? "default"
-                  : "warning"
+              status === "PUBLISHED" ? "success" : status === "ARCHIVED" ? "default" : "warning"
             }
           >
             {status}
@@ -1299,9 +1183,7 @@ export function ExamFormPage({
                   icon={<Icon.CheckCircle className="w-4 h-4" />}
                   onClick={() => handlePublishStatusChange("PUBLISHED")}
                   disabled={
-                    saving ||
-                    loading ||
-                    (generationType === "STATIC" && totalQuestionCount === 0)
+                    saving || loading || (generationType === "STATIC" && totalQuestionCount === 0)
                   }
                 >
                   Publish Exam
@@ -1327,9 +1209,8 @@ export function ExamFormPage({
         <div className="p-4 bg-info-light/40 border border-brand-line/60 rounded-[12px] flex items-center gap-2.5">
           <Icon.Info className="w-5 h-5 text-brand-ink flex-shrink-0" />
           <span className="text-sm font-medium text-foreground">
-            This exam is published. Exam settings and published question
-            contents are locked, but you can add or remove questions from the
-            bank.
+            This exam is published. Exam settings and published question contents are locked, but
+            you can add or remove questions from the bank.
           </span>
         </div>
       )}
@@ -1421,9 +1302,7 @@ export function ExamFormPage({
                       emptyText="No courses found"
                     />
                     {fieldErrors.courseId && (
-                      <p className="text-xs text-danger mt-1">
-                        {fieldErrors.courseId}
-                      </p>
+                      <p className="text-xs text-danger mt-1">{fieldErrors.courseId}</p>
                     )}
                   </div>
 
@@ -1435,8 +1314,7 @@ export function ExamFormPage({
                       onChange={(v) => {
                         setModuleId(v);
                         setIsDirty(true);
-                        if (fieldErrors.moduleId)
-                          setFieldErrors((p) => ({ ...p, moduleId: "" }));
+                        if (fieldErrors.moduleId) setFieldErrors((p) => ({ ...p, moduleId: "" }));
                       }}
                       options={[
                         { label: "Select Module", value: "" },
@@ -1445,23 +1323,18 @@ export function ExamFormPage({
                           value: String(m.moduleId),
                         })),
                       ]}
-                      placeholder={
-                        !courseId ? "Select a course first" : "Select module"
-                      }
+                      placeholder={!courseId ? "Select a course first" : "Select module"}
                       searchPlaceholder="Search modules…"
                       emptyText="No modules found"
                     />
                     {fieldErrors.moduleId && (
-                      <p className="text-xs text-danger mt-1">
-                        {fieldErrors.moduleId}
-                      </p>
+                      <p className="text-xs text-danger mt-1">{fieldErrors.moduleId}</p>
                     )}
                   </div>
                 </div>
                 {hasAddedQuestions && !isReadOnly && (
                   <p className="text-xs text-content-subtle -mt-2">
-                    Remove all added questions before changing the course or
-                    module.
+                    Remove all added questions before changing the course or module.
                   </p>
                 )}
 
@@ -1475,14 +1348,11 @@ export function ExamFormPage({
                     onChange={(e) => {
                       setTitle(e.target.value);
                       setIsDirty(true);
-                      if (fieldErrors.title)
-                        setFieldErrors((p) => ({ ...p, title: "" }));
+                      if (fieldErrors.title) setFieldErrors((p) => ({ ...p, title: "" }));
                     }}
                   />
                   {fieldErrors.title && (
-                    <p className="text-xs text-danger mt-1">
-                      {fieldErrors.title}
-                    </p>
+                    <p className="text-xs text-danger mt-1">{fieldErrors.title}</p>
                   )}
                 </div>
 
@@ -1521,9 +1391,7 @@ export function ExamFormPage({
                       }}
                     />
                     {fieldErrors.durationMinutes && (
-                      <p className="text-2xs text-danger mt-0.5">
-                        {fieldErrors.durationMinutes}
-                      </p>
+                      <p className="text-2xs text-danger mt-0.5">{fieldErrors.durationMinutes}</p>
                     )}
                   </div>
 
@@ -1545,9 +1413,7 @@ export function ExamFormPage({
                       }}
                     />
                     {fieldErrors.maxScore && (
-                      <p className="text-2xs text-danger mt-0.5">
-                        {fieldErrors.maxScore}
-                      </p>
+                      <p className="text-2xs text-danger mt-0.5">{fieldErrors.maxScore}</p>
                     )}
                   </div>
 
@@ -1588,9 +1454,7 @@ export function ExamFormPage({
                       : "Random order: items shuffle per attempt, while questions inside each reading passage group stay contiguous and in order."}
                   </p>
                   {fieldErrors.questions && (
-                    <p className="mt-1 text-xs text-danger">
-                      {fieldErrors.questions}
-                    </p>
+                    <p className="mt-1 text-xs text-danger">{fieldErrors.questions}</p>
                   )}
                 </div>
 
@@ -1684,8 +1548,7 @@ export function ExamFormPage({
               ) : (
                 <div className="space-y-3">
                   {unifiedItems.map((entry, idx) => {
-                    const canReorderTop =
-                      !isReadOnly && questionOrder === "MANUAL" && !orderSaving;
+                    const canReorderTop = !isReadOnly && questionOrder === "MANUAL" && !orderSaving;
 
                     if (entry.kind === "question") {
                       const q = entry.question;
@@ -1704,10 +1567,7 @@ export function ExamFormPage({
                                   <QuestionContent text={q.content} />
                                 </p>
                                 <div className="flex flex-wrap items-center gap-2 mt-2">
-                                  <Badge
-                                    variant="default"
-                                    className="text-2xs font-semibold"
-                                  >
+                                  <Badge variant="default" className="text-2xs font-semibold">
                                     {q.questionType.replace("_", " ")}
                                   </Badge>
                                   <label className="inline-flex items-center gap-1.5 text-xs text-content-secondary font-medium">
@@ -1721,12 +1581,10 @@ export function ExamFormPage({
                                       className="w-20 px-2 py-1 rounded border border-line bg-surface text-content disabled:opacity-60"
                                       value={q.weight ?? q.points ?? 1}
                                       onChange={(e) => {
-                                        const weight =
-                                          Number(e.target.value) || 0;
+                                        const weight = Number(e.target.value) || 0;
                                         setQuestions((prev) =>
                                           prev.map((item) =>
-                                            item.examQuestionId ===
-                                            q.examQuestionId
+                                            item.examQuestionId === q.examQuestionId
                                               ? {
                                                   ...item,
                                                   weight,
@@ -1746,36 +1604,29 @@ export function ExamFormPage({
                                     />
                                   </label>
                                   <span className="text-xs text-brand-ink font-semibold">
-                                    Score:{" "}
-                                    {formatScore(
-                                      scoreForWeight(q.weight ?? q.points ?? 1),
-                                    )}{" "}
+                                    Score: {formatScore(scoreForWeight(q.weight ?? q.points ?? 1))}{" "}
                                     pts
                                   </span>
 
-                                  {!isReadOnly &&
-                                    isAssessment &&
-                                    isEssayQuestion(q) && (
-                                      <button
-                                        type="button"
-                                        onClick={() =>
-                                          setRubricModalQuestion({
-                                            id: q.questionId,
-                                            content: q.content,
-                                          })
-                                        }
-                                        className="text-xs font-semibold text-brand-ink hover:underline cursor-pointer"
-                                      >
-                                        Edit Rubric
-                                      </button>
-                                    )}
+                                  {!isReadOnly && isAssessment && isEssayQuestion(q) && (
+                                    <button
+                                      type="button"
+                                      onClick={() =>
+                                        setRubricModalQuestion({
+                                          id: q.questionId,
+                                          content: q.content,
+                                        })
+                                      }
+                                      className="text-xs font-semibold text-brand-ink hover:underline cursor-pointer"
+                                    >
+                                      Edit Rubric
+                                    </button>
+                                  )}
                                 </div>
                               </div>
                             </div>
 
-                            {(canReorderTop ||
-                              !isReadOnly ||
-                              canManageExamQuestions) && (
+                            {(canReorderTop || !isReadOnly || canManageExamQuestions) && (
                               <div className="flex items-center gap-1">
                                 {canReorderTop && (
                                   <>
@@ -1815,9 +1666,7 @@ export function ExamFormPage({
                                 {canManageExamQuestions && (
                                   <button
                                     type="button"
-                                    disabled={
-                                      isPublished && totalQuestionCount <= 1
-                                    }
+                                    disabled={isPublished && totalQuestionCount <= 1}
                                     onClick={() =>
                                       setRemoveConfirmTarget({
                                         type: "question",
@@ -1839,12 +1688,8 @@ export function ExamFormPage({
                               </div>
                             )}
                           </div>
-                          {(q.questionType === "DIAGRAM" ||
-                            q.questionType === "DIAGRAM_ESSAY") && (
-                            <ExamDiagramAnswer
-                              questionId={q.questionId}
-                              readOnly={isReadOnly}
-                            />
+                          {(q.questionType === "DIAGRAM" || q.questionType === "DIAGRAM_ESSAY") && (
+                            <ExamDiagramAnswer questionId={q.questionId} readOnly={isReadOnly} />
                           )}
                         </div>
                       );
@@ -1894,15 +1739,11 @@ export function ExamFormPage({
                           <QuestionFormBlock
                             q={item.draft}
                             index={idx}
-                            onChange={(draft) =>
-                              updateImportedDraft(item.draft.key, draft)
-                            }
+                            onChange={(draft) => updateImportedDraft(item.draft.key, draft)}
                             showErrors={importedQuestionsSubmitted}
                             removable
                             onRemove={() => removeImportedDraft(item.draft.key)}
-                            allowedTypes={
-                              allowedQuestionTypes as EditableQuestionType[]
-                            }
+                            allowedTypes={allowedQuestionTypes as EditableQuestionType[]}
                           />
                           <div className="flex flex-wrap items-center gap-3 border-t border-line-soft pt-2">
                             <label className="inline-flex items-center gap-2 text-xs font-medium text-content-secondary">
@@ -1928,16 +1769,13 @@ export function ExamFormPage({
                               />
                             </label>
                             <span className="text-xs font-semibold text-brand-ink">
-                              Score: {formatScore(scoreForWeight(item.weight))}{" "}
-                              pts
+                              Score: {formatScore(scoreForWeight(item.weight))} pts
                             </span>
                           </div>
                           {importedQuestionsSubmitted &&
-                            Object.keys(validateDraft(item.draft)).length >
-                              0 && (
+                            Object.keys(validateDraft(item.draft)).length > 0 && (
                               <p className="text-xs text-danger">
-                                Fix the question validation errors above before
-                                creating the exam.
+                                Fix the question validation errors above before creating the exam.
                               </p>
                             )}
                         </div>
@@ -1960,8 +1798,7 @@ export function ExamFormPage({
                             onClick={() =>
                               setExpandedGroupIds((current) => {
                                 const next = new Set(current);
-                                if (next.has(g.examGroupId))
-                                  next.delete(g.examGroupId);
+                                if (next.has(g.examGroupId)) next.delete(g.examGroupId);
                                 else next.add(g.examGroupId);
                                 return next;
                               })
@@ -1981,8 +1818,7 @@ export function ExamFormPage({
                               {g.title}
                             </span>
                             <span className="flex-shrink-0 text-xs text-content-secondary font-medium">
-                              {groupQuestions.length || g.questionCount || 0}{" "}
-                              questions
+                              {groupQuestions.length || g.questionCount || 0} questions
                             </span>
                           </button>
 
@@ -2017,9 +1853,7 @@ export function ExamFormPage({
                                 disabled={
                                   isPublished &&
                                   totalQuestionCount -
-                                    (groupQuestions.length ||
-                                      g.questionCount ||
-                                      0) <
+                                    (groupQuestions.length || g.questionCount || 0) <
                                     1
                                 }
                                 onClick={() =>
@@ -2033,9 +1867,7 @@ export function ExamFormPage({
                                 title={
                                   isPublished &&
                                   totalQuestionCount -
-                                    (groupQuestions.length ||
-                                      g.questionCount ||
-                                      0) <
+                                    (groupQuestions.length || g.questionCount || 0) <
                                     1
                                     ? "Published exam must keep at least one question"
                                     : "Remove group"
@@ -2094,12 +1926,10 @@ export function ExamFormPage({
                                               className="w-20 rounded border border-line bg-surface px-2 py-1 text-content disabled:opacity-60"
                                               value={q.weight ?? q.points ?? 1}
                                               onChange={(e) => {
-                                                const weight =
-                                                  Number(e.target.value) || 0;
+                                                const weight = Number(e.target.value) || 0;
                                                 setQuestions((prev) =>
                                                   prev.map((item) =>
-                                                    item.examQuestionId ===
-                                                    q.examQuestionId
+                                                    item.examQuestionId === q.examQuestionId
                                                       ? {
                                                           ...item,
                                                           weight,
@@ -2113,53 +1943,39 @@ export function ExamFormPage({
                                               onBlur={(e) =>
                                                 handleQuestionWeightBlur(
                                                   q,
-                                                  Number(
-                                                    e.currentTarget.value,
-                                                  ) || 0,
+                                                  Number(e.currentTarget.value) || 0,
                                                 )
                                               }
                                             />
                                           </label>
                                           <span className="text-xs font-semibold text-brand-ink">
                                             Score:{" "}
-                                            {formatScore(
-                                              scoreForWeight(
-                                                q.weight ?? q.points ?? 1,
-                                              ),
-                                            )}{" "}
+                                            {formatScore(scoreForWeight(q.weight ?? q.points ?? 1))}{" "}
                                             pts
                                           </span>
-                                          {!isReadOnly &&
-                                            isAssessment &&
-                                            isEssayQuestion(q) && (
-                                              <button
-                                                type="button"
-                                                onClick={() =>
-                                                  setRubricModalQuestion({
-                                                    id: q.questionId,
-                                                    content: q.content,
-                                                  })
-                                                }
-                                                className="text-xs font-semibold text-brand-ink hover:underline cursor-pointer"
-                                              >
-                                                Edit Rubric
-                                              </button>
-                                            )}
+                                          {!isReadOnly && isAssessment && isEssayQuestion(q) && (
+                                            <button
+                                              type="button"
+                                              onClick={() =>
+                                                setRubricModalQuestion({
+                                                  id: q.questionId,
+                                                  content: q.content,
+                                                })
+                                              }
+                                              className="text-xs font-semibold text-brand-ink hover:underline cursor-pointer"
+                                            >
+                                              Edit Rubric
+                                            </button>
+                                          )}
                                         </div>
                                       </div>
                                       {!isReadOnly && (
                                         <div className="flex items-center gap-1">
                                           <button
                                             type="button"
-                                            disabled={
-                                              orderSaving || questionIndex === 0
-                                            }
+                                            disabled={orderSaving || questionIndex === 0}
                                             onClick={() =>
-                                              moveGroupQuestion(
-                                                g.groupId,
-                                                questionIndex,
-                                                -1,
-                                              )
+                                              moveGroupQuestion(g.groupId, questionIndex, -1)
                                             }
                                             className="rounded p-1 text-content-subtle hover:bg-surface-hover hover:text-content cursor-pointer disabled:opacity-30 disabled:cursor-not-allowed"
                                             title="Move question up within group"
@@ -2171,15 +1987,10 @@ export function ExamFormPage({
                                             type="button"
                                             disabled={
                                               orderSaving ||
-                                              questionIndex ===
-                                                groupQuestions.length - 1
+                                              questionIndex === groupQuestions.length - 1
                                             }
                                             onClick={() =>
-                                              moveGroupQuestion(
-                                                g.groupId,
-                                                questionIndex,
-                                                1,
-                                              )
+                                              moveGroupQuestion(g.groupId, questionIndex, 1)
                                             }
                                             className="rounded p-1 text-content-subtle hover:bg-surface-hover hover:text-content cursor-pointer disabled:opacity-30 disabled:cursor-not-allowed"
                                             title="Move question down within group"
@@ -2189,9 +2000,7 @@ export function ExamFormPage({
                                           </button>
                                           <button
                                             type="button"
-                                            onClick={() =>
-                                              setQuestionEditTarget(q)
-                                            }
+                                            onClick={() => setQuestionEditTarget(q)}
                                             className="rounded p-1 text-content-subtle hover:bg-surface-hover hover:text-brand-ink cursor-pointer"
                                             title="Edit Question"
                                             aria-label={`Edit question ${questionIndex + 1} in ${g.title}`}
@@ -2260,27 +2069,19 @@ export function ExamFormPage({
               </div>
               <div className="flex items-center justify-between">
                 <span className="text-content-subtle">Duration:</span>
-                <span className="font-semibold text-content">
-                  {durationMinutes} min
-                </span>
+                <span className="font-semibold text-content">{durationMinutes} min</span>
               </div>
               <div className="flex items-center justify-between">
                 <span className="text-content-subtle">Total Questions:</span>
-                <span className="font-bold text-content">
-                  {totalQuestionCount}
-                </span>
+                <span className="font-bold text-content">{totalQuestionCount}</span>
               </div>
               <div className="flex items-center justify-between">
                 <span className="text-content-subtle">Total Weight:</span>
-                <span className="font-semibold text-content">
-                  {formatScore(totalWeight)}
-                </span>
+                <span className="font-semibold text-content">{formatScore(totalWeight)}</span>
               </div>
               <div className="flex items-center justify-between">
                 <span className="text-content-subtle">Max Score:</span>
-                <span className="font-bold text-brand-ink">
-                  {formatScore(maxScore)} pts
-                </span>
+                <span className="font-bold text-brand-ink">{formatScore(maxScore)} pts</span>
               </div>
             </div>
 
@@ -2317,10 +2118,7 @@ export function ExamFormPage({
         existingQuestionIds={existingQuestionIds}
         courseId={Number(courseId)}
         initialModuleId={moduleId ? Number(moduleId) : undefined}
-        courseName={
-          courses.find((course) => String(course.courseId) === courseId)
-            ?.title ?? ""
-        }
+        courseName={courses.find((course) => String(course.courseId) === courseId)?.title ?? ""}
         modules={modules.map((module) => ({
           moduleId: module.moduleId,
           title: module.title,
@@ -2346,9 +2144,7 @@ export function ExamFormPage({
         size="2xl"
         error={
           questionEditError &&
-          questionEditDraft && (
-            <Alert type="error" message={questionEditError} />
-          )
+          questionEditDraft && <Alert type="error" message={questionEditError} />
         }
         footer={
           <div className="flex w-full flex-wrap items-center justify-end gap-2">
@@ -2370,9 +2166,7 @@ export function ExamFormPage({
         }
       >
         {questionEditLoading ? (
-          <p className="py-8 text-center text-sm text-content-subtle">
-            Loading question…
-          </p>
+          <p className="py-8 text-center text-sm text-content-subtle">Loading question…</p>
         ) : questionEditError && !questionEditDraft ? (
           <div role="alert" className="py-5 text-sm text-danger">
             {questionEditError}
@@ -2387,8 +2181,7 @@ export function ExamFormPage({
               allowedTypes={allowedQuestionTypes as EditableQuestionType[]}
             />
             <p className="text-xs text-content-subtle">
-              Saving updates this question in the Question Bank as well as in
-              this exam.
+              Saving updates this question in the Question Bank as well as in this exam.
             </p>
           </div>
         ) : null}
@@ -2399,18 +2192,14 @@ export function ExamFormPage({
         questionId={rubricModalQuestion?.id || null}
         questionContent={rubricModalQuestion?.content}
         questionPoints={scoreForWeight(
-          questions.find((q) => q.questionId === rubricModalQuestion?.id)
-            ?.weight ??
-            questions.find((q) => q.questionId === rubricModalQuestion?.id)
-              ?.points ??
+          questions.find((q) => q.questionId === rubricModalQuestion?.id)?.weight ??
+            questions.find((q) => q.questionId === rubricModalQuestion?.id)?.points ??
             1,
         )}
         onClose={() => setRubricModalQuestion(null)}
         onSaved={(qid) => {
           setQuestions((prev) =>
-            prev.map((q) =>
-              q.questionId === qid ? { ...q, hasRubric: true } : q,
-            ),
+            prev.map((q) => (q.questionId === qid ? { ...q, hasRubric: true } : q)),
           );
         }}
       />
@@ -2449,11 +2238,8 @@ export function ExamFormPage({
         title="Remove from this exam?"
         description={
           <>
-            <strong className="text-content">
-              "{removeConfirmTarget?.title}"
-            </strong>{" "}
-            is only unlinked from this exam. The original item in the Question
-            Bank is preserved.
+            <strong className="text-content">"{removeConfirmTarget?.title}"</strong> is only
+            unlinked from this exam. The original item in the Question Bank is preserved.
           </>
         }
         confirmLabel="Remove"
@@ -2466,10 +2252,7 @@ export function ExamFormPage({
         size="lg"
         footer={
           <div className="flex w-full flex-wrap items-center justify-end gap-2">
-            <Button
-              variant="outline"
-              onClick={() => setArchiveCloneModalOpen(false)}
-            >
+            <Button variant="outline" onClick={() => setArchiveCloneModalOpen(false)}>
               Cancel
             </Button>
             {saveDescriptionOnly ? (
@@ -2478,10 +2261,7 @@ export function ExamFormPage({
               </Button>
             ) : (
               <>
-                <Button
-                  variant="secondary"
-                  onClick={() => setSaveDescriptionOnly(true)}
-                >
+                <Button variant="secondary" onClick={() => setSaveDescriptionOnly(true)}>
                   Edit Description Only
                 </Button>
                 <Button
@@ -2498,13 +2278,13 @@ export function ExamFormPage({
       >
         <div className="space-y-3 text-sm text-content">
           <p className="text-danger font-medium">
-            This exam already has student submission attempts. Structure,
-            duration, and question matrix cannot be directly modified.
+            This exam already has student submission attempts. Structure, duration, and question
+            matrix cannot be directly modified.
           </p>
           <p className="text-xs text-content-subtle leading-relaxed">
             You can either update only the description, or execute{" "}
-            <strong>Archive and Clone</strong> to archive the current exam
-            (preserving score records) and generate a new editable draft copy.
+            <strong>Archive and Clone</strong> to archive the current exam (preserving score
+            records) and generate a new editable draft copy.
           </p>
         </div>
       </Modal>
@@ -2523,13 +2303,7 @@ export function ExamFormPage({
   );
 }
 
-function ExamDiagramAnswer({
-  questionId,
-  readOnly,
-}: {
-  questionId: number;
-  readOnly: boolean;
-}) {
+function ExamDiagramAnswer({ questionId, readOnly }: { questionId: number; readOnly: boolean }) {
   const [question, setQuestion] = useState<QuestionDetail | null>(null);
   const [draft, setDraft] = useState<QuestionDraft | null>(null);
   const [loading, setLoading] = useState(true);
@@ -2549,9 +2323,7 @@ function ExamDiagramAnswer({
       })
       .catch((err) => {
         if (active) {
-          setError(
-            getApiErrorMessage(err, "Could not load the model answer diagram."),
-          );
+          setError(getApiErrorMessage(err, "Could not load the model answer diagram."));
         }
       })
       .finally(() => {
@@ -2579,10 +2351,7 @@ function ExamDiagramAnswer({
       setDraft(fromDetail(updated));
     } catch (err) {
       setError(
-        getApiErrorMessage(
-          err,
-          "Could not save the model answer diagram. Please try again.",
-        ),
+        getApiErrorMessage(err, "Could not save the model answer diagram. Please try again."),
       );
     } finally {
       setSaving(false);
@@ -2590,11 +2359,7 @@ function ExamDiagramAnswer({
   };
 
   if (loading)
-    return (
-      <div className="mt-3 text-xs text-content-subtle">
-        Loading model answer diagram…
-      </div>
-    );
+    return <div className="mt-3 text-xs text-content-subtle">Loading model answer diagram…</div>;
   if (!draft)
     return (
       <div className="mt-3 text-xs text-danger">
@@ -2604,16 +2369,8 @@ function ExamDiagramAnswer({
 
   return (
     <div className="mt-4 border-t border-line-soft pt-4">
-      <DiagramAnswer
-        q={draft}
-        set={saveDiagram}
-        readOnly={readOnly || saving}
-      />
-      {saving && (
-        <p className="mt-2 text-xs text-content-subtle">
-          Saving model answer diagram…
-        </p>
-      )}
+      <DiagramAnswer q={draft} set={saveDiagram} readOnly={readOnly || saving} />
+      {saving && <p className="mt-2 text-xs text-content-subtle">Saving model answer diagram…</p>}
       {error && <p className="mt-2 text-xs text-danger">{error}</p>}
     </div>
   );

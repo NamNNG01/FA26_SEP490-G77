@@ -58,9 +58,7 @@ export function LoginPage() {
       });
     } catch (err: unknown) {
       const message =
-        err instanceof Error
-          ? err.message
-          : "Authentication failed. Please try again.";
+        err instanceof Error ? err.message : "Authentication failed. Please try again.";
       setError(message);
     } finally {
       setLoading(false);
@@ -71,21 +69,12 @@ export function LoginPage() {
     <>
       <div className="flex flex-col">
         <div className="mb-4">
-          <AuthPageHeader
-            title="Welcome back"
-            subtitle="Sign in to continue your exam prep"
-          />
+          <AuthPageHeader title="Welcome back" subtitle="Sign in to continue your exam prep" />
         </div>
 
         <div className="card p-6 [@media(max-height:850px)]:p-5 shadow-lg">
           <div className="mb-4">
-            {error && (
-              <Alert
-                type="error"
-                title="Authentication failed"
-                message={error}
-              />
-            )}
+            {error && <Alert type="error" title="Authentication failed" message={error} />}
             {!error && locationState?.passwordReset && (
               <Alert
                 type="success"
@@ -147,11 +136,7 @@ export function LoginPage() {
                   onClick={() => setShowPwd((s) => !s)}
                   className="hover:text-content-secondary transition-colors"
                 >
-                  {showPwd ? (
-                    <Icon.EyeOff className="w-4 h-4" />
-                  ) : (
-                    <Icon.Eye className="w-4 h-4" />
-                  )}
+                  {showPwd ? <Icon.EyeOff className="w-4 h-4" /> : <Icon.Eye className="w-4 h-4" />}
                 </button>
               }
             />

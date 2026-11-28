@@ -1,6 +1,6 @@
-import { api } from './api';
-import type { ApiResponse } from '@/types/api';
-import type { PageResponse } from './course.service';
+import { api } from "./api";
+import type { ApiResponse } from "@/types/api";
+import type { PageResponse } from "./course.service";
 
 /**
  * StudentCodeExamService — CODE questions: run in the BE sandbox, grade against test cases.
@@ -50,7 +50,7 @@ export interface CodeExamQuestions {
 
 /** CD-04 — a compile error comes back as FAILED with `stderr`. */
 export interface CodeRunResult {
-  status: 'COMPLETED' | 'FAILED' | string;
+  status: "COMPLETED" | "FAILED" | string;
   stdout: string | null;
   stderr: string | null;
   executionTimeMs: number | null;
@@ -65,7 +65,7 @@ export interface CodeSubmitAnswer {
 /** CD-05 — PASSED only when every test case passes. */
 export interface CodeSubmitResult {
   questionId: number;
-  status: 'PASSED' | 'FAILED' | string;
+  status: "PASSED" | "FAILED" | string;
   testCasesPassed: number;
   testCasesTotal: number;
   failedTestCase?: number | null;
@@ -93,7 +93,7 @@ export interface CodeSubmission {
   /** Attempt the submission was graded in; absent until the BE returns it (then the attempt's time window is used). */
   attemptId?: number | null;
   language: CodeLanguage;
-  status: 'PASSED' | 'FAILED' | string;
+  status: "PASSED" | "FAILED" | string;
   testCasesPassed: number;
   testCasesTotal: number;
   /** Per-fixture verdicts in judging order; empty for submissions judged before this field existed. */
@@ -104,21 +104,28 @@ export interface CodeSubmission {
 export const studentCodeExamService = {
   /** CD-03 */
   async getQuestions(examId: number | string): Promise<CodeExamQuestions> {
-    const res = await api.get<ApiResponse<CodeExamQuestions>>(`/student/code-exams/${examId}/questions`);
+    const res = await api.get<ApiResponse<CodeExamQuestions>>(
+      `/student/code-exams/${examId}/questions`,
+    );
     return res.data;
   },
 
   /** CD-04 */
-  async run(body: { questionId: number; language: CodeLanguage; sourceCode: string; stdin?: string }): Promise<CodeRunResult> {
-    const res = await api.post<ApiResponse<CodeRunResult>>('/student/code-exams/run', body);
+  async run(body: {
+    questionId: number;
+    language: CodeLanguage;
+    sourceCode: string;
+    stdin?: string;
+  }): Promise<CodeRunResult> {
+    const res = await api.post<ApiResponse<CodeRunResult>>("/student/code-exams/run", body);
     return res.data;
   },
 
   /** CD-05. The BE runs every test case in the sandbox, which can take well past the default 15 s timeout. */
   async submit(examId: number, answers: CodeSubmitAnswer[]): Promise<CodeSubmitResult[]> {
     const res = await api.request<ApiResponse<{ results: CodeSubmitResult[] }>>({
-      method: 'post',
-      url: '/student/code-exams/submit',
+      method: "post",
+      url: "/student/code-exams/submit",
       data: { examId, answers },
       timeout: CODE_SUBMIT_TIMEOUT_MS,
     });
@@ -127,7 +134,7 @@ export const studentCodeExamService = {
 
   /** CD-06 */
   async getLanguages(): Promise<CodeLanguageInfo[]> {
-    const res = await api.get<ApiResponse<CodeLanguageInfo[]>>('/student/code-exams/languages');
+    const res = await api.get<ApiResponse<CodeLanguageInfo[]>>("/student/code-exams/languages");
     return res.data ?? [];
   },
 
@@ -138,7 +145,8 @@ export const studentCodeExamService = {
     size = 10,
     attemptId?: number | string,
   ): Promise<PageResponse<CodeSubmission>> {
-    const attemptParam = attemptId != null ? `&attemptId=${encodeURIComponent(String(attemptId))}` : '';
+    const attemptParam =
+      attemptId != null ? `&attemptId=${encodeURIComponent(String(attemptId))}` : "";
     const res = await api.get<ApiResponse<PageResponse<CodeSubmission>>>(
       `/student/code-exams/${examId}/submissions?page=${page}&size=${size}${attemptParam}`,
     );
@@ -146,7 +154,10 @@ export const studentCodeExamService = {
   },
 
   /** CD-07, every page. */
-  async getAllSubmissions(examId: number | string, attemptId?: number | string): Promise<CodeSubmission[]> {
+  async getAllSubmissions(
+    examId: number | string,
+    attemptId?: number | string,
+  ): Promise<CodeSubmission[]> {
     const items: CodeSubmission[] = [];
     for (let page = 0; ; page++) {
       const res = await studentCodeExamService.getSubmissions(examId, page, 100, attemptId);

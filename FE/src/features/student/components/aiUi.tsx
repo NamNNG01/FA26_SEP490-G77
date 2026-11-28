@@ -1,20 +1,30 @@
-import { Badge } from '@/components/ui/Badge';
-import { Alert } from '@/components/ui/Alert';
-import { Icon } from '@/assets/icons';
-import type { AiError, AiQuotaLeft, AiTrend } from '@/services/studentAi.service';
+import { Badge } from "@/components/ui/Badge";
+import { Alert } from "@/components/ui/Alert";
+import { Icon } from "@/assets/icons";
+import type { AiError, AiQuotaLeft, AiTrend } from "@/services/studentAi.service";
 
 /** Shared bits of the AI personalization screens (AI-01..04). */
 
 const TREND: Record<AiTrend, { label: string; className: string; arrow: string }> = {
-  IMPROVING: { label: 'Improving', className: 'text-success', arrow: '↑' },
-  STABLE: { label: 'Stable', className: 'text-content-subtle', arrow: '→' },
-  DECLINING: { label: 'Declining', className: 'text-danger', arrow: '↓' },
+  IMPROVING: { label: "Improving", className: "text-success", arrow: "↑" },
+  STABLE: { label: "Stable", className: "text-content-subtle", arrow: "→" },
+  DECLINING: { label: "Declining", className: "text-danger", arrow: "↓" },
 };
 
-export function TrendIcon({ trend, withLabel = false }: { trend: AiTrend | null | undefined; withLabel?: boolean }) {
-  const t = TREND[trend ?? 'STABLE'] ?? TREND.STABLE;
+export function TrendIcon({
+  trend,
+  withLabel = false,
+}: {
+  trend: AiTrend | null | undefined;
+  withLabel?: boolean;
+}) {
+  const t = TREND[trend ?? "STABLE"] ?? TREND.STABLE;
   return (
-    <span className={`inline-flex items-center gap-1 text-xs font-semibold ${t.className}`} title={t.label} aria-label={t.label}>
+    <span
+      className={`inline-flex items-center gap-1 text-xs font-semibold ${t.className}`}
+      title={t.label}
+      aria-label={t.label}
+    >
       <span aria-hidden>{t.arrow}</span>
       {withLabel && <span className="font-medium">{t.label}</span>}
     </span>
@@ -23,9 +33,9 @@ export function TrendIcon({ trend, withLabel = false }: { trend: AiTrend | null 
 
 /** Accuracy colour: red below 50 %, amber below 75 %, green above. */
 export function accuracyTone(accuracy: number): { bar: string; text: string } {
-  if (accuracy < 50) return { bar: 'bg-danger-solid', text: 'text-danger' };
-  if (accuracy < 75) return { bar: 'bg-warning', text: 'text-warning' };
-  return { bar: 'bg-success', text: 'text-success' };
+  if (accuracy < 50) return { bar: "bg-danger-solid", text: "text-danger" };
+  if (accuracy < 75) return { bar: "bg-warning", text: "text-warning" };
+  return { bar: "bg-success", text: "text-success" };
 }
 
 export function AccuracyBar({ accuracy, label }: { accuracy: number; label?: string }) {
@@ -46,7 +56,7 @@ export function AccuracyBar({ accuracy, label }: { accuracy: number; label?: str
 }
 
 export function SourceBadge({ source }: { source: string | null | undefined }) {
-  if (source !== 'CACHED') return null;
+  if (source !== "CACHED") return null;
   return (
     <Badge size="sm" variant="default">
       Cached
@@ -63,19 +73,21 @@ export function QuotaLine({ quota }: { quota: AiQuotaLeft | null | undefined }) 
 
 /** 429 → the token numbers, 422 → "do more exams", anything else → the message. */
 export function AiErrorAlert({ error }: { error: AiError }) {
-  if (error.kind === 'QUOTA_EXCEEDED') {
+  if (error.kind === "QUOTA_EXCEEDED") {
     const detail =
       error.estimatedTokens != null && error.availableTokens != null
         ? ` This needs about ${error.estimatedTokens.toLocaleString()} tokens; you have ${error.availableTokens.toLocaleString()} left.`
-        : '';
-    return <Alert type="warning" title="Not enough AI quota" message={`${error.message}${detail}`} />;
+        : "";
+    return (
+      <Alert type="warning" title="Not enough AI quota" message={`${error.message}${detail}`} />
+    );
   }
-  if (error.kind === 'INSUFFICIENT_DATA') {
+  if (error.kind === "INSUFFICIENT_DATA") {
     return <Alert type="info" title="Not enough data yet" message={error.message} />;
   }
   return <Alert type="error" message={error.message} />;
 }
 
-export function AiSparkle({ className = 'w-4 h-4' }: { className?: string }) {
+export function AiSparkle({ className = "w-4 h-4" }: { className?: string }) {
   return <Icon.Lightbulb className={className} />;
 }

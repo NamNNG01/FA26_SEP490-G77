@@ -1,49 +1,63 @@
-import React, { useCallback, useEffect, useState } from 'react';
-import { useNavigate, useParams } from 'react-router';
-import { isAxiosError } from 'axios';
-import { Badge, type BadgeVariant } from '@/components/ui/Badge';
-import { Avatar } from '@/components/ui/Avatar';
-import { Breadcrumb } from '@/components/ui/Breadcrumb';
-import { Button } from '@/components/ui/Button';
-import { Table, type TableColumn } from '@/components/ui/Table';
-import { Modal } from '@/components/ui/Modal';
-import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
-import { Input } from '@/components/ui/Input';
-import { Select } from '@/components/ui/Select';
-import { Skeleton } from '@/components/ui/Skeleton';
-import { DashboardError } from '@/components/common/DashboardState';
-import { Icon } from '@/assets/icons';
-import { useToast } from '@/components/ui/ToastHost';
-import { getApiErrorMessage } from '@/utils/apiError';
-import { ROUTES } from '@/app/routes';
-import { adminSubscriptionPlanService, type AdminSubscriptionPlan } from '@/services/adminSubscriptionPlan.service';
-import { activeSubscription, formatPlanDate } from '../components/SubscriptionCell';
+import React, { useCallback, useEffect, useState } from "react";
+import { useNavigate, useParams } from "react-router";
+import { isAxiosError } from "axios";
+import { Badge, type BadgeVariant } from "@/components/ui/Badge";
+import { Avatar } from "@/components/ui/Avatar";
+import { Breadcrumb } from "@/components/ui/Breadcrumb";
+import { Button } from "@/components/ui/Button";
+import { Table, type TableColumn } from "@/components/ui/Table";
+import { Modal } from "@/components/ui/Modal";
+import { ConfirmDialog } from "@/components/ui/ConfirmDialog";
+import { Input } from "@/components/ui/Input";
+import { Select } from "@/components/ui/Select";
+import { Skeleton } from "@/components/ui/Skeleton";
+import { DashboardError } from "@/components/common/DashboardState";
+import { Icon } from "@/assets/icons";
+import { useToast } from "@/components/ui/ToastHost";
+import { getApiErrorMessage } from "@/utils/apiError";
+import { ROUTES } from "@/app/routes";
+import {
+  adminSubscriptionPlanService,
+  type AdminSubscriptionPlan,
+} from "@/services/adminSubscriptionPlan.service";
+import { activeSubscription, formatPlanDate } from "../components/SubscriptionCell";
 import {
   adminUserService,
   type AdminUserDetail,
   type AdminUserRole,
   type AdminUserStatus,
-} from '@/services/adminUser.service';
+} from "@/services/adminUser.service";
 
-const ROLE_LABELS: Record<string, string> = { STUDENT: 'Student', COURSE_MANAGER: 'Content Manager', ADMIN: 'Admin' };
+const ROLE_LABELS: Record<string, string> = {
+  STUDENT: "Student",
+  COURSE_MANAGER: "Content Manager",
+  ADMIN: "Admin",
+};
 const roleLabel = (role: string) => ROLE_LABELS[role] ?? role;
-const roleBadgeVariant = (role: string): BadgeVariant => (role === 'ADMIN' ? 'danger' : role === 'COURSE_MANAGER' ? 'purple' : 'info');
-const statusLabel = (status: string) => (status === 'ACTIVE' ? 'Active' : status === 'INACTIVE' ? 'Inactive' : status);
+const roleBadgeVariant = (role: string): BadgeVariant =>
+  role === "ADMIN" ? "danger" : role === "COURSE_MANAGER" ? "purple" : "info";
+const statusLabel = (status: string) =>
+  status === "ACTIVE" ? "Active" : status === "INACTIVE" ? "Inactive" : status;
 
 const ATTEMPT_STATUS_LABELS: Record<string, string> = {
-  IN_PROGRESS: 'In progress',
-  SUBMITTED: 'Submitted',
-  GRADING: 'Grading',
-  COMPLETED: 'Completed',
-  PASSED: 'Passed',
-  FAILED: 'Failed',
+  IN_PROGRESS: "In progress",
+  SUBMITTED: "Submitted",
+  GRADING: "Grading",
+  COMPLETED: "Completed",
+  PASSED: "Passed",
+  FAILED: "Failed",
 };
 const attemptStatusLabel = (status: string) => ATTEMPT_STATUS_LABELS[status] ?? status;
 const attemptStatusVariant = (status: string): BadgeVariant =>
-  status === 'COMPLETED' || status === 'PASSED' ? 'success'
-    : status === 'FAILED' ? 'danger'
-      : status === 'GRADING' ? 'warning'
-        : status === 'SUBMITTED' ? 'info' : 'default';
+  status === "COMPLETED" || status === "PASSED"
+    ? "success"
+    : status === "FAILED"
+      ? "danger"
+      : status === "GRADING"
+        ? "warning"
+        : status === "SUBMITTED"
+          ? "info"
+          : "default";
 
 /** "Nov 16, 2026, 2:05 PM", or null when the value is missing. */
 function formatDateTime(value: string | null): string | null {
@@ -65,20 +79,20 @@ type EditForm = {
   status: AdminUserStatus;
   planId: string;
   endDate: string;
-  quotaMode: 'default' | 'custom';
+  quotaMode: "default" | "custom";
   customMonthlyTokenLimit: string;
 };
 
 /** Local calendar date as YYYY-MM-DD (what <input type="date"> reads and writes). */
 function toDateInput(date: Date): string {
-  const pad = (n: number) => String(n).padStart(2, '0');
+  const pad = (n: number) => String(n).padStart(2, "0");
   return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}`;
 }
 
 /** "Premium · until Dec 17, 2026", or "Free" without an active paid plan. */
 function subscriptionLabel(p: AdminUserDetail): string {
   const active = activeSubscription(p.subscription);
-  if (!active) return 'Free';
+  if (!active) return "Free";
   const until = formatPlanDate(active.endDate);
   return until ? `${active.planName} · until ${until}` : active.planName;
 }
@@ -105,15 +119,21 @@ function UserDetailSkeleton() {
               </div>
             </div>
             <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-x-6 gap-y-4 pt-2">
-              {Array.from({ length: 6 }, (_, i) => <Skeleton key={i} className="h-8 w-full" />)}
+              {Array.from({ length: 6 }, (_, i) => (
+                <Skeleton key={i} className="h-8 w-full" />
+              ))}
             </div>
           </div>
           <div className="grid grid-cols-2 xl:grid-cols-4 gap-3">
-            {Array.from({ length: 4 }, (_, i) => <Skeleton key={i} className="h-20 rounded-[10px]" />)}
+            {Array.from({ length: 4 }, (_, i) => (
+              <Skeleton key={i} className="h-20 rounded-[10px]" />
+            ))}
           </div>
           <div className="card p-6 space-y-3">
             <Skeleton className="h-5 w-52" />
-            {Array.from({ length: 3 }, (_, i) => <Skeleton key={i} className="h-10 w-full" />)}
+            {Array.from({ length: 3 }, (_, i) => (
+              <Skeleton key={i} className="h-10 w-full" />
+            ))}
           </div>
         </div>
         <div className="lg:col-span-1 space-y-4 min-w-0">
@@ -125,7 +145,13 @@ function UserDetailSkeleton() {
   );
 }
 
-export function UserDetailPage({ onNavigate, params: paramsProp }: { onNavigate?: (id: string, params?: Record<string, string>) => void; params?: Record<string, string> }) {
+export function UserDetailPage({
+  onNavigate,
+  params: paramsProp,
+}: {
+  onNavigate?: (id: string, params?: Record<string, string>) => void;
+  params?: Record<string, string>;
+}) {
   // Support both direct props and the :userId route param.
   const routeParams = useParams();
   const params = paramsProp ?? (routeParams as Record<string, string>);
@@ -141,14 +167,14 @@ export function UserDetailPage({ onNavigate, params: paramsProp }: { onNavigate?
   const [error, setError] = useState<string | null>(null);
   const [editOpen, setEditOpen] = useState(false);
   const [form, setForm] = useState<EditForm>({
-    fullName: '',
-    email: '',
-    role: 'STUDENT',
-    status: 'ACTIVE',
-    planId: '',
-    endDate: '',
-    quotaMode: 'default',
-    customMonthlyTokenLimit: '1000000',
+    fullName: "",
+    email: "",
+    role: "STUDENT",
+    status: "ACTIVE",
+    planId: "",
+    endDate: "",
+    quotaMode: "default",
+    customMonthlyTokenLimit: "1000000",
   });
   /** Paid plans for the subscription picker; null while loading. */
   const [plans, setPlans] = useState<AdminSubscriptionPlan[] | null>(null);
@@ -179,7 +205,7 @@ export function UserDetailPage({ onNavigate, params: paramsProp }: { onNavigate?
     } catch (err) {
       setUser(null);
       if (isAxiosError(err) && err.response?.status === 404) setNotFound(true);
-      else setError(getApiErrorMessage(err, 'Could not load this user.'));
+      else setError(getApiErrorMessage(err, "Could not load this user."));
     } finally {
       setLoading(false);
     }
@@ -190,22 +216,28 @@ export function UserDetailPage({ onNavigate, params: paramsProp }: { onNavigate?
   }, [load]);
 
   const backToUsers = () => {
-    if (onNavigate) onNavigate('users');
+    if (onNavigate) onNavigate("users");
     else navigate(ROUTES.adminUsers);
   };
 
   /** The subscription the form started from, to send UM-07 only when it changed. */
   const initialPlan = (p: AdminUserDetail) => {
     const active = activeSubscription(p.subscription);
-    return { planId: active ? String(active.planId) : '', endDate: active?.endDate ? toDateInput(new Date(active.endDate)) : '' };
+    return {
+      planId: active ? String(active.planId) : "",
+      endDate: active?.endDate ? toDateInput(new Date(active.endDate)) : "",
+    };
   };
 
   /** The manager monthly AI quota the form started from, to send UM-08 only when it changed. */
   const initialQuota = (p: AdminUserDetail) => {
     const q = p.managerAiQuota;
     return q?.overrideLimit != null
-      ? { quotaMode: 'custom' as const, customMonthlyTokenLimit: String(q.overrideLimit) }
-      : { quotaMode: 'default' as const, customMonthlyTokenLimit: String(q?.globalDefaultLimit ?? 1000000) };
+      ? { quotaMode: "custom" as const, customMonthlyTokenLimit: String(q.overrideLimit) }
+      : {
+          quotaMode: "default" as const,
+          customMonthlyTokenLimit: String(q?.globalDefaultLimit ?? 1000000),
+        };
   };
 
   const openEdit = () => {
@@ -223,19 +255,31 @@ export function UserDetailPage({ onNavigate, params: paramsProp }: { onNavigate?
     setEditOpen(true);
     setPlansError(null);
     const currentPlanId = activeSubscription(profile.subscription)?.planId;
-    adminSubscriptionPlanService.listAll()
+    adminSubscriptionPlanService
+      .listAll()
       // Paid plans that are on sale; a turned-off plan only when it is the student's current one,
       // so the form still shows what they have.
-      .then(all => setPlans(all
-        .filter(plan => plan.price > 0 && (plan.isActive || plan.planId === currentPlanId))
-        .sort((a, b) => a.sortOrder - b.sortOrder)))
-      .catch(err => { setPlans([]); setPlansError(getApiErrorMessage(err, 'Could not load subscription plans.')); });
+      .then((all) =>
+        setPlans(
+          all
+            .filter((plan) => plan.price > 0 && (plan.isActive || plan.planId === currentPlanId))
+            .sort((a, b) => a.sortOrder - b.sortOrder),
+        ),
+      )
+      .catch((err) => {
+        setPlans([]);
+        setPlansError(getApiErrorMessage(err, "Could not load subscription plans."));
+      });
   };
 
   const choosePlan = (planId: string) => {
-    const plan = plans?.find(p => String(p.planId) === planId);
+    const plan = plans?.find((p) => String(p.planId) === planId);
     // A newly picked paid plan runs for its usual length from today; Free has no end date.
-    setForm(prev => ({ ...prev, planId, endDate: plan ? toDateInput(addDays(plan.durationDays)) : '' }));
+    setForm((prev) => ({
+      ...prev,
+      planId,
+      endDate: plan ? toDateInput(addDays(plan.durationDays)) : "",
+    }));
     setEndDateError(undefined);
   };
 
@@ -245,31 +289,49 @@ export function UserDetailPage({ onNavigate, params: paramsProp }: { onNavigate?
     const fullName = form.fullName.trim();
     const email = form.email.trim();
     if (!fullName || !email) {
-      toast.error('Full name and email are required.');
+      toast.error("Full name and email are required.");
       return;
     }
     const start = initialPlan(profile);
-    const subscriptionChanged = form.role === 'STUDENT' && (form.planId !== start.planId || (form.planId !== '' && form.endDate !== start.endDate));
-    if (subscriptionChanged && form.planId !== '') {
-      if (!form.endDate) { setEndDateError('Choose when the plan ends.'); return; }
-      if (form.endDate < toDateInput(new Date())) { setEndDateError('The end date cannot be in the past.'); return; }
+    const subscriptionChanged =
+      form.role === "STUDENT" &&
+      (form.planId !== start.planId || (form.planId !== "" && form.endDate !== start.endDate));
+    if (subscriptionChanged && form.planId !== "") {
+      if (!form.endDate) {
+        setEndDateError("Choose when the plan ends.");
+        return;
+      }
+      if (form.endDate < toDateInput(new Date())) {
+        setEndDateError("The end date cannot be in the past.");
+        return;
+      }
     }
     const qStart = initialQuota(profile);
     const trimmedLimit = form.customMonthlyTokenLimit.trim();
     const quotaChanged =
-      form.role === 'COURSE_MANAGER' &&
-      (profile.role !== 'COURSE_MANAGER'
-        ? form.quotaMode === 'custom'
-        : form.quotaMode !== qStart.quotaMode || (form.quotaMode === 'custom' && trimmedLimit !== qStart.customMonthlyTokenLimit));
-    if (form.role === 'COURSE_MANAGER' && form.quotaMode === 'custom' && !/^\d+$/.test(trimmedLimit)) {
-      setCustomLimitError('Enter a non-negative whole number of tokens.');
+      form.role === "COURSE_MANAGER" &&
+      (profile.role !== "COURSE_MANAGER"
+        ? form.quotaMode === "custom"
+        : form.quotaMode !== qStart.quotaMode ||
+          (form.quotaMode === "custom" && trimmedLimit !== qStart.customMonthlyTokenLimit));
+    if (
+      form.role === "COURSE_MANAGER" &&
+      form.quotaMode === "custom" &&
+      !/^\d+$/.test(trimmedLimit)
+    ) {
+      setCustomLimitError("Enter a non-negative whole number of tokens.");
       return;
     }
     setSaving(true);
     try {
-      await adminUserService.update(profile.userId, { fullName, email, role: form.role, status: form.status });
+      await adminUserService.update(profile.userId, {
+        fullName,
+        email,
+        role: form.role,
+        status: form.status,
+      });
     } catch (err) {
-      toast.error(getApiErrorMessage(err, 'Could not update this user.'));
+      toast.error(getApiErrorMessage(err, "Could not update this user."));
       setSaving(false);
       return;
     }
@@ -282,13 +344,18 @@ export function UserDetailPage({ onNavigate, params: paramsProp }: { onNavigate?
       }
       if (quotaChanged) {
         await adminUserService.setManagerAiQuota(profile.userId, {
-          monthlyTokenLimit: form.quotaMode === 'custom' ? Number(trimmedLimit) : null,
+          monthlyTokenLimit: form.quotaMode === "custom" ? Number(trimmedLimit) : null,
         });
       }
-      toast.success('User updated.');
+      toast.success("User updated.");
       setEditOpen(false);
     } catch (err) {
-      toast.error(getApiErrorMessage(err, 'The profile was saved, but the quota or subscription could not be updated.'));
+      toast.error(
+        getApiErrorMessage(
+          err,
+          "The profile was saved, but the quota or subscription could not be updated.",
+        ),
+      );
     } finally {
       setSaving(false);
       await load();
@@ -302,7 +369,7 @@ export function UserDetailPage({ onNavigate, params: paramsProp }: { onNavigate?
       await adminUserService.resetPassword(profile.userId);
       toast.success(`Password reset email sent to ${profile.email}.`);
     } catch (err) {
-      toast.error(getApiErrorMessage(err, 'Could not send the password reset email.'));
+      toast.error(getApiErrorMessage(err, "Could not send the password reset email."));
     } finally {
       setResetting(false);
       setResetConfirmOpen(false);
@@ -311,14 +378,14 @@ export function UserDetailPage({ onNavigate, params: paramsProp }: { onNavigate?
 
   const toggleStatus = async () => {
     if (!profile) return;
-    const next: AdminUserStatus = profile.status === 'ACTIVE' ? 'INACTIVE' : 'ACTIVE';
+    const next: AdminUserStatus = profile.status === "ACTIVE" ? "INACTIVE" : "ACTIVE";
     setChangingStatus(true);
     try {
       await adminUserService.setStatus(profile.userId, next);
-      toast.success(next === 'ACTIVE' ? 'User activated.' : 'User deactivated.');
+      toast.success(next === "ACTIVE" ? "User activated." : "User deactivated.");
       await load();
     } catch (err) {
-      toast.error(getApiErrorMessage(err, 'Could not change this user’s status.'));
+      toast.error(getApiErrorMessage(err, "Could not change this user’s status."));
     } finally {
       setChangingStatus(false);
     }
@@ -334,8 +401,14 @@ export function UserDetailPage({ onNavigate, params: paramsProp }: { onNavigate?
             <Icon.User className="w-10 h-10 text-muted-foreground" />
           </div>
           <h3 className="text-lg font-semibold text-content mb-1.5">User not found</h3>
-          <p className="text-sm text-content-soft mb-6">No account matches this link. It may have been removed, or the address may be wrong.</p>
-          <Button variant="outline" icon={<Icon.ChevronLeft className="w-4 h-4" />} onClick={backToUsers}>
+          <p className="text-sm text-content-soft mb-6">
+            No account matches this link. It may have been removed, or the address may be wrong.
+          </p>
+          <Button
+            variant="outline"
+            icon={<Icon.ChevronLeft className="w-4 h-4" />}
+            onClick={backToUsers}
+          >
             Back to User Management
           </Button>
         </div>
@@ -347,10 +420,18 @@ export function UserDetailPage({ onNavigate, params: paramsProp }: { onNavigate?
     return (
       <div className="p-8">
         <div className="card overflow-hidden">
-          <DashboardError bare message={error ?? 'Could not load this user.'} onRetry={() => void load()} />
+          <DashboardError
+            bare
+            message={error ?? "Could not load this user."}
+            onRetry={() => void load()}
+          />
         </div>
         <div className="mt-4 flex justify-center">
-          <Button variant="ghost" icon={<Icon.ChevronLeft className="w-4 h-4" />} onClick={backToUsers}>
+          <Button
+            variant="ghost"
+            icon={<Icon.ChevronLeft className="w-4 h-4" />}
+            onClick={backToUsers}
+          >
             Back to User Management
           </Button>
         </div>
@@ -359,43 +440,83 @@ export function UserDetailPage({ onNavigate, params: paramsProp }: { onNavigate?
   }
 
   // Learning stats and exam attempts only exist for students; AI quota card applies to Content Managers.
-  const isStudent = profile.role === 'STUDENT';
-  const isManager = profile.role === 'COURSE_MANAGER';
+  const isStudent = profile.role === "STUDENT";
+  const isManager = profile.role === "COURSE_MANAGER";
   const managerQuota = profile.managerAiQuota ?? null;
-  const attemptRows = profile.recentAttempts.map(attempt => ({ ...attempt, id: attempt.attemptId }));
+  const attemptRows = profile.recentAttempts.map((attempt) => ({
+    ...attempt,
+    id: attempt.attemptId,
+  }));
   const attemptColumns: TableColumn[] = [
-    { key: 'examTitle', label: 'Exam Name', render: (row: Record<string, unknown>) => (
-      <span className="font-medium text-content text-sm">{row.examTitle as string}</span>
-    )},
+    {
+      key: "examTitle",
+      label: "Exam Name",
+      render: (row: Record<string, unknown>) => (
+        <span className="font-medium text-content text-sm">{row.examTitle as string}</span>
+      ),
+    },
     // The attempt score is raw points (the API carries no maxScore), so it is labelled as such —
     // never as a percentage. The student result screen is student-only, so no "View Result" link
     // is offered here: it could only bounce an admin away.
-    { key: 'score', label: 'Score (pts)', render: (row: Record<string, unknown>) => {
-      const value = scoreLabel(row.score as number | null);
-      return value == null
-        ? <span className="text-content-faint">—</span>
-        : <span className="font-semibold text-content-secondary tabular-nums">{value}</span>;
-    }},
-    { key: 'status', label: 'Status', render: (row: Record<string, unknown>) => (
-      <Badge variant={attemptStatusVariant(String(row.status))}>{attemptStatusLabel(String(row.status))}</Badge>
-    )},
-    { key: 'submittedAt', label: 'Submitted', render: (row: Record<string, unknown>) => (
-      <span className="text-sm text-content-soft">{formatDateTime(row.submittedAt as string | null) ?? '—'}</span>
-    )},
+    {
+      key: "score",
+      label: "Score (pts)",
+      render: (row: Record<string, unknown>) => {
+        const value = scoreLabel(row.score as number | null);
+        return value == null ? (
+          <span className="text-content-faint">—</span>
+        ) : (
+          <span className="font-semibold text-content-secondary tabular-nums">{value}</span>
+        );
+      },
+    },
+    {
+      key: "status",
+      label: "Status",
+      render: (row: Record<string, unknown>) => (
+        <Badge variant={attemptStatusVariant(String(row.status))}>
+          {attemptStatusLabel(String(row.status))}
+        </Badge>
+      ),
+    },
+    {
+      key: "submittedAt",
+      label: "Submitted",
+      render: (row: Record<string, unknown>) => (
+        <span className="text-sm text-content-soft">
+          {formatDateTime(row.submittedAt as string | null) ?? "—"}
+        </span>
+      ),
+    },
   ];
 
   const statCards: { label: string; value: string; color: string; small?: boolean }[] = [
-    { label: 'Total Courses Enrolled', value: String(profile.stats.coursesEnrolled), color: '#F27124' },
-    { label: 'Exams Taken', value: String(profile.stats.examsTaken), color: '#059669' },
+    {
+      label: "Total Courses Enrolled",
+      value: String(profile.stats.coursesEnrolled),
+      color: "#F27124",
+    },
+    { label: "Exams Taken", value: String(profile.stats.examsTaken), color: "#059669" },
     // Average of the attempts' raw total scores — there is no max score in this payload, so a
     // percentage would be invented. Show the points and say so.
-    { label: 'Average Score (pts)', value: profile.stats.averageScore == null ? '—' : String(Number(profile.stats.averageScore)), color: '#7C3AED' },
-    { label: 'Last Activity', value: formatDateTime(profile.stats.lastActivityAt) ?? '—', color: '#0891B2', small: true },
+    {
+      label: "Average Score (pts)",
+      value: profile.stats.averageScore == null ? "—" : String(Number(profile.stats.averageScore)),
+      color: "#7C3AED",
+    },
+    {
+      label: "Last Activity",
+      value: formatDateTime(profile.stats.lastActivityAt) ?? "—",
+      color: "#0891B2",
+      small: true,
+    },
   ];
 
   return (
     <div className="p-8 space-y-5">
-      <Breadcrumb items={[{ label: 'User Management', onClick: backToUsers }, { label: profile.fullName }]} />
+      <Breadcrumb
+        items={[{ label: "User Management", onClick: backToUsers }, { label: profile.fullName }]}
+      />
 
       <div className="grid grid-cols-1 lg:grid-cols-4 gap-6 items-start">
         {/* Left (75%): profile, learning stats, recent exam attempts */}
@@ -411,25 +532,30 @@ export function UserDetailPage({ onNavigate, params: paramsProp }: { onNavigate?
                 </div>
               </div>
               <span className="text-xs text-content-subtle flex items-center gap-1.5 flex-shrink-0">
-                <Icon.Clock className="w-3.5 h-3.5" />Last login {formatDateTime(profile.lastLoginAt) ?? '—'}
+                <Icon.Clock className="w-3.5 h-3.5" />
+                Last login {formatDateTime(profile.lastLoginAt) ?? "—"}
               </span>
             </div>
             <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-x-6 gap-y-4 mt-5">
               {[
-                { label: 'Full Name', value: profile.fullName },
-                { label: 'Email', value: profile.email },
-                { label: 'Role', value: roleLabel(profile.role) },
-                { label: 'Status', value: statusLabel(profile.status) },
-                { label: 'Date Joined', value: formatDateTime(profile.createdAt) ?? '—' },
-                { label: 'Last Login', value: formatDateTime(profile.lastLoginAt) ?? '—' },
-                ...(isStudent ? [{ label: 'Subscription', value: subscriptionLabel(profile) }] : []),
-                ...(isManager && managerQuota
-                  ? [{
-                      label: 'AI Token Quota',
-                      value: `${managerQuota.effectiveLimit.toLocaleString()} / mo (${managerQuota.overrideLimit != null ? 'Custom override' : 'Global default'})`,
-                    }]
+                { label: "Full Name", value: profile.fullName },
+                { label: "Email", value: profile.email },
+                { label: "Role", value: roleLabel(profile.role) },
+                { label: "Status", value: statusLabel(profile.status) },
+                { label: "Date Joined", value: formatDateTime(profile.createdAt) ?? "—" },
+                { label: "Last Login", value: formatDateTime(profile.lastLoginAt) ?? "—" },
+                ...(isStudent
+                  ? [{ label: "Subscription", value: subscriptionLabel(profile) }]
                   : []),
-              ].map(f => (
+                ...(isManager && managerQuota
+                  ? [
+                      {
+                        label: "AI Token Quota",
+                        value: `${managerQuota.effectiveLimit.toLocaleString()} / mo (${managerQuota.overrideLimit != null ? "Custom override" : "Global default"})`,
+                      },
+                    ]
+                  : []),
+              ].map((f) => (
                 <div key={f.label} className="min-w-0">
                   <p className="text-xs text-content-subtle">{f.label}</p>
                   <p className="text-sm font-medium text-content mt-0.5 break-words">{f.value}</p>
@@ -442,65 +568,85 @@ export function UserDetailPage({ onNavigate, params: paramsProp }: { onNavigate?
             <div>
               <div className="flex flex-wrap items-center justify-between gap-2 mb-3">
                 <h3 className="text-lg font-semibold text-content">AI Token Quota (Monthly)</h3>
-                <Badge variant={managerQuota.overrideLimit != null ? 'info' : 'default'}>
+                <Badge variant={managerQuota.overrideLimit != null ? "info" : "default"}>
                   {managerQuota.overrideLimit != null
                     ? `Custom override (global default: ${managerQuota.globalDefaultLimit.toLocaleString()})`
-                    : 'Using global default'}
+                    : "Using global default"}
                 </Badge>
               </div>
               <div className="grid grid-cols-2 xl:grid-cols-4 gap-3">
                 <div className="bg-surface-alt rounded-[10px] p-4">
-                  <p className="text-xl font-bold text-content tabular-nums">{managerQuota.effectiveLimit.toLocaleString()}</p>
+                  <p className="text-xl font-bold text-content tabular-nums">
+                    {managerQuota.effectiveLimit.toLocaleString()}
+                  </p>
                   <p className="text-xs text-content-subtle mt-0.5">Monthly Limit</p>
                 </div>
                 <div className="bg-surface-alt rounded-[10px] p-4">
-                  <p className="text-xl font-bold text-brand-ink tabular-nums">{managerQuota.usedTokens.toLocaleString()}</p>
+                  <p className="text-xl font-bold text-brand-ink tabular-nums">
+                    {managerQuota.usedTokens.toLocaleString()}
+                  </p>
                   <p className="text-xs text-content-subtle mt-0.5">Used This Month</p>
                 </div>
                 <div className="bg-surface-alt rounded-[10px] p-4">
-                  <p className="text-xl font-bold text-warning tabular-nums">{managerQuota.reservedTokens.toLocaleString()}</p>
+                  <p className="text-xl font-bold text-warning tabular-nums">
+                    {managerQuota.reservedTokens.toLocaleString()}
+                  </p>
                   <p className="text-xs text-content-subtle mt-0.5">Reserved (In Queue)</p>
                 </div>
                 <div className="bg-surface-alt rounded-[10px] p-4">
-                  <p className="text-xl font-bold text-success tabular-nums">{managerQuota.remainingTokens.toLocaleString()}</p>
+                  <p className="text-xl font-bold text-success tabular-nums">
+                    {managerQuota.remainingTokens.toLocaleString()}
+                  </p>
                   <p className="text-xs text-content-subtle mt-0.5">Remaining</p>
                 </div>
               </div>
               <p className="text-xs text-content-subtle mt-2">
-                Current cycle resets on {formatDateTime(managerQuota.periodEnd) ?? 'next month'} (Asia/Ho_Chi_Minh).
+                Current cycle resets on {formatDateTime(managerQuota.periodEnd) ?? "next month"}{" "}
+                (Asia/Ho_Chi_Minh).
               </p>
             </div>
           )}
 
-          {isStudent && <>
-          {/* Learning Statistics */}
-          <div>
-            <h3 className="text-lg font-semibold text-content mb-3">Learning Statistics</h3>
-            <div className="grid grid-cols-2 xl:grid-cols-4 gap-3">
-              {statCards.map(s => (
-                <div key={s.label} className="bg-surface-alt rounded-[10px] p-4">
-                  <p className={s.small ? 'text-base font-semibold break-words' : 'text-xl font-bold'} style={{ color: s.color }}>{s.value}</p>
-                  <p className="text-xs text-content-subtle mt-0.5">{s.label}</p>
+          {isStudent && (
+            <>
+              {/* Learning Statistics */}
+              <div>
+                <h3 className="text-lg font-semibold text-content mb-3">Learning Statistics</h3>
+                <div className="grid grid-cols-2 xl:grid-cols-4 gap-3">
+                  {statCards.map((s) => (
+                    <div key={s.label} className="bg-surface-alt rounded-[10px] p-4">
+                      <p
+                        className={
+                          s.small ? "text-base font-semibold break-words" : "text-xl font-bold"
+                        }
+                        style={{ color: s.color }}
+                      >
+                        {s.value}
+                      </p>
+                      <p className="text-xs text-content-subtle mt-0.5">{s.label}</p>
+                    </div>
+                  ))}
                 </div>
-              ))}
-            </div>
-          </div>
+              </div>
 
-          {/* Recent Exam Attempts */}
-          <div className="card overflow-hidden">
-            <div className="px-5 py-4 border-b border-line-soft">
-              <h4 className="text-lg font-semibold text-content">Recent Exam Attempts</h4>
-              <p className="text-xs text-content-subtle mt-0.5">Latest 5 attempts across all enrolled courses</p>
-            </div>
-            <Table
-              columns={attemptColumns}
-              data={attemptRows as unknown as Record<string, unknown>[]}
-              perPage={5}
-              unit="attempts"
-              emptyState="No exam attempts yet."
-            />
-          </div>
-          </>}
+              {/* Recent Exam Attempts */}
+              <div className="card overflow-hidden">
+                <div className="px-5 py-4 border-b border-line-soft">
+                  <h4 className="text-lg font-semibold text-content">Recent Exam Attempts</h4>
+                  <p className="text-xs text-content-subtle mt-0.5">
+                    Latest 5 attempts across all enrolled courses
+                  </p>
+                </div>
+                <Table
+                  columns={attemptColumns}
+                  data={attemptRows as unknown as Record<string, unknown>[]}
+                  perPage={5}
+                  unit="attempts"
+                  emptyState="No exam attempts yet."
+                />
+              </div>
+            </>
+          )}
         </div>
 
         {/* Right (25%): sticky sidebar */}
@@ -514,28 +660,55 @@ export function UserDetailPage({ onNavigate, params: paramsProp }: { onNavigate?
             <p className="text-xs text-content-subtle font-mono">User ID: {profile.userId}</p>
             <div className="flex items-center justify-center gap-2 mt-3">
               <Badge variant={roleBadgeVariant(profile.role)}>{roleLabel(profile.role)}</Badge>
-              <Badge variant={profile.status === 'ACTIVE' ? 'success' : 'default'}>{statusLabel(profile.status)}</Badge>
+              <Badge variant={profile.status === "ACTIVE" ? "success" : "default"}>
+                {statusLabel(profile.status)}
+              </Badge>
             </div>
           </div>
 
           {/* Actions card */}
           <div className="card p-5 space-y-2">
             <h4 className="text-base font-semibold text-content mb-1">Actions</h4>
-            <Button icon={<Icon.Edit className="w-4 h-4" />} className="w-full justify-center" onClick={openEdit}>Edit User</Button>
-            <Button variant="outline" icon={<Icon.Lock className="w-4 h-4" />} className="w-full justify-center" disabled={resetting} onClick={() => setResetConfirmOpen(true)}>Reset Password</Button>
             <Button
-              variant={profile.status === 'ACTIVE' ? 'outline' : 'primary'}
-              icon={profile.status === 'ACTIVE' ? <Icon.EyeOff className="w-4 h-4" /> : <Icon.CheckCircle className="w-4 h-4" />}
+              icon={<Icon.Edit className="w-4 h-4" />}
+              className="w-full justify-center"
+              onClick={openEdit}
+            >
+              Edit User
+            </Button>
+            <Button
+              variant="outline"
+              icon={<Icon.Lock className="w-4 h-4" />}
+              className="w-full justify-center"
+              disabled={resetting}
+              onClick={() => setResetConfirmOpen(true)}
+            >
+              Reset Password
+            </Button>
+            <Button
+              variant={profile.status === "ACTIVE" ? "outline" : "primary"}
+              icon={
+                profile.status === "ACTIVE" ? (
+                  <Icon.EyeOff className="w-4 h-4" />
+                ) : (
+                  <Icon.CheckCircle className="w-4 h-4" />
+                )
+              }
               className="w-full justify-center"
               loading={changingStatus}
               disabled={changingStatus}
               onClick={() => void toggleStatus()}
             >
-              {profile.status === 'ACTIVE' ? 'Deactivate' : 'Activate'}
+              {profile.status === "ACTIVE" ? "Deactivate" : "Activate"}
             </Button>
           </div>
 
-          <Button variant="ghost" icon={<Icon.ChevronLeft className="w-4 h-4" />} className="w-full justify-center" onClick={backToUsers}>
+          <Button
+            variant="ghost"
+            icon={<Icon.ChevronLeft className="w-4 h-4" />}
+            className="w-full justify-center"
+            onClick={backToUsers}
+          >
             Back to User Management
           </Button>
         </div>
@@ -543,25 +716,47 @@ export function UserDetailPage({ onNavigate, params: paramsProp }: { onNavigate?
 
       <Modal open={editOpen} onClose={() => setEditOpen(false)} title="Edit User">
         <form onSubmit={saveEdit} className="space-y-4">
-          <Input label="Full Name" required maxLength={100} value={form.fullName} onChange={e => setForm(prev => ({ ...prev, fullName: e.target.value }))} />
-          <Input label="Email" type="email" required maxLength={150} value={form.email} onChange={e => setForm(prev => ({ ...prev, email: e.target.value }))} />
+          <Input
+            label="Full Name"
+            required
+            maxLength={100}
+            value={form.fullName}
+            onChange={(e) => setForm((prev) => ({ ...prev, fullName: e.target.value }))}
+          />
+          <Input
+            label="Email"
+            type="email"
+            required
+            maxLength={150}
+            value={form.email}
+            onChange={(e) => setForm((prev) => ({ ...prev, email: e.target.value }))}
+          />
           <Select
             label="Role"
             value={form.role}
-            onChange={v => setForm(prev => ({ ...prev, role: v as AdminUserRole }))}
-            options={[{ label: 'Student', value: 'STUDENT' }, { label: 'Content Manager', value: 'COURSE_MANAGER' }, { label: 'Admin', value: 'ADMIN' }]}
+            onChange={(v) => setForm((prev) => ({ ...prev, role: v as AdminUserRole }))}
+            options={[
+              { label: "Student", value: "STUDENT" },
+              { label: "Content Manager", value: "COURSE_MANAGER" },
+              { label: "Admin", value: "ADMIN" },
+            ]}
           />
           <Select
             label="Status"
             value={form.status}
-            onChange={v => setForm(prev => ({ ...prev, status: v as AdminUserStatus }))}
-            options={[{ label: 'Active', value: 'ACTIVE' }, { label: 'Inactive', value: 'INACTIVE' }]}
+            onChange={(v) => setForm((prev) => ({ ...prev, status: v as AdminUserStatus }))}
+            options={[
+              { label: "Active", value: "ACTIVE" },
+              { label: "Inactive", value: "INACTIVE" },
+            ]}
           />
-          {form.role === 'STUDENT' && (
+          {form.role === "STUDENT" && (
             <div className="space-y-3 pt-4 border-t border-line-soft">
               <div>
                 <p className="text-sm font-semibold text-content">Subscription</p>
-                <p className="text-xs text-content-subtle mt-0.5">Granted by an admin, free of charge.</p>
+                <p className="text-xs text-content-subtle mt-0.5">
+                  Granted by an admin, free of charge.
+                </p>
               </div>
               <Select
                 label="Plan"
@@ -570,11 +765,14 @@ export function UserDetailPage({ onNavigate, params: paramsProp }: { onNavigate?
                 disabled={plans == null}
                 error={plansError ?? undefined}
                 options={[
-                  { label: plans == null ? 'Loading plans…' : 'Free', value: '' },
-                  ...(plans ?? []).map(plan => ({ label: plan.isActive ? plan.planName : `${plan.planName} (hidden)`, value: String(plan.planId) })),
+                  { label: plans == null ? "Loading plans…" : "Free", value: "" },
+                  ...(plans ?? []).map((plan) => ({
+                    label: plan.isActive ? plan.planName : `${plan.planName} (hidden)`,
+                    value: String(plan.planId),
+                  })),
                 ]}
               />
-              {form.planId !== '' && (
+              {form.planId !== "" && (
                 <Input
                   label="End Date"
                   type="date"
@@ -582,32 +780,40 @@ export function UserDetailPage({ onNavigate, params: paramsProp }: { onNavigate?
                   min={toDateInput(new Date())}
                   value={form.endDate}
                   error={endDateError}
-                  onChange={e => { setForm(prev => ({ ...prev, endDate: e.target.value })); setEndDateError(undefined); }}
+                  onChange={(e) => {
+                    setForm((prev) => ({ ...prev, endDate: e.target.value }));
+                    setEndDateError(undefined);
+                  }}
                 />
               )}
             </div>
           )}
-          {form.role === 'COURSE_MANAGER' && (
+          {form.role === "COURSE_MANAGER" && (
             <div className="space-y-3 pt-4 border-t border-line-soft">
               <div>
                 <p className="text-sm font-semibold text-content">AI Token Quota (Monthly)</p>
                 <p className="text-xs text-content-subtle mt-0.5">
-                  Inherits the System Settings global default ({(managerQuota?.globalDefaultLimit ?? 1000000).toLocaleString()} tokens/mo) unless overridden here.
+                  Inherits the System Settings global default (
+                  {(managerQuota?.globalDefaultLimit ?? 1000000).toLocaleString()} tokens/mo) unless
+                  overridden here.
                 </p>
               </div>
               <Select
                 label="Quota Mode"
                 value={form.quotaMode}
-                onChange={v => {
-                  setForm(prev => ({ ...prev, quotaMode: v as 'default' | 'custom' }));
+                onChange={(v) => {
+                  setForm((prev) => ({ ...prev, quotaMode: v as "default" | "custom" }));
                   setCustomLimitError(undefined);
                 }}
                 options={[
-                  { label: `Use Global Default (${(managerQuota?.globalDefaultLimit ?? 1000000).toLocaleString()} / mo)`, value: 'default' },
-                  { label: 'Custom Per-Manager Override', value: 'custom' },
+                  {
+                    label: `Use Global Default (${(managerQuota?.globalDefaultLimit ?? 1000000).toLocaleString()} / mo)`,
+                    value: "default",
+                  },
+                  { label: "Custom Per-Manager Override", value: "custom" },
                 ]}
               />
-              {form.quotaMode === 'custom' && (
+              {form.quotaMode === "custom" && (
                 <Input
                   label="Monthly AI Token Limit"
                   type="number"
@@ -617,8 +823,8 @@ export function UserDetailPage({ onNavigate, params: paramsProp }: { onNavigate?
                   suffix="tokens / mo"
                   value={form.customMonthlyTokenLimit}
                   error={customLimitError}
-                  onChange={e => {
-                    setForm(prev => ({ ...prev, customMonthlyTokenLimit: e.target.value }));
+                  onChange={(e) => {
+                    setForm((prev) => ({ ...prev, customMonthlyTokenLimit: e.target.value }));
                     setCustomLimitError(undefined);
                   }}
                 />
@@ -626,8 +832,17 @@ export function UserDetailPage({ onNavigate, params: paramsProp }: { onNavigate?
             </div>
           )}
           <div className="flex justify-end gap-2 pt-4 border-t border-line-soft">
-            <Button type="button" variant="outline" onClick={() => setEditOpen(false)} disabled={saving}>Cancel</Button>
-            <Button type="submit" variant="primary" loading={saving} disabled={saving}>Save Changes</Button>
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => setEditOpen(false)}
+              disabled={saving}
+            >
+              Cancel
+            </Button>
+            <Button type="submit" variant="primary" loading={saving} disabled={saving}>
+              Save Changes
+            </Button>
           </div>
         </form>
       </Modal>
@@ -637,7 +852,12 @@ export function UserDetailPage({ onNavigate, params: paramsProp }: { onNavigate?
         onClose={() => setResetConfirmOpen(false)}
         onConfirm={() => void resetPassword()}
         title="Reset password?"
-        description={<>A password reset email will be sent to <span className="font-medium text-content">{profile.email}</span>.</>}
+        description={
+          <>
+            A password reset email will be sent to{" "}
+            <span className="font-medium text-content">{profile.email}</span>.
+          </>
+        }
         confirmLabel="Send reset email"
         loading={resetting}
       />

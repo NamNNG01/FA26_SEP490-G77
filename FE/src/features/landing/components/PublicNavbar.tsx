@@ -32,9 +32,7 @@ export function PublicNavbar() {
   const [menuOpen, setMenuOpen] = useState(false);
 
   const isStudent = user?.role === Role.STUDENT;
-  const dashboardPath = isStudent
-    ? ROUTES.studentCourses
-    : landingPathForRole(user?.role);
+  const dashboardPath = isStudent ? ROUTES.studentCourses : landingPathForRole(user?.role);
 
   // A student's own pages (exam history, contests, flashcards…) live in the dashboard sidebar.
   const navLinks: { label: string; to: string }[] = [
@@ -50,9 +48,7 @@ export function PublicNavbar() {
 
   function isActive(path: string) {
     if (path === ROUTES.landing) return location.pathname === ROUTES.landing;
-    return (
-      location.pathname === path || location.pathname.startsWith(`${path}/`)
-    );
+    return location.pathname === path || location.pathname.startsWith(`${path}/`);
   }
 
   return (
@@ -63,18 +59,11 @@ export function PublicNavbar() {
           {/* Signed in → the role's own dashboard; guests → the landing page. */}
           <button
             type="button"
-            onClick={() =>
-              goTo(isAuthenticated ? dashboardPath : ROUTES.landing)
-            }
-            aria-label={
-              isAuthenticated ? "Go to your dashboard" : "PrepExam home"
-            }
+            onClick={() => goTo(isAuthenticated ? dashboardPath : ROUTES.landing)}
+            aria-label={isAuthenticated ? "Go to your dashboard" : "PrepExam home"}
             className="flex flex-shrink-0 cursor-pointer items-center gap-2.5"
           >
-            <Icon.Logo
-              className="h-8 w-8 flex-shrink-0 text-brand-ink"
-              aria-hidden="true"
-            />
+            <Icon.Logo className="h-8 w-8 flex-shrink-0 text-brand-ink" aria-hidden="true" />
             <span className="text-lg font-bold text-content">PrepExam</span>
           </button>
 
@@ -154,11 +143,7 @@ export function PublicNavbar() {
             onClick={() => setMenuOpen((o) => !o)}
             className="ml-auto inline-flex h-10 w-10 items-center justify-center rounded-[10px] text-content-secondary transition-colors hover:bg-accent lg:hidden cursor-pointer"
           >
-            {menuOpen ? (
-              <Icon.X className="h-5 w-5" />
-            ) : (
-              <Icon.List className="h-5 w-5" />
-            )}
+            {menuOpen ? <Icon.X className="h-5 w-5" /> : <Icon.List className="h-5 w-5" />}
           </button>
         </div>
       </Container>

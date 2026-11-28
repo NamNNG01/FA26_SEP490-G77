@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState } from "react";
 
 /** Preview URL for a local File, revoked when the file changes or the component unmounts. */
 export function useObjectUrl(file: File | null): string | null {

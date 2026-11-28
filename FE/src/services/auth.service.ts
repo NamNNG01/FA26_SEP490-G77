@@ -1,6 +1,6 @@
-import { api } from './api';
-import type { ApiResponse } from '@/types/api';
-import type { GoogleLoginResponse, LoginResponse } from '@/types/auth';
+import { api } from "./api";
+import type { ApiResponse } from "@/types/api";
+import type { GoogleLoginResponse, LoginResponse } from "@/types/auth";
 
 /**
  * AuthService
@@ -17,24 +17,24 @@ import type { GoogleLoginResponse, LoginResponse } from '@/types/auth';
  */
 export const authService = {
   async login(email: string, password: string): Promise<LoginResponse> {
-    const body = await api.post<ApiResponse<LoginResponse>>('/auth/login', { email, password });
+    const body = await api.post<ApiResponse<LoginResponse>>("/auth/login", { email, password });
     return body.data;
   },
 
   async loginWithGoogle(idToken: string): Promise<GoogleLoginResponse> {
-    const body = await api.post<ApiResponse<GoogleLoginResponse>>('/auth/google', { idToken });
+    const body = await api.post<ApiResponse<GoogleLoginResponse>>("/auth/google", { idToken });
     return body.data;
   },
 
   async register(email: string, password: string, fullName: string): Promise<void> {
-    await api.post<ApiResponse<unknown>>('/auth/register', { email, password, fullName });
+    await api.post<ApiResponse<unknown>>("/auth/register", { email, password, fullName });
   },
 
   async logout(refreshToken: string): Promise<void> {
-    await api.post<ApiResponse<null>>('/auth/logout', { refreshToken });
+    await api.post<ApiResponse<null>>("/auth/logout", { refreshToken });
   },
 
   async logoutAll(): Promise<void> {
-    await api.post<ApiResponse<null>>('/auth/logout-all');
+    await api.post<ApiResponse<null>>("/auth/logout-all");
   },
 };

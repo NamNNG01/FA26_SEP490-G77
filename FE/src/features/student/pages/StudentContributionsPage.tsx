@@ -10,7 +10,7 @@ import { Alert } from "@/components/ui/Alert";
 import { focusFirstInvalidAfter } from "@/utils/focusFirstInvalid";
 import { Pagination } from "@/components/ui/Pagination";
 import { Select } from "@/components/ui/Select";
-import { useToast } from '@/components/ui/ToastHost';
+import { useToast } from "@/components/ui/ToastHost";
 import { Tabs } from "@/components/ui/Tabs";
 import { Icon } from "@/assets/icons";
 import { ROUTES, studentDeckPath } from "@/app/routes";
@@ -35,11 +35,7 @@ import { DeckContributionModal as SharedDeckContributionModal } from "../compone
 import { useActiveCourses } from "../components/flashcards/flashcardUi";
 import { ContributionCourseModuleFields } from "../components/ContributionCourseModuleFields";
 import { getApiErrorMessage } from "@/utils/apiError";
-import {
-  LoadError,
-  PageTitle,
-  STUDENT_PAGE_CLASS,
-} from "../components/studentUi";
+import { LoadError, PageTitle, STUDENT_PAGE_CLASS } from "../components/studentUi";
 
 const PAGE_SIZE = 10;
 const STATUSES = ["PENDING", "ACCEPTED", "REJECTED"] as const;
@@ -90,34 +86,35 @@ function ContributionList() {
       studentDeckService.listAllDecks({ scope: "MINE" }),
     ])
       .then(([questions, decks]) => {
-        if (!cancelled) setItems([
-          ...questions.map((item: ContributionItem) => ({
-            key: `question-${item.contributionId}`,
-            type: "question" as const,
-            status: item.status,
-            summary: item.summary.replace(/\{\{\s*\d+\s*\}\}/g, "____"),
-            createdAt: item.createdAt,
-            reviewedAt: item.reviewedAt,
-            contributionId: item.contributionId,
-          })),
-          ...decks.filter(deck => deck.reviewStatus !== "NONE").map(deck => ({
-            key: `deck-${deck.deckId}`,
-            type: "deck" as const,
-            status: deck.reviewStatus,
-            summary: deck.title,
-            createdAt: deck.createdAt,
-            reviewedAt: null,
-            deckId: deck.deckId,
-            cardCount: deck.cardCount,
-            deck,
-          })),
-        ]);
+        if (!cancelled)
+          setItems([
+            ...questions.map((item: ContributionItem) => ({
+              key: `question-${item.contributionId}`,
+              type: "question" as const,
+              status: item.status,
+              summary: item.summary.replace(/\{\{\s*\d+\s*\}\}/g, "____"),
+              createdAt: item.createdAt,
+              reviewedAt: item.reviewedAt,
+              contributionId: item.contributionId,
+            })),
+            ...decks
+              .filter((deck) => deck.reviewStatus !== "NONE")
+              .map((deck) => ({
+                key: `deck-${deck.deckId}`,
+                type: "deck" as const,
+                status: deck.reviewStatus,
+                summary: deck.title,
+                createdAt: deck.createdAt,
+                reviewedAt: null,
+                deckId: deck.deckId,
+                cardCount: deck.cardCount,
+                deck,
+              })),
+          ]);
       })
       .catch((err) => {
         if (!cancelled && !quiet)
-          setError(
-            getApiErrorMessage(err, "Failed to load your contributions."),
-          );
+          setError(getApiErrorMessage(err, "Failed to load your contributions."));
       })
       .finally(() => {
         if (!cancelled) setLoading(false);
@@ -127,10 +124,25 @@ function ContributionList() {
     };
   }, [reload]);
 
-  const filteredItems = useMemo(() => items
-    .filter(item => tab === "All" || (tab === "Question" ? item.type === "question" : item.type === "deck"))
-    .filter(item => !status || item.status === status || (status === "PENDING" && item.status === "PENDING_REVIEW") || (status === "ACCEPTED" && item.status === "APPROVED"))
-    .sort((a, b) => new Date(b.createdAt ?? 0).getTime() - new Date(a.createdAt ?? 0).getTime()), [items, tab, status]);
+  const filteredItems = useMemo(
+    () =>
+      items
+        .filter(
+          (item) =>
+            tab === "All" || (tab === "Question" ? item.type === "question" : item.type === "deck"),
+        )
+        .filter(
+          (item) =>
+            !status ||
+            item.status === status ||
+            (status === "PENDING" && item.status === "PENDING_REVIEW") ||
+            (status === "ACCEPTED" && item.status === "APPROVED"),
+        )
+        .sort(
+          (a, b) => new Date(b.createdAt ?? 0).getTime() - new Date(a.createdAt ?? 0).getTime(),
+        ),
+    [items, tab, status],
+  );
   const total = filteredItems.length;
   const pageItems = filteredItems.slice(page * PAGE_SIZE, (page + 1) * PAGE_SIZE);
 
@@ -156,10 +168,7 @@ function ContributionList() {
             >
               Contribute a flashcard deck
             </Button>
-            <Button
-              icon={<Icon.Plus className="h-4 w-4" />}
-              onClick={() => setForm("question")}
-            >
+            <Button icon={<Icon.Plus className="h-4 w-4" />} onClick={() => setForm("question")}>
               Contribute a question
             </Button>
           </div>
@@ -190,47 +199,63 @@ function ContributionList() {
         </p>
       </div>
       {error ? (
-        <LoadError
-          message={error}
-          onRetry={() => setReload((value) => value + 1)}
-        />
+        <LoadError message={error} onRetry={() => setReload((value) => value + 1)} />
       ) : loading ? (
-        <div className="card p-8 text-sm text-content-subtle">
-          Loading contributions…
-        </div>
+        <div className="card p-8 text-sm text-content-subtle">Loading contributions…</div>
       ) : pageItems.length === 0 ? (
         <div className="card">
           <EmptyState
             icon={<Icon.FileText className="h-7 w-7" />}
-            title={items.length ? 'No contributions match these filters' : 'No contributions yet'}
-            message={items.length ? 'Try changing the type or review status filter.' : 'Submit a practice question or a flashcard deck for review.'}
-            action={items.length ? undefined : <div className="flex flex-wrap justify-center gap-2"><Button onClick={() => setForm("question")}>Contribute a question</Button><Button variant="outline" onClick={() => setForm("deck")}>Contribute a flashcard deck</Button></div>}
+            title={items.length ? "No contributions match these filters" : "No contributions yet"}
+            message={
+              items.length
+                ? "Try changing the type or review status filter."
+                : "Submit a practice question or a flashcard deck for review."
+            }
+            action={
+              items.length ? undefined : (
+                <div className="flex flex-wrap justify-center gap-2">
+                  <Button onClick={() => setForm("question")}>Contribute a question</Button>
+                  <Button variant="outline" onClick={() => setForm("deck")}>
+                    Contribute a flashcard deck
+                  </Button>
+                </div>
+              )
+            }
           />
         </div>
       ) : (
         <div className="card overflow-hidden">
           <ul className="divide-y divide-line">
             {pageItems.map((item) => (
-              <li
-                key={item.key}
-                className="flex flex-wrap items-center gap-3 px-4 py-4 sm:px-5"
-              >
+              <li key={item.key} className="flex flex-wrap items-center gap-3 px-4 py-4 sm:px-5">
                 <span className="flex h-10 w-10 items-center justify-center rounded-xl bg-primary-light text-primary">
-                  {item.type === "deck" ? <Icon.Layers className="h-5 w-5" /> : <Icon.FileText className="h-5 w-5" />}
+                  {item.type === "deck" ? (
+                    <Icon.Layers className="h-5 w-5" />
+                  ) : (
+                    <Icon.FileText className="h-5 w-5" />
+                  )}
                 </span>
                 <div className="min-w-[12rem] flex-1">
                   <button
                     type="button"
                     onClick={() =>
-                      navigate(item.type === "deck" ? studentDeckPath(item.deckId!) : `${ROUTES.studentContributions}/${item.contributionId}`)
+                      navigate(
+                        item.type === "deck"
+                          ? studentDeckPath(item.deckId!)
+                          : `${ROUTES.studentContributions}/${item.contributionId}`,
+                      )
                     }
                     className="text-left text-sm font-semibold text-content hover:text-primary hover:underline"
                   >
                     {item.summary}
                   </button>
                   <p className="mt-1 text-xs text-content-subtle">
-                    {item.type === "deck" ? `Flashcard deck · ${item.cardCount ?? 0} cards · Created ${formatDate(item.createdAt)}` : `Question · Submitted ${formatDate(item.createdAt)}`}
-                    {item.reviewedAt && ["ACCEPTED", "APPROVED", "REJECTED"].includes(item.status.toUpperCase())
+                    {item.type === "deck"
+                      ? `Flashcard deck · ${item.cardCount ?? 0} cards · Created ${formatDate(item.createdAt)}`
+                      : `Question · Submitted ${formatDate(item.createdAt)}`}
+                    {item.reviewedAt &&
+                    ["ACCEPTED", "APPROVED", "REJECTED"].includes(item.status.toUpperCase())
                       ? ` · Reviewed ${formatDate(item.reviewedAt)}`
                       : ""}
                   </p>
@@ -240,7 +265,11 @@ function ContributionList() {
                   size="sm"
                   variant="outline"
                   onClick={() =>
-                      navigate(item.type === "deck" ? studentDeckPath(item.deckId!) : `${ROUTES.studentContributions}/${item.contributionId}`)
+                    navigate(
+                      item.type === "deck"
+                        ? studentDeckPath(item.deckId!)
+                        : `${ROUTES.studentContributions}/${item.contributionId}`,
+                    )
                   }
                 >
                   {item.type === "deck" ? "Open deck" : "Details"}
@@ -264,7 +293,11 @@ function ContributionList() {
         onClose={() => setForm(null)}
         onSaved={saved}
       />
-      <SharedDeckContributionModal open={form === "deck"} onClose={() => setForm(null)} onSubmitted={saved} />
+      <SharedDeckContributionModal
+        open={form === "deck"}
+        onClose={() => setForm(null)}
+        onSubmitted={saved}
+      />
     </div>
   );
 }
@@ -286,10 +319,7 @@ function ContributionDetail({ contributionId }: { contributionId: string }) {
         if (!cancelled) setItem(result);
       })
       .catch((err) => {
-        if (!cancelled)
-          setError(
-            getApiErrorMessage(err, "Failed to load this contribution."),
-          );
+        if (!cancelled) setError(getApiErrorMessage(err, "Failed to load this contribution."));
       })
       .finally(() => {
         if (!cancelled) setLoading(false);
@@ -301,18 +331,13 @@ function ContributionDetail({ contributionId }: { contributionId: string }) {
   if (loading)
     return (
       <div className={`${STUDENT_PAGE_CLASS}`}>
-        <div className="card p-8 text-sm text-content-subtle">
-          Loading contribution…
-        </div>
+        <div className="card p-8 text-sm text-content-subtle">Loading contribution…</div>
       </div>
     );
   if (error || !item)
     return (
       <div className={`${STUDENT_PAGE_CLASS} space-y-4`}>
-        <Button
-          variant="ghost"
-          onClick={() => navigate(ROUTES.studentContributions)}
-        >
+        <Button variant="ghost" onClick={() => navigate(ROUTES.studentContributions)}>
           ← My Contributions
         </Button>
         <LoadError
@@ -321,38 +346,35 @@ function ContributionDetail({ contributionId }: { contributionId: string }) {
         />
       </div>
     );
-  const canResubmit =
-    item.type === "question" && item.status === "REJECTED" && item.courseId;
+  const canResubmit = item.type === "question" && item.status === "REJECTED" && item.courseId;
   return (
     <div className={`${STUDENT_PAGE_CLASS} space-y-5`}>
-      <Button
-        variant="ghost"
-        onClick={() => navigate(ROUTES.studentContributions)}
-      >
+      <Button variant="ghost" onClick={() => navigate(ROUTES.studentContributions)}>
         ← My Contributions
       </Button>
       <section className="card space-y-5 p-5 sm:p-6">
         <div className="flex flex-wrap items-start justify-between gap-3">
           <div>
-            <Badge variant="info">
-              {titleCase(item.type)}
-            </Badge>
-            <h1 className="mt-2 text-xl font-bold text-content">
-              {item.summary}
-            </h1>
+            <Badge variant="info">{titleCase(item.type)}</Badge>
+            <h1 className="mt-2 text-xl font-bold text-content">{item.summary}</h1>
           </div>
           <StatusBadge status={item.status} />
         </div>
         <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-sm text-content-subtle">
           <p>Submitted {formatDate(item.createdAt)}</p>
-          <span aria-hidden="true" className="text-content-subtle/60">·</span>
-          <p>{item.reviewedAt && ["ACCEPTED", "APPROVED", "REJECTED"].includes(item.status.toUpperCase()) ? `Reviewed ${formatDate(item.reviewedAt)}` : "Awaiting review"}</p>
+          <span aria-hidden="true" className="text-content-subtle/60">
+            ·
+          </span>
+          <p>
+            {item.reviewedAt &&
+            ["ACCEPTED", "APPROVED", "REJECTED"].includes(item.status.toUpperCase())
+              ? `Reviewed ${formatDate(item.reviewedAt)}`
+              : "Awaiting review"}
+          </p>
         </div>
         {item.reviewNote && (
           <div className="rounded-xl border border-warning-line bg-warning-light p-4">
-            <p className="text-sm font-semibold text-warning-strong">
-              Reviewer feedback
-            </p>
+            <p className="text-sm font-semibold text-warning-strong">Reviewer feedback</p>
             <p className="mt-1 whitespace-pre-wrap text-sm text-content-secondary">
               {item.reviewNote}
             </p>
@@ -366,17 +388,11 @@ function ContributionDetail({ contributionId }: { contributionId: string }) {
               {item.content ?? item.summary}
             </p>
             {item.sourceReference && (
-              <p className="text-xs text-content-subtle">
-                Source: {item.sourceReference}
-              </p>
+              <p className="text-xs text-content-subtle">Source: {item.sourceReference}</p>
             )}
           </div>
         )}
-        {canResubmit && (
-          <Button onClick={() => setResubmitOpen(true)}>
-            Edit and resubmit
-          </Button>
-        )}
+        {canResubmit && <Button onClick={() => setResubmitOpen(true)}>Edit and resubmit</Button>}
       </section>
       {canResubmit && (
         <QuestionContributionModal
@@ -408,9 +424,7 @@ function QuestionPreview({ item }: { item: ContributionDetail }) {
         readOnly
       />
       {item.sourceReference && (
-        <p className="text-xs text-content-subtle">
-          Source: {item.sourceReference}
-        </p>
+        <p className="text-xs text-content-subtle">Source: {item.sourceReference}</p>
       )}
     </div>
   );
@@ -476,13 +490,9 @@ function QuestionContributionModal({
 }) {
   const toast = useToast();
   const { courses, error: coursesError } = useActiveCourses();
-  const [courseId, setCourseId] = useState(
-    initial?.courseId ? String(initial.courseId) : "",
-  );
+  const [courseId, setCourseId] = useState(initial?.courseId ? String(initial.courseId) : "");
   const [moduleId, setModuleId] = useState(initial?.moduleId ? String(initial.moduleId) : "");
-  const [question, setQuestion] = useState<QuestionDraft>(() =>
-    contributionQuestionDraft(initial),
-  );
+  const [question, setQuestion] = useState<QuestionDraft>(() => contributionQuestionDraft(initial));
   const [showErrors, setShowErrors] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -513,27 +523,25 @@ function QuestionContributionModal({
     }
     if (question.type === "DIAGRAM" && question.rubric.length === 0) {
       setShowErrors(true);
-      setError(
-        "Add at least one grading rubric criterion for a diagram question.",
-      );
+      setError("Add at least one grading rubric criterion for a diagram question.");
       return;
     }
     const request = toCreateRequest(question, Number(courseId), Number(moduleId));
     const body: QuestionContributionBody = {
       ...request,
       moduleId: Number(moduleId),
-      questionType:
-        request.questionType as QuestionContributionBody["questionType"],
+      questionType: request.questionType as QuestionContributionBody["questionType"],
       difficulty: request.difficulty ?? "MEDIUM",
       options: request.options ?? [],
       explanation: request.explanation ?? "",
     };
     setBusy(true);
     try {
-      if (contributionId)
-        await studentContributionService.resubmit(contributionId, body);
+      if (contributionId) await studentContributionService.resubmit(contributionId, body);
       else await studentContributionService.createQuestion(body);
-      toast.success(contributionId ? 'Question resubmitted for review.' : 'Question submitted for review.');
+      toast.success(
+        contributionId ? "Question resubmitted for review." : "Question submitted for review.",
+      );
       onSaved();
     } catch (err) {
       setError(getApiErrorMessage(err, "Could not submit this question."));
@@ -546,9 +554,7 @@ function QuestionContributionModal({
       open={open}
       onClose={busy ? () => {} : onClose}
       error={error && <Alert type="error" message={error} />}
-      title={
-        contributionId ? "Edit and resubmit question" : "Contribute a question"
-      }
+      title={contributionId ? "Edit and resubmit question" : "Contribute a question"}
       size="xl"
       footer={
         <>
@@ -566,17 +572,21 @@ function QuestionContributionModal({
         </>
       }
     >
-      <form
-        id="question-contribution-form"
-        onSubmit={submit}
-        className="space-y-4"
-      >
+      <form id="question-contribution-form" onSubmit={submit} className="space-y-4">
         <ContributionCourseModuleFields
           courses={courses ?? []}
           courseId={courseId}
           moduleId={moduleId}
-          onCourseChange={value => { setCourseId(value); setCourseError(""); setError(null); }}
-          onModuleChange={value => { setModuleId(value); setModuleError(""); setError(null); }}
+          onCourseChange={(value) => {
+            setCourseId(value);
+            setCourseError("");
+            setError(null);
+          }}
+          onModuleChange={(value) => {
+            setModuleId(value);
+            setModuleError("");
+            setError(null);
+          }}
           courseError={courseError || coursesError || undefined}
           moduleError={moduleError || undefined}
           disabled={busy}
@@ -592,7 +602,11 @@ function QuestionContributionModal({
           showErrors={showErrors}
           allowedTypes={STUDENT_QUESTION_TYPES}
         />
-        {!courses?.length && <p className="text-sm text-warning">An active course enrollment is needed to contribute a question.</p>}
+        {!courses?.length && (
+          <p className="text-sm text-warning">
+            An active course enrollment is needed to contribute a question.
+          </p>
+        )}
       </form>
     </Modal>
   );
@@ -605,7 +619,12 @@ function StatusBadge({ status }: { status: ContributionStatus | string }) {
       : status === "REJECTED"
         ? "danger"
         : "warning";
-  const label = status === "PENDING_REVIEW" ? "Pending review" : status === "APPROVED" || status === "ACCEPTED" ? "Accepted" : titleCase(status);
+  const label =
+    status === "PENDING_REVIEW"
+      ? "Pending review"
+      : status === "APPROVED" || status === "ACCEPTED"
+        ? "Accepted"
+        : titleCase(status);
   return <Badge variant={variant}>{label}</Badge>;
 }
 

@@ -1,17 +1,24 @@
-import React from 'react';
+import React from "react";
 
-export function Tooltip({ label, children, side = 'top' }: {
+export function Tooltip({
+  label,
+  children,
+  side = "top",
+}: {
   label: React.ReactNode;
   children: React.ReactNode;
-  side?: 'top' | 'bottom';
+  side?: "top" | "bottom";
 }) {
-  const pos = side === 'top'
-    ? '-top-1 left-0 translate-y-[-100%] mb-1'
-    : '-bottom-1 left-0 translate-y-[100%] mt-1';
+  const pos =
+    side === "top"
+      ? "-top-1 left-0 translate-y-[-100%] mb-1"
+      : "-bottom-1 left-0 translate-y-[100%] mt-1";
   return (
     <span className="relative inline-flex group">
       {children}
-      <span className={`pointer-events-none absolute z-20 ${pos} hidden group-hover:block whitespace-nowrap bg-fill-inverse text-white text-2xs px-2.5 py-1.5 rounded-[8px] shadow-lg`}>
+      <span
+        className={`pointer-events-none absolute z-20 ${pos} hidden group-hover:block whitespace-nowrap bg-fill-inverse text-white text-2xs px-2.5 py-1.5 rounded-[8px] shadow-lg`}
+      >
         {label}
       </span>
     </span>

@@ -43,13 +43,7 @@ export interface DropdownMultiProps extends DropdownBaseProps {
 export type DropdownProps = DropdownSingleProps | DropdownMultiProps;
 
 export function Dropdown(props: DropdownProps) {
-  const {
-    trigger,
-    items,
-    search = false,
-    searchPlaceholder = "Search...",
-    className = "",
-  } = props;
+  const { trigger, items, search = false, searchPlaceholder = "Search...", className = "" } = props;
 
   const isMulti = props.multi === true;
   const singleValue = !isMulti ? props.value : undefined;
@@ -126,17 +120,13 @@ export function Dropdown(props: DropdownProps) {
     const width = Math.max(MENU_WIDTH, Math.round(anchor.width));
     const below = anchor.bottom + GAP;
     const top =
-      below + menuHeight > window.innerHeight - 8 &&
-      anchor.top - GAP - menuHeight > 8
+      below + menuHeight > window.innerHeight - 8 && anchor.top - GAP - menuHeight > 8
         ? anchor.top - GAP - menuHeight
         : below;
     const left =
       anchor.width >= MENU_WIDTH
         ? Math.min(Math.max(8, anchor.left), window.innerWidth - width - 8)
-        : Math.min(
-            Math.max(8, anchor.right - width),
-            window.innerWidth - width - 8,
-          );
+        : Math.min(Math.max(8, anchor.right - width), window.innerWidth - width - 8);
     setPos({ top, left, width });
   }, [open]);
 
@@ -144,8 +134,7 @@ export function Dropdown(props: DropdownProps) {
     search && searchQuery.trim()
       ? items.filter(
           (item) =>
-            item.divider ||
-            item.label.toLowerCase().includes(searchQuery.trim().toLowerCase()),
+            item.divider || item.label.toLowerCase().includes(searchQuery.trim().toLowerCase()),
         )
       : items;
 
@@ -157,9 +146,7 @@ export function Dropdown(props: DropdownProps) {
     if (isMulti) {
       return multiValues.some((v) => String(v) === String(item.value));
     }
-    return (
-      singleValue !== undefined && String(item.value) === String(singleValue)
-    );
+    return singleValue !== undefined && String(item.value) === String(singleValue);
   };
 
   const handleItemSelect = (item: DropdownItem) => {
@@ -167,9 +154,7 @@ export function Dropdown(props: DropdownProps) {
     if (isMulti) {
       const itemValue = item.value;
       if (itemValue === undefined) return;
-      const alreadySelected = multiValues.some(
-        (v) => String(v) === String(itemValue),
-      );
+      const alreadySelected = multiValues.some((v) => String(v) === String(itemValue));
       const next = alreadySelected
         ? multiValues.filter((v) => String(v) !== String(itemValue))
         : [...multiValues, itemValue];
@@ -217,10 +202,7 @@ export function Dropdown(props: DropdownProps) {
             className="bg-surface rounded-[10px] border border-line shadow-xl z-[9999] overflow-hidden"
           >
             {search && (
-              <div
-                className="p-2 border-b border-line-soft"
-                onClick={(e) => e.stopPropagation()}
-              >
+              <div className="p-2 border-b border-line-soft" onClick={(e) => e.stopPropagation()}>
                 <div className="relative flex items-center">
                   <input
                     ref={searchInputRef}
@@ -245,14 +227,10 @@ export function Dropdown(props: DropdownProps) {
 
             {isMulti && multiValues.length > 0 && (
               <div className="px-3 py-1.5 border-b border-line-soft flex items-center justify-between">
-                <span className="text-xs text-content-soft">
-                  {multiValues.length} selected
-                </span>
+                <span className="text-xs text-content-soft">{multiValues.length} selected</span>
                 <button
                   type="button"
-                  onClick={() =>
-                    (props as DropdownMultiProps).onSelectMulti?.([])
-                  }
+                  onClick={() => (props as DropdownMultiProps).onSelectMulti?.([])}
                   className="text-xs text-danger hover:underline"
                 >
                   Clear all
@@ -264,9 +242,7 @@ export function Dropdown(props: DropdownProps) {
               {hasVisibleItems ? (
                 filteredItems.map((item, i) => {
                   if (item.divider) {
-                    return (
-                      <div key={i} className="my-1 border-t border-line-soft" />
-                    );
+                    return <div key={i} className="my-1 border-t border-line-soft" />;
                   }
 
                   const selected = isItemSelected(item);
@@ -296,14 +272,10 @@ export function Dropdown(props: DropdownProps) {
                       {isMulti && (
                         <span
                           className={`w-4 h-4 shrink-0 rounded border flex items-center justify-center transition-colors ${
-                            selected
-                              ? "bg-primary border-primary"
-                              : "border-line bg-surface"
+                            selected ? "bg-primary border-primary" : "border-line bg-surface"
                           }`}
                         >
-                          {selected && (
-                            <Icon.Check className="w-2.5 h-2.5 text-white" />
-                          )}
+                          {selected && <Icon.Check className="w-2.5 h-2.5 text-white" />}
                         </span>
                       )}
                       <div className="flex items-center gap-2 min-w-0 flex-1">

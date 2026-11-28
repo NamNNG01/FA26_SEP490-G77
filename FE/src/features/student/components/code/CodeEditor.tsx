@@ -1,10 +1,15 @@
-import { useEffect, useRef } from 'react';
-import Editor, { type OnMount } from '@monaco-editor/react';
-import { useTheme } from '@/theme/ThemeProvider';
-import { Skeleton } from '@/components/ui/Skeleton';
-import type { CodeLanguage } from '@/services/studentCodeExam.service';
+import { useEffect, useRef } from "react";
+import Editor, { type OnMount } from "@monaco-editor/react";
+import { useTheme } from "@/theme/ThemeProvider";
+import { Skeleton } from "@/components/ui/Skeleton";
+import type { CodeLanguage } from "@/services/studentCodeExam.service";
 
-const MONACO_LANGUAGE: Record<string, string> = { JAVA: 'java', PYTHON: 'python', C: 'c', CPP: 'cpp' };
+const MONACO_LANGUAGE: Record<string, string> = {
+  JAVA: "java",
+  PYTHON: "python",
+  C: "c",
+  CPP: "cpp",
+};
 
 /**
  * Monaco (the VS Code editor), lazy-loaded by CodeQuestionWorkspace so it stays out of the main
@@ -37,10 +42,10 @@ export default function CodeEditor({
   return (
     <Editor
       height="100%"
-      language={MONACO_LANGUAGE[language] ?? 'plaintext'}
+      language={MONACO_LANGUAGE[language] ?? "plaintext"}
       value={value}
-      theme={resolved === 'dark' ? 'vs-dark' : 'vs'}
-      onChange={v => onChange(v ?? '')}
+      theme={resolved === "dark" ? "vs-dark" : "vs"}
+      onChange={(v) => onChange(v ?? "")}
       onMount={onMount}
       loading={<Skeleton className="h-full w-full" />}
       options={{

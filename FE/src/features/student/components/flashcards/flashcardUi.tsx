@@ -1,25 +1,32 @@
-import React, { useEffect, useState } from 'react';
-import { Badge } from '@/components/ui/Badge';
-import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
-import { Icon } from '@/assets/icons';
-import { studentCourseService, type MyCourse } from '@/services/studentCourse.service';
+import React, { useEffect, useState } from "react";
+import { Badge } from "@/components/ui/Badge";
+import { ConfirmDialog } from "@/components/ui/ConfirmDialog";
+import { Icon } from "@/assets/icons";
+import { studentCourseService, type MyCourse } from "@/services/studentCourse.service";
 import {
   CODE_LANGUAGE_LABEL,
   DECK_MODE_LABEL,
   type CodeLanguage,
   type DeckMode,
   type ReviewStatus,
-} from '@/services/studentDeck.service';
+} from "@/services/studentDeck.service";
 
 export const TEXTAREA_CLASS =
-  'w-full rounded-[10px] border border-line bg-surface px-3 py-2 text-base text-content placeholder:text-content-placeholder transition-all focus:outline-none focus:ring-2 focus:ring-brand-600/20 focus:border-brand-600';
+  "w-full rounded-[10px] border border-line bg-surface px-3 py-2 text-base text-content placeholder:text-content-placeholder transition-all focus:outline-none focus:ring-2 focus:ring-brand-600/20 focus:border-brand-600";
 export const CODE_TEXTAREA_CLASS = `${TEXTAREA_CLASS} font-mono text-sm leading-relaxed`;
 
-const REVIEW_BADGE: Record<ReviewStatus, { label: string; variant: 'default' | 'warning' | 'success' | 'danger'; icon: React.ReactNode }> = {
-  NONE: { label: 'Private', variant: 'default', icon: <Icon.Lock className="w-3 h-3" /> },
-  PENDING_REVIEW: { label: 'Pending review', variant: 'warning', icon: <Icon.Clock className="w-3 h-3" /> },
-  APPROVED: { label: 'Public', variant: 'success', icon: <Icon.Eye className="w-3 h-3" /> },
-  REJECTED: { label: 'Rejected', variant: 'danger', icon: <Icon.XCircle className="w-3 h-3" /> },
+const REVIEW_BADGE: Record<
+  ReviewStatus,
+  { label: string; variant: "default" | "warning" | "success" | "danger"; icon: React.ReactNode }
+> = {
+  NONE: { label: "Private", variant: "default", icon: <Icon.Lock className="w-3 h-3" /> },
+  PENDING_REVIEW: {
+    label: "Pending review",
+    variant: "warning",
+    icon: <Icon.Clock className="w-3 h-3" />,
+  },
+  APPROVED: { label: "Public", variant: "success", icon: <Icon.Eye className="w-3 h-3" /> },
+  REJECTED: { label: "Rejected", variant: "danger", icon: <Icon.XCircle className="w-3 h-3" /> },
 };
 
 export function DeckStatusBadge({ status }: { status: ReviewStatus }) {
@@ -41,15 +48,27 @@ export function DeckModeBadge({ mode }: { mode: DeckMode | null | undefined }) {
 }
 
 /** Monospace code with its language on top (no syntax colouring). */
-export function CodeBlock({ code, language, className = '' }: { code: string; language?: CodeLanguage | null; className?: string }) {
+export function CodeBlock({
+  code,
+  language,
+  className = "",
+}: {
+  code: string;
+  language?: CodeLanguage | null;
+  className?: string;
+}) {
   return (
-    <div className={`w-full min-w-0 rounded-[10px] border border-line bg-surface-alt text-left overflow-hidden ${className}`}>
+    <div
+      className={`w-full min-w-0 rounded-[10px] border border-line bg-surface-alt text-left overflow-hidden ${className}`}
+    >
       {language && (
         <div className="px-3 py-1.5 border-b border-line text-2xs font-semibold uppercase tracking-wide text-content-subtle">
           {CODE_LANGUAGE_LABEL[language] ?? language}
         </div>
       )}
-      <pre className="px-3 py-2.5 text-sm font-mono text-content whitespace-pre overflow-x-auto max-h-80">{code}</pre>
+      <pre className="px-3 py-2.5 text-sm font-mono text-content whitespace-pre overflow-x-auto max-h-80">
+        {code}
+      </pre>
     </div>
   );
 }
@@ -64,14 +83,27 @@ export interface CardContent {
 }
 
 /** What one face of a card shows, by deck mode: CODE_SNIPPET puts the code on the back, CODE_OUTPUT on the front. */
-export function CardFace({ card, mode, side }: { card: CardContent; mode: DeckMode; side: 'front' | 'back' }) {
+export function CardFace({
+  card,
+  mode,
+  side,
+}: {
+  card: CardContent;
+  mode: DeckMode;
+  side: "front" | "back";
+}) {
   const text = (t: string) => (
-    <p className="text-[clamp(1rem,0.95rem+0.4vw,1.25rem)] font-medium text-content whitespace-pre-line break-words">{t}</p>
+    <p className="text-[clamp(1rem,0.95rem+0.4vw,1.25rem)] font-medium text-content whitespace-pre-line break-words">
+      {t}
+    </p>
   );
-  const code = card.codeBody ? <CodeBlock code={card.codeBody} language={card.codeLanguage} /> : null;
-  if (mode === 'CODE_SNIPPET') return side === 'front' ? text(card.frontText) : code ?? text(card.backText);
-  if (mode === 'CODE_OUTPUT') {
-    if (side === 'front') return code ?? text(card.frontText);
+  const code = card.codeBody ? (
+    <CodeBlock code={card.codeBody} language={card.codeLanguage} />
+  ) : null;
+  if (mode === "CODE_SNIPPET")
+    return side === "front" ? text(card.frontText) : (code ?? text(card.backText));
+  if (mode === "CODE_OUTPUT") {
+    if (side === "front") return code ?? text(card.frontText);
     return (
       <div className="w-full space-y-1.5 text-left">
         <p className="text-2xs font-semibold uppercase tracking-wide text-content-subtle">Output</p>
@@ -82,12 +114,17 @@ export function CardFace({ card, mode, side }: { card: CardContent; mode: DeckMo
     );
   }
   // FLASHCARD: a face shows its image, its text, or the image above the text.
-  const faceText = side === 'front' ? card.frontText : card.backText;
-  const image = side === 'front' ? card.frontImageUrl : card.backImageUrl;
+  const faceText = side === "front" ? card.frontText : card.backText;
+  const image = side === "front" ? card.frontImageUrl : card.backImageUrl;
   if (!image) return text(faceText);
   return (
     <div className="flex w-full flex-col items-center gap-3">
-      <img src={image} alt={faceText?.trim() || `Card ${side}`} loading="lazy" className="max-h-64 max-w-full rounded-[10px] object-contain" />
+      <img
+        src={image}
+        alt={faceText?.trim() || `Card ${side}`}
+        loading="lazy"
+        className="max-h-64 max-w-full rounded-[10px] object-contain"
+      />
       {faceText?.trim() && text(faceText)}
     </div>
   );
@@ -103,7 +140,11 @@ export function useActiveCourses() {
       try {
         const all: MyCourse[] = [];
         for (let page = 0; ; page++) {
-          const res = await studentCourseService.getMyCourses({ status: 'ACTIVE', page, size: 100 });
+          const res = await studentCourseService.getMyCourses({
+            status: "ACTIVE",
+            page,
+            size: 100,
+          });
           all.push(...res.content);
           if (res.last || res.content.length === 0) break;
         }
@@ -111,7 +152,7 @@ export function useActiveCourses() {
       } catch {
         if (!cancelled) {
           setCourses([]);
-          setError('Could not load your courses.');
+          setError("Could not load your courses.");
         }
       }
     })();
@@ -148,11 +189,11 @@ export function ConfirmModal({
       title={title}
       description={message}
       confirmLabel={confirmLabel}
-      tone={danger ? 'danger' : 'warning'}
+      tone={danger ? "danger" : "warning"}
       loading={busy}
     />
   );
 }
 
 /** "1 card" / "3 cards". */
-export const plural = (n: number, word: string) => `${n} ${word}${n === 1 ? '' : 's'}`;
+export const plural = (n: number, word: string) => `${n} ${word}${n === 1 ? "" : "s"}`;

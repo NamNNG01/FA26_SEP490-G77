@@ -1,11 +1,11 @@
-import React, { useEffect, useState } from 'react';
-import { useAuth } from '@/auth/authContext';
-import type { UserResponse } from '@/types/auth';
-import { Alert } from '@/components/ui/Alert';
-import { Button } from '@/components/ui/Button';
-import { Input } from '@/components/ui/Input';
-import { Icon } from '@/assets/icons';
-import { userService, FULL_NAME_MAX_LENGTH } from '@/services/user.service';
+import React, { useEffect, useState } from "react";
+import { useAuth } from "@/auth/authContext";
+import type { UserResponse } from "@/types/auth";
+import { Alert } from "@/components/ui/Alert";
+import { Button } from "@/components/ui/Button";
+import { Input } from "@/components/ui/Input";
+import { Icon } from "@/assets/icons";
+import { userService, FULL_NAME_MAX_LENGTH } from "@/services/user.service";
 
 /**
  * Personal Information section.
@@ -29,8 +29,8 @@ export function PersonalInfoCard({
   const { updateUser } = useAuth();
   const [fullName, setFullName] = useState(user.fullName);
   const [saving, setSaving] = useState(false);
-  const [error, setError] = useState('');
-  const [success, setSuccess] = useState('');
+  const [error, setError] = useState("");
+  const [success, setSuccess] = useState("");
 
   // Fresh form whenever editing starts or the saved user changes.
   useEffect(() => {
@@ -39,26 +39,26 @@ export function PersonalInfoCard({
 
   useEffect(() => {
     if (editing) {
-      setError('');
-      setSuccess('');
+      setError("");
+      setSuccess("");
     }
   }, [editing]);
 
   const handleCancel = () => {
     setFullName(user.fullName);
-    setError('');
+    setError("");
     onEditingChange(false);
   };
 
   const handleSave = async (e: React.FormEvent) => {
     e.preventDefault();
-    setError('');
-    setSuccess('');
+    setError("");
+    setSuccess("");
 
     // Backend validation (from UpdateProfileRequest) + users.full_name NOT NULL.
     const trimmed = fullName.trim();
     if (!trimmed) {
-      setError('Full name is required');
+      setError("Full name is required");
       return;
     }
     if (trimmed.length > FULL_NAME_MAX_LENGTH) {
@@ -73,10 +73,12 @@ export function PersonalInfoCard({
     setSaving(true);
     try {
       updateUser(await userService.updateProfile({ fullName: trimmed }));
-      setSuccess('Your profile has been updated.');
+      setSuccess("Your profile has been updated.");
       onEditingChange(false);
     } catch (err: unknown) {
-      setError(err instanceof Error ? err.message : 'Could not update your profile. Please try again.');
+      setError(
+        err instanceof Error ? err.message : "Could not update your profile. Please try again.",
+      );
     } finally {
       setSaving(false);
     }
@@ -105,11 +107,16 @@ export function PersonalInfoCard({
           value={user.email}
           readOnly
           icon={<Icon.Mail className="w-4 h-4" />}
-          hint={editing ? 'Email cannot be changed.' : undefined}
+          hint={editing ? "Email cannot be changed." : undefined}
         />
 
         <div className="mt-auto pt-2 flex justify-end gap-3">
-          <Button type="button" variant="outline" onClick={handleCancel} disabled={!editing || saving}>
+          <Button
+            type="button"
+            variant="outline"
+            onClick={handleCancel}
+            disabled={!editing || saving}
+          >
             Cancel
           </Button>
           <Button type="submit" loading={saving} disabled={!editing}>

@@ -1,4 +1,4 @@
-import type { PublicExam } from './mockPublicExams';
+import type { PublicExam } from "./mockPublicExams";
 
 /**
  * Attempt history for the History tab.
@@ -17,7 +17,7 @@ import type { PublicExam } from './mockPublicExams';
  * the displayed string does not drift with the machine's locale.
  */
 
-export type AttemptStatus = 'completed' | 'in-progress' | 'abandoned';
+export type AttemptStatus = "completed" | "in-progress" | "abandoned";
 
 export interface ExamAttempt {
   id: string;
@@ -42,38 +42,38 @@ const ANCHOR = Date.UTC(2026, 9, 5, 14, 30); // 05 Oct 2026 14:30 UTC
 const HOUR = 60 * 60 * 1000;
 
 const STATUS_LABEL: Record<AttemptStatus, string> = {
-  completed: 'Completed',
-  'in-progress': 'In Progress',
-  abandoned: 'Abandoned',
+  completed: "Completed",
+  "in-progress": "In Progress",
+  abandoned: "Abandoned",
 };
 
-const STATUS_VARIANT: Record<AttemptStatus, 'success' | 'warning' | 'danger'> = {
-  completed: 'success',
-  'in-progress': 'warning',
-  abandoned: 'danger',
+const STATUS_VARIANT: Record<AttemptStatus, "success" | "warning" | "danger"> = {
+  completed: "success",
+  "in-progress": "warning",
+  abandoned: "danger",
 };
 
 export function attemptStatusLabel(status: AttemptStatus): string {
   return STATUS_LABEL[status];
 }
 
-export function attemptStatusVariant(status: AttemptStatus): 'success' | 'warning' | 'danger' {
+export function attemptStatusVariant(status: AttemptStatus): "success" | "warning" | "danger" {
   return STATUS_VARIANT[status];
 }
 
 /** "05 Oct 2026 • 14:30" — pinned to en-GB / UTC so it never drifts. */
 export function formatAttemptDate(iso: string): string {
   const date = new Date(iso);
-  const day = date.toLocaleDateString('en-GB', {
-    day: '2-digit',
-    month: 'short',
-    year: 'numeric',
-    timeZone: 'UTC',
+  const day = date.toLocaleDateString("en-GB", {
+    day: "2-digit",
+    month: "short",
+    year: "numeric",
+    timeZone: "UTC",
   });
-  const time = date.toLocaleTimeString('en-GB', {
-    hour: '2-digit',
-    minute: '2-digit',
-    timeZone: 'UTC',
+  const time = date.toLocaleTimeString("en-GB", {
+    hour: "2-digit",
+    minute: "2-digit",
+    timeZone: "UTC",
   });
   return `${day} • ${time}`;
 }
@@ -94,12 +94,12 @@ export function formatDuration(minutes: number): string {
  *   completed    → 2-4 attempts, mixing abandoned runs and earlier attempts
  */
 export function attemptsFor(exam: PublicExam): ExamAttempt[] {
-  if (exam.status === 'available') return [];
+  if (exam.status === "available") return [];
 
   const seed = [...exam.id].reduce((acc, ch) => acc + ch.charCodeAt(0), 0);
   const total = exam.questions;
 
-  if (exam.status === 'in-progress') {
+  if (exam.status === "in-progress") {
     const answered = Math.min(total, Math.round(total * (0.3 + (seed % 5) / 10)));
     const correct = Math.round(answered * (0.55 + (seed % 20) / 100));
     const startedAt = new Date(ANCHOR - 26 * HOUR).toISOString();
@@ -108,7 +108,7 @@ export function attemptsFor(exam: PublicExam): ExamAttempt[] {
         id: `${exam.id}-A1`,
         attemptNumber: 1,
         startedAt,
-        status: 'in-progress',
+        status: "in-progress",
         correct,
         wrong: answered - correct,
         unanswered: total - answered,
@@ -130,9 +130,14 @@ export function attemptsFor(exam: PublicExam): ExamAttempt[] {
     const score = isNewest
       ? exam.score!
       : Math.max(45, Math.min(92, (exam.score ?? 70) - 6 - i * 7 + (seed % 5)));
-    const status: AttemptStatus = isNewest ? 'completed' : (seed + i) % 3 === 0 ? 'abandoned' : 'completed';
+    const status: AttemptStatus = isNewest
+      ? "completed"
+      : (seed + i) % 3 === 0
+        ? "abandoned"
+        : "completed";
 
-    const unanswered = status === 'abandoned' ? Math.min(total, 3 + ((seed + i) % 8)) : (seed + i) % 3 === 0 ? 1 : 0;
+    const unanswered =
+      status === "abandoned" ? Math.min(total, 3 + ((seed + i) % 8)) : (seed + i) % 3 === 0 ? 1 : 0;
     const answered = total - unanswered;
     // Derive the tally FROM the score, never the reverse — rounding back the
     // other way would drift the displayed score by a point on some totals.
@@ -141,14 +146,16 @@ export function attemptsFor(exam: PublicExam): ExamAttempt[] {
 
     // An abandoned run never used its full allowance; a submitted one came close.
     const timeSpentMin =
-      status === 'abandoned'
+      status === "abandoned"
         ? Math.max(1, Math.round(exam.duration * (0.25 + ((seed + i) % 4) / 10)))
         : Math.max(1, exam.duration - ((seed + i) % 9));
 
     const startedAt = new Date(cursor).toISOString();
     // Every attempt in this branch was submitted — an abandoned run still ends
     // with a submit (or a discard) timestamp.
-    const submittedAt = new Date(new Date(startedAt).getTime() + timeSpentMin * 60 * 1000).toISOString();
+    const submittedAt = new Date(
+      new Date(startedAt).getTime() + timeSpentMin * 60 * 1000,
+    ).toISOString();
     cursor -= (26 + ((seed + i) % 60)) * HOUR;
 
     attempts.push({
@@ -157,7 +164,7 @@ export function attemptsFor(exam: PublicExam): ExamAttempt[] {
       startedAt,
       submittedAt,
       status,
-      score: status === 'completed' ? score : undefined,
+      score: status === "completed" ? score : undefined,
       correct,
       wrong,
       unanswered,

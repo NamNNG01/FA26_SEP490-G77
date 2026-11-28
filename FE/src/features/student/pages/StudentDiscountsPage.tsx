@@ -40,11 +40,7 @@ const sources = [
 
 export function StudentDiscountsPage() {
   const { discountId } = useParams<{ discountId: string }>();
-  return discountId ? (
-    <DiscountDetail discountId={discountId} />
-  ) : (
-    <DiscountList />
-  );
+  return discountId ? <DiscountDetail discountId={discountId} /> : <DiscountList />;
 }
 
 function DiscountList() {
@@ -72,10 +68,7 @@ function DiscountList() {
       })
       .catch((err) => {
         if (cancelled) return;
-        const message = getApiErrorMessage(
-          err,
-          "Could not load your discounts.",
-        );
+        const message = getApiErrorMessage(err, "Could not load your discounts.");
         setError(message);
         toast.error(message);
       })
@@ -135,11 +128,7 @@ function DiscountList() {
               <li key={item.userDiscountId}>
                 <button
                   type="button"
-                  onClick={() =>
-                    navigate(
-                      `${ROUTES.studentDiscounts}/${item.userDiscountId}`,
-                    )
-                  }
+                  onClick={() => navigate(`${ROUTES.studentDiscounts}/${item.userDiscountId}`)}
                   className="flex w-full flex-wrap items-center gap-4 px-4 py-4 text-left transition-colors hover:bg-surface-muted/50 sm:px-5"
                 >
                   <span className="flex h-11 w-11 flex-shrink-0 items-center justify-center rounded-xl bg-primary-light text-primary">
@@ -155,13 +144,9 @@ function DiscountList() {
                     </span>
                   </span>
                   <span className="text-right">
-                    <span className="block font-semibold text-content">
-                      {discountValue(item)}
-                    </span>
+                    <span className="block font-semibold text-content">{discountValue(item)}</span>
                     <span className="mt-1 block text-xs text-content-subtle">
-                      {item.expiresAt
-                        ? `Expires ${formatDate(item.expiresAt)}`
-                        : "No expiry date"}
+                      {item.expiresAt ? `Expires ${formatDate(item.expiresAt)}` : "No expiry date"}
                     </span>
                   </span>
                   <Icon.ChevronRight className="h-4 w-4 text-content-subtle" />
@@ -199,8 +184,7 @@ function DiscountDetail({ discountId }: { discountId: string }) {
         if (!cancelled) setItem(data);
       })
       .catch((err) => {
-        if (!cancelled)
-          setError(getApiErrorMessage(err, "Could not load this discount."));
+        if (!cancelled) setError(getApiErrorMessage(err, "Could not load this discount."));
       })
       .finally(() => {
         if (!cancelled) setLoading(false);
@@ -226,10 +210,7 @@ function DiscountDetail({ discountId }: { discountId: string }) {
         ← My Discounts
       </Button>
       {loading ? (
-        <div
-          className="card h-72 animate-pulse bg-surface-muted/40"
-          aria-busy="true"
-        />
+        <div className="card h-72 animate-pulse bg-surface-muted/40" aria-busy="true" />
       ) : error || !item ? (
         <LoadError
           message={error ?? "Discount not found."}
@@ -242,9 +223,7 @@ function DiscountDetail({ discountId }: { discountId: string }) {
               <Badge variant="info">{sourceLabel(item.sourceType)}</Badge>
               <StatusBadge status={item.status} />
             </div>
-            <h1 className="mt-5 text-2xl font-bold text-content sm:text-3xl">
-              {item.name}
-            </h1>
+            <h1 className="mt-5 text-2xl font-bold text-content sm:text-3xl">{item.name}</h1>
             <p className="mt-2 text-content-secondary">
               {item.description || "A discount assigned to your account."}
             </p>
@@ -268,37 +247,21 @@ function DiscountDetail({ discountId }: { discountId: string }) {
             <DetailFact label="Value" value={discountValue(item)} />
             <DetailFact
               label="Applies to"
-              value={
-                item.appliesTo === "ALL"
-                  ? "Courses and subscriptions"
-                  : item.appliesTo
-              }
+              value={item.appliesTo === "ALL" ? "Courses and subscriptions" : item.appliesTo}
             />
             <DetailFact
               label="Minimum order"
-              value={
-                item.minOrderAmount == null
-                  ? "No minimum"
-                  : formatVnd(item.minOrderAmount)
-              }
+              value={item.minOrderAmount == null ? "No minimum" : formatVnd(item.minOrderAmount)}
             />
             <DetailFact
               label="Maximum discount"
               value={
-                item.maxDiscountAmount == null
-                  ? "No maximum"
-                  : formatVnd(item.maxDiscountAmount)
+                item.maxDiscountAmount == null ? "No maximum" : formatVnd(item.maxDiscountAmount)
               }
             />
-            <DetailFact
-              label="Assigned"
-              value={formatDateTime(item.assignedAt)}
-            />
+            <DetailFact label="Assigned" value={formatDateTime(item.assignedAt)} />
             <DetailFact label="Starts" value={formatDateTime(item.startAt)} />
-            <DetailFact
-              label="Expires"
-              value={formatDateTime(item.expiresAt)}
-            />
+            <DetailFact label="Expires" value={formatDateTime(item.expiresAt)} />
             <DetailFact label="Used" value={formatDateTime(item.usedAt)} />
           </dl>
           {item.contestInfo && (
@@ -306,22 +269,15 @@ function DiscountDetail({ discountId }: { discountId: string }) {
               <p className="text-xs font-semibold uppercase tracking-wide text-content-subtle">
                 Contest reward
               </p>
-              <p className="mt-1 font-semibold text-content">
-                {item.contestInfo.title}
-              </p>
+              <p className="mt-1 font-semibold text-content">{item.contestInfo.title}</p>
               <p className="mt-1 text-sm text-content-soft">
-                {formatDate(item.contestInfo.startTime)} –{" "}
-                {formatDate(item.contestInfo.endTime)}
+                {formatDate(item.contestInfo.startTime)} – {formatDate(item.contestInfo.endTime)}
               </p>
               <Button
                 className="mt-3"
                 variant="outline"
                 size="sm"
-                onClick={() =>
-                  navigate(
-                    `${ROUTES.studentContests}/${item.contestInfo!.contestId}`,
-                  )
-                }
+                onClick={() => navigate(`${ROUTES.studentContests}/${item.contestInfo!.contestId}`)}
               >
                 View contest
               </Button>
@@ -343,9 +299,7 @@ function DetailFact({ label, value }: { label: string; value: string }) {
 }
 
 function discountValue(item: StudentDiscount) {
-  return item.discountType === "PERCENT"
-    ? `${item.value}% off`
-    : `${formatVnd(item.value)} off`;
+  return item.discountType === "PERCENT" ? `${item.value}% off` : `${formatVnd(item.value)} off`;
 }
 
 function sourceLabel(source: string | null) {

@@ -1,10 +1,10 @@
-import React, { useEffect, useId, useRef, useState } from 'react';
-import { useLocation, useNavigate } from 'react-router';
-import { Icon } from '@/assets/icons';
-import { coursePath, courseSearchPath } from '@/app/routes';
-import { useCourseSearch } from '../hooks/useCourseSearch';
-import { CourseLogo } from './CourseLogo';
-import type { StudentCourseCard } from '@/services/studentCourse.service';
+import React, { useEffect, useId, useRef, useState } from "react";
+import { useLocation, useNavigate } from "react-router";
+import { Icon } from "@/assets/icons";
+import { coursePath, courseSearchPath } from "@/app/routes";
+import { useCourseSearch } from "../hooks/useCourseSearch";
+import { CourseLogo } from "./CourseLogo";
+import type { StudentCourseCard } from "@/services/studentCourse.service";
 
 /** Max rows rendered inline — the rest are reachable via "View all courses". */
 const MAX_VISIBLE_RESULTS = 6;
@@ -24,7 +24,7 @@ const MAX_VISIBLE_RESULTS = 6;
  * never a dead end.
  */
 export function CourseSearchBar({
-  className = '',
+  className = "",
   autoFocus = false,
   onNavigate,
 }: {
@@ -40,7 +40,9 @@ export function CourseSearchBar({
   const containerRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
 
-  const { query, setQuery, results, total, loading, error, isEmptyResult } = useCourseSearch('', { size: MAX_VISIBLE_RESULTS });
+  const { query, setQuery, results, total, loading, error, isEmptyResult } = useCourseSearch("", {
+    size: MAX_VISIBLE_RESULTS,
+  });
   const [open, setOpen] = useState(false);
   const [activeIndex, setActiveIndex] = useState(-1);
 
@@ -57,8 +59,8 @@ export function CourseSearchBar({
         setActiveIndex(-1);
       }
     }
-    document.addEventListener('mousedown', handlePointerDown);
-    return () => document.removeEventListener('mousedown', handlePointerDown);
+    document.addEventListener("mousedown", handlePointerDown);
+    return () => document.removeEventListener("mousedown", handlePointerDown);
   }, [expanded]);
 
   // Collapse after the route changes (result clicked, or a nav link used).
@@ -84,37 +86,37 @@ export function CourseSearchBar({
   function handleKeyDown(event: React.KeyboardEvent<HTMLInputElement>) {
     const count = expanded ? visibleResults.length : 0;
 
-    if (event.key === 'Escape') {
+    if (event.key === "Escape") {
       setOpen(false);
       setActiveIndex(-1);
       return;
     }
 
-    if (event.key === 'ArrowDown' || event.key === 'ArrowUp') {
+    if (event.key === "ArrowDown" || event.key === "ArrowUp") {
       event.preventDefault();
       setOpen(true);
       if (!count) {
         setActiveIndex(-1);
         return;
       }
-      const step = event.key === 'ArrowDown' ? 1 : -1;
+      const step = event.key === "ArrowDown" ? 1 : -1;
       setActiveIndex((prev) => (prev + step + count) % count);
       return;
     }
 
-    if (event.key === 'Home' && count) {
+    if (event.key === "Home" && count) {
       event.preventDefault();
       setActiveIndex(0);
       return;
     }
 
-    if (event.key === 'End' && count) {
+    if (event.key === "End" && count) {
       event.preventDefault();
       setActiveIndex(count - 1);
       return;
     }
 
-    if (event.key === 'Enter') {
+    if (event.key === "Enter") {
       event.preventDefault();
       const active = expanded && activeIndex >= 0 ? visibleResults[activeIndex] : undefined;
       if (active) goToCourse(active);
@@ -128,8 +130,8 @@ export function CourseSearchBar({
       <div
         className={`flex h-10 items-center gap-2 rounded-[12px] border bg-surface-alt pr-2 pl-3 transition-all ${
           expanded
-            ? 'border-brand-600 ring-2 ring-brand-600/20'
-            : 'border-line hover:border-line-strong'
+            ? "border-brand-600 ring-2 ring-brand-600/20"
+            : "border-line hover:border-line-strong"
         }`}
       >
         <Icon.Search className="w-4 h-4 flex-shrink-0 text-content-subtle" />
@@ -140,7 +142,9 @@ export function CourseSearchBar({
           aria-expanded={expanded}
           aria-controls={listboxId}
           aria-autocomplete="list"
-          aria-activedescendant={expanded && activeIndex >= 0 ? `${listboxId}-${activeIndex}` : undefined}
+          aria-activedescendant={
+            expanded && activeIndex >= 0 ? `${listboxId}-${activeIndex}` : undefined
+          }
           aria-label="Search courses"
           autoFocus={autoFocus}
           value={query}
@@ -159,7 +163,7 @@ export function CourseSearchBar({
             type="button"
             aria-label="Clear course search"
             onClick={() => {
-              setQuery('');
+              setQuery("");
               setActiveIndex(-1);
               inputRef.current?.focus();
             }}
@@ -173,9 +177,19 @@ export function CourseSearchBar({
       {/* Results dropdown */}
       {expanded && (
         <div className="absolute top-[calc(100%+8px)] right-0 left-0 z-50 overflow-hidden rounded-[14px] border border-line bg-surface shadow-xl shadow-gray-900/10">
-          <ul id={listboxId} role="listbox" aria-label="Course search results" className="max-h-[min(60vh,420px)] overflow-y-auto p-1.5">
+          <ul
+            id={listboxId}
+            role="listbox"
+            aria-label="Course search results"
+            className="max-h-[min(60vh,420px)] overflow-y-auto p-1.5"
+          >
             {visibleResults.map((course, index) => (
-              <li key={course.courseId} role="option" aria-selected={index === activeIndex} id={`${listboxId}-${index}`}>
+              <li
+                key={course.courseId}
+                role="option"
+                aria-selected={index === activeIndex}
+                id={`${listboxId}-${index}`}
+              >
                 <button
                   type="button"
                   // Keep the listbox open on hover so pointer users can move
@@ -183,7 +197,7 @@ export function CourseSearchBar({
                   onMouseEnter={() => setActiveIndex(index)}
                   onClick={() => goToCourse(course)}
                   className={`flex w-full items-center gap-3 rounded-[10px] px-2.5 py-2.5 text-left transition-colors cursor-pointer ${
-                    index === activeIndex ? 'bg-primary-light' : 'hover:bg-surface-hover'
+                    index === activeIndex ? "bg-primary-light" : "hover:bg-surface-hover"
                   }`}
                 >
                   <CourseLogo title={course.title} thumbnailUrl={course.thumbnailUrl} size={34} />
@@ -192,7 +206,7 @@ export function CourseSearchBar({
                       {course.title}
                     </span>
                     <span className="mt-0.5 block truncate text-xs text-content-subtle">
-                      {course.category?.name ?? 'Uncategorized'}
+                      {course.category?.name ?? "Uncategorized"}
                       <span className="mx-1.5 text-content-faint">·</span>
                       {course.publishedExamCount} Exams
                       <span className="mx-1.5 text-content-faint">·</span>
@@ -208,12 +222,18 @@ export function CourseSearchBar({
               <li className="px-3 py-6 text-center text-sm text-content-subtle">Searching…</li>
             )}
 
-            {error && !loading && <li className="px-3 py-6 text-center text-sm text-content-soft">{error}</li>}
+            {error && !loading && (
+              <li className="px-3 py-6 text-center text-sm text-content-soft">{error}</li>
+            )}
 
             {isEmptyResult && (
               <li className="px-3 py-6 text-center">
-                <p className="text-sm font-medium text-content-secondary">No courses match “{trimmed}”</p>
-                <p className="mt-1 text-xs text-content-subtle">Try a shorter or different keyword.</p>
+                <p className="text-sm font-medium text-content-secondary">
+                  No courses match “{trimmed}”
+                </p>
+                <p className="mt-1 text-xs text-content-subtle">
+                  Try a shorter or different keyword.
+                </p>
               </li>
             )}
           </ul>
@@ -226,8 +246,8 @@ export function CourseSearchBar({
             >
               <span>
                 {total > 0
-                  ? `View all ${total} ${total === 1 ? 'course' : 'courses'}`
-                  : 'Browse all courses'}
+                  ? `View all ${total} ${total === 1 ? "course" : "courses"}`
+                  : "Browse all courses"}
               </span>
               <Icon.ChevronRight className="h-4 w-4" />
             </button>

@@ -1,8 +1,8 @@
-import { api } from './api';
-import type { ApiResponse } from '@/types/api';
-import type { StudentPage } from './studentLearning.service';
+import { api } from "./api";
+import type { ApiResponse } from "@/types/api";
+import type { StudentPage } from "./studentLearning.service";
 
-export type ContestStatus = 'UPCOMING' | 'ONGOING' | 'ENDED' | 'REWARDED' | 'CANCELLED';
+export type ContestStatus = "UPCOMING" | "ONGOING" | "ENDED" | "REWARDED" | "CANCELLED";
 
 /**
  * Prize of one rank. CT-01 / CT-04 do not send prizes yet (docs/notes/contest-be-gaps-2026-10-31.md):
@@ -33,7 +33,7 @@ export interface StudentContest {
   course?: { courseId: number; title: string } | null;
   /** Not sent by CT-01 yet. */
   rewards?: ContestPrize[];
-  participationStatus?: 'REGISTERED' | 'IN_PROGRESS' | 'FINISHED' | null;
+  participationStatus?: "REGISTERED" | "IN_PROGRESS" | "FINISHED" | null;
   hasStarted?: boolean;
   hasSubmitted?: boolean;
   score?: number | null;
@@ -52,7 +52,12 @@ export interface StudentContest {
 export interface ContestLeaderboard {
   generatedAt: string;
   rows: {
-    rank: number; userId: number; studentName: string; score: number; completedAt: string; isCurrentUser: boolean;
+    rank: number;
+    userId: number;
+    studentName: string;
+    score: number;
+    completedAt: string;
+    isCurrentUser: boolean;
     /** Not sent by CT-04 yet. */
     avatarUrl?: string | null;
     /** Not sent by CT-04 yet. */
@@ -62,7 +67,7 @@ export interface ContestLeaderboard {
 
 export interface ContestReward {
   rewardId: number;
-  rewardType: 'BADGE' | 'DISCOUNT_CODE' | 'CERTIFICATE' | string;
+  rewardType: "BADGE" | "DISCOUNT_CODE" | "CERTIFICATE" | string;
   value: string;
   description: string;
   claimed: boolean;
@@ -98,21 +103,25 @@ export interface ContestHistoryItem {
 function query(params: Record<string, string | number | undefined | null>) {
   const qs = new URLSearchParams();
   Object.entries(params).forEach(([key, value]) => {
-    if (value !== undefined && value !== null && value !== '') qs.set(key, String(value));
+    if (value !== undefined && value !== null && value !== "") qs.set(key, String(value));
   });
   return qs.toString();
 }
 
 export const studentContestService = {
-  async getContests(params: {
-    status?: ContestStatus;
-    courseId?: number;
-    from?: string;
-    to?: string;
-    page?: number;
-    size?: number;
-  } = {}) {
-    const res = await api.get<ApiResponse<StudentPage<StudentContest>>>(`/student/contests?${query(params)}`);
+  async getContests(
+    params: {
+      status?: ContestStatus;
+      courseId?: number;
+      from?: string;
+      to?: string;
+      page?: number;
+      size?: number;
+    } = {},
+  ) {
+    const res = await api.get<ApiResponse<StudentPage<StudentContest>>>(
+      `/student/contests?${query(params)}`,
+    );
     return res.data;
   },
 
@@ -122,17 +131,29 @@ export const studentContestService = {
   },
 
   async register(contestId: number | string) {
-    const res = await api.post<ApiResponse<{ contestId: number; registeredCount: number }>>(`/student/contests/${contestId}/register`);
+    const res = await api.post<ApiResponse<{ contestId: number; registeredCount: number }>>(
+      `/student/contests/${contestId}/register`,
+    );
     return res.data;
   },
 
   async start(contestId: number | string) {
-    const res = await api.post<ApiResponse<{ attemptId: number; examId: number; durationMinutes: number; endsAt: string; questions: unknown[] }>>(`/student/contests/${contestId}/start`);
+    const res = await api.post<
+      ApiResponse<{
+        attemptId: number;
+        examId: number;
+        durationMinutes: number;
+        endsAt: string;
+        questions: unknown[];
+      }>
+    >(`/student/contests/${contestId}/start`);
     return res.data;
   },
 
   async getLeaderboard(contestId: number | string) {
-    const res = await api.get<ApiResponse<ContestLeaderboard>>(`/student/contests/${contestId}/leaderboard`);
+    const res = await api.get<ApiResponse<ContestLeaderboard>>(
+      `/student/contests/${contestId}/leaderboard`,
+    );
     return res.data;
   },
 
@@ -141,19 +162,26 @@ export const studentContestService = {
     return res.data;
   },
 
-  async getHistory(params: {
-    courseId?: number;
-    from?: string;
-    to?: string;
-    page?: number;
-    size?: number;
-  } = {}) {
-    const res = await api.get<ApiResponse<StudentPage<ContestHistoryItem>>>(`/student/contests/history?${query(params)}`);
+  async getHistory(
+    params: {
+      courseId?: number;
+      from?: string;
+      to?: string;
+      page?: number;
+      size?: number;
+    } = {},
+  ) {
+    const res = await api.get<ApiResponse<StudentPage<ContestHistoryItem>>>(
+      `/student/contests/history?${query(params)}`,
+    );
     return res.data;
   },
 
   async claimReward(contestId: number | string, rewardId: number) {
-    const res = await api.post<ApiResponse<ContestReward>>(`/student/contests/${contestId}/claim-reward`, { rewardId });
+    const res = await api.post<ApiResponse<ContestReward>>(
+      `/student/contests/${contestId}/claim-reward`,
+      { rewardId },
+    );
     return res.data;
   },
 };

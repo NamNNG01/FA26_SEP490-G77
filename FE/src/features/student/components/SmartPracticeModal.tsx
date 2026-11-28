@@ -1,18 +1,18 @@
-import { useEffect, useRef, useState } from 'react';
-import { useNavigate } from 'react-router';
-import { Modal } from '@/components/ui/Modal';
-import { Button } from '@/components/ui/Button';
-import { Input } from '@/components/ui/Input';
-import { Select } from '@/components/ui/Select';
-import { SearchableSelect } from '@/components/ui/SearchableSelect';
-import { MultiSelect } from '@/components/ui/MultiSelect';
-import { Tabs } from '@/components/ui/Tabs';
-import { Badge } from '@/components/ui/Badge';
-import { Alert } from '@/components/ui/Alert';
-import { Icon } from '@/assets/icons';
-import { studentTakeExamPath } from '@/app/routes';
-import { getApiErrorMessage } from '@/utils/apiError';
-import { studentCourseService, type MyCourse } from '@/services/studentCourse.service';
+import { useEffect, useRef, useState } from "react";
+import { useNavigate } from "react-router";
+import { Modal } from "@/components/ui/Modal";
+import { Button } from "@/components/ui/Button";
+import { Input } from "@/components/ui/Input";
+import { Select } from "@/components/ui/Select";
+import { SearchableSelect } from "@/components/ui/SearchableSelect";
+import { MultiSelect } from "@/components/ui/MultiSelect";
+import { Tabs } from "@/components/ui/Tabs";
+import { Badge } from "@/components/ui/Badge";
+import { Alert } from "@/components/ui/Alert";
+import { Icon } from "@/assets/icons";
+import { studentTakeExamPath } from "@/app/routes";
+import { getApiErrorMessage } from "@/utils/apiError";
+import { studentCourseService, type MyCourse } from "@/services/studentCourse.service";
 import {
   SMART_MINUTES,
   SMART_QUESTIONS,
@@ -22,7 +22,7 @@ import {
   type CategoryAccuracy,
   type SmartPracticeStarted,
   type SmartPracticeStatus,
-} from '@/services/studentAi.service';
+} from "@/services/studentAi.service";
 import {
   PRACTICE_MINUTES,
   PRACTICE_QUESTIONS,
@@ -31,64 +31,70 @@ import {
   type PracticeDifficulty,
   type PracticeExamType,
   type PracticePlan,
-} from '@/services/studentPracticeExam.service';
-import { AiErrorAlert, AiSparkle, accuracyTone } from './aiUi';
-import type { BadgeVariant } from '@/components/ui/Badge';
-import type { Mastery } from '@/services/studentAi.service';
-import { TakeModePicker } from './TakeModeModal';
-import type { TakeAs } from '../examModes';
+} from "@/services/studentPracticeExam.service";
+import { AiErrorAlert, AiSparkle, accuracyTone } from "./aiUi";
+import type { BadgeVariant } from "@/components/ui/Badge";
+import type { Mastery } from "@/services/studentAi.service";
+import { TakeModePicker } from "./TakeModeModal";
+import type { TakeAs } from "../examModes";
 
 const DEFAULT_POLL_MS = 2000;
 
 /** AI tab on; a module-focused open (Focus next) still starts on Random, since AI-01 has no focusModuleId. */
 const AI_ENABLED = true;
 
-export type SmartPracticeMode = 'AI' | 'RANDOM';
+export type SmartPracticeMode = "AI" | "RANDOM";
 
-const MODE_TABS: Record<SmartPracticeMode, string> = { AI: 'AI', RANDOM: 'Random' };
-const MODE_BY_TAB: Record<string, SmartPracticeMode> = { AI: 'AI', Random: 'RANDOM' };
+const MODE_TABS: Record<SmartPracticeMode, string> = { AI: "AI", RANDOM: "Random" };
+const MODE_BY_TAB: Record<string, SmartPracticeMode> = { AI: "AI", Random: "RANDOM" };
 
-type Phase = 'form' | 'processing' | 'completed' | 'failed';
+type Phase = "form" | "processing" | "completed" | "failed";
 
 /** Random: SMART lets the BE spread the questions over the modules by the student's weak spots; CUSTOM = picked here. */
-type Allocation = 'SMART' | 'CUSTOM';
+type Allocation = "SMART" | "CUSTOM";
 
-const ALLOCATIONS: { value: Allocation; title: string; description: string; icon: React.ReactNode }[] = [
+const ALLOCATIONS: {
+  value: Allocation;
+  title: string;
+  description: string;
+  icon: React.ReactNode;
+}[] = [
   {
-    value: 'SMART',
-    title: 'Personalized',
-    description: 'More questions from your weak modules, your open mistakes and questions you have not seen yet.',
+    value: "SMART",
+    title: "Personalized",
+    description:
+      "More questions from your weak modules, your open mistakes and questions you have not seen yet.",
     icon: <Icon.Target className="w-5 h-5" />,
   },
   {
-    value: 'CUSTOM',
-    title: 'Choose modules',
-    description: 'Random questions; pick the modules and how many questions each gives.',
+    value: "CUSTOM",
+    title: "Choose modules",
+    description: "Random questions; pick the modules and how many questions each gives.",
     icon: <Icon.Shuffle className="w-5 h-5" />,
   },
 ];
 
 const MASTERY_LABEL: Record<Mastery, { label: string; variant: BadgeVariant }> = {
-  NOT_STARTED: { label: 'New', variant: 'default' },
-  WEAK: { label: 'Weak', variant: 'danger' },
-  LEARNING: { label: 'Learning', variant: 'warning' },
-  STRONG: { label: 'Strong', variant: 'info' },
-  MASTERED: { label: 'Mastered', variant: 'success' },
+  NOT_STARTED: { label: "New", variant: "default" },
+  WEAK: { label: "Weak", variant: "danger" },
+  LEARNING: { label: "Learning", variant: "warning" },
+  STRONG: { label: "Strong", variant: "info" },
+  MASTERED: { label: "Mastered", variant: "success" },
 };
 
 const PLAN_DEBOUNCE_MS = 400;
 
 const EXAM_TYPE_OPTIONS: { value: PracticeExamType; label: string }[] = [
-  { value: 'MIXED', label: 'All types (Balanced)' },
-  { value: 'QUIZ', label: 'Quiz' },
-  { value: 'ESSAY', label: 'Assessment' },
+  { value: "MIXED", label: "All types (Balanced)" },
+  { value: "QUIZ", label: "Quiz" },
+  { value: "ESSAY", label: "Assessment" },
 ];
 
-const DIFFICULTY_OPTIONS: { value: '' | PracticeDifficulty; label: string }[] = [
-  { value: '', label: 'Any difficulty' },
-  { value: 'EASY', label: 'Easy' },
-  { value: 'MEDIUM', label: 'Medium' },
-  { value: 'HARD', label: 'Hard' },
+const DIFFICULTY_OPTIONS: { value: "" | PracticeDifficulty; label: string }[] = [
+  { value: "", label: "Any difficulty" },
+  { value: "EASY", label: "Easy" },
+  { value: "MEDIUM", label: "Medium" },
+  { value: "HARD", label: "Hard" },
 ];
 
 /** Free-text guidance the student gives the AI (sent as `context`). */
@@ -97,7 +103,9 @@ const AI_CONTEXT_MAX = 500;
 const TITLE_MAX = 255;
 
 const limitsOf = (mode: SmartPracticeMode) =>
-  mode === 'AI' ? { questions: SMART_QUESTIONS, minutes: SMART_MINUTES } : { questions: PRACTICE_QUESTIONS, minutes: PRACTICE_MINUTES };
+  mode === "AI"
+    ? { questions: SMART_QUESTIONS, minutes: SMART_MINUTES }
+    : { questions: PRACTICE_QUESTIONS, minutes: PRACTICE_MINUTES };
 
 /**
  * Create Practice Exam — a practice exam the student builds for one course. Two ways to pick the questions:
@@ -115,13 +123,13 @@ export function SmartPracticeModal({
   onClose,
   courses,
   initialCourseId,
-  initialMode = 'AI',
+  initialMode = "AI",
   lockCourse = false,
   focusModule = null,
 }: {
   open: boolean;
   onClose: () => void;
-  courses: Pick<MyCourse, 'courseId' | 'title'>[];
+  courses: Pick<MyCourse, "courseId" | "title">[];
   initialCourseId?: number | null;
   initialMode?: SmartPracticeMode;
   lockCourse?: boolean;
@@ -129,21 +137,21 @@ export function SmartPracticeModal({
   focusModule?: { id: number | null; name: string } | null;
 }) {
   const navigate = useNavigate();
-  const startMode: SmartPracticeMode = AI_ENABLED && !focusModule ? initialMode : 'RANDOM';
+  const startMode: SmartPracticeMode = AI_ENABLED && !focusModule ? initialMode : "RANDOM";
   const [mode, setMode] = useState<SmartPracticeMode>(startMode);
   /** Random: take the new exam as an Exam (timed) or as Practice (each answer checked at once). */
-  const [takeAs, setTakeAs] = useState<TakeAs>('PRACTICE');
+  const [takeAs, setTakeAs] = useState<TakeAs>("PRACTICE");
   const [minutes, setMinutes] = useState(String(PRACTICE_MINUTES.default));
-  const [courseId, setCourseId] = useState('');
-  const [title, setTitle] = useState('');
-  const [questionCount, setQuestionCount] = useState('');
+  const [courseId, setCourseId] = useState("");
+  const [title, setTitle] = useState("");
+  const [questionCount, setQuestionCount] = useState("");
   const [touched, setTouched] = useState(false);
   // AI only
-  const [aiContext, setAiContext] = useState('');
+  const [aiContext, setAiContext] = useState("");
 
   // Random only
-  const [examType, setExamType] = useState<PracticeExamType>('QUIZ');
-  const [difficulty, setDifficulty] = useState<'' | PracticeDifficulty>('');
+  const [examType, setExamType] = useState<PracticeExamType>("QUIZ");
+  const [difficulty, setDifficulty] = useState<"" | PracticeDifficulty>("");
   const [moduleIds, setModuleIds] = useState<string[]>([]);
   /** Questions wanted per picked module, by module id (typed text, validated below). */
   const [moduleCounts, setModuleCounts] = useState<Record<string, string>>({});
@@ -151,14 +159,14 @@ export function SmartPracticeModal({
   const [modulesError, setModulesError] = useState<string | null>(null);
   const [loadingModules, setLoadingModules] = useState(false);
   const [randomError, setRandomError] = useState<string | null>(null);
-  const [allocation, setAllocation] = useState<Allocation>('SMART');
+  const [allocation, setAllocation] = useState<Allocation>("SMART");
   const [plan, setPlan] = useState<PracticePlan | null>(null);
   const [planError, setPlanError] = useState<string | null>(null);
   const [planLoading, setPlanLoading] = useState(false);
   /** The module this practice is limited to; the student can widen it back to the whole course. */
   const [focus, setFocus] = useState<{ id: number | null; name: string } | null>(null);
 
-  const [phase, setPhase] = useState<Phase>('form');
+  const [phase, setPhase] = useState<Phase>("form");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<AiError | null>(null);
   const [started, setStarted] = useState<SmartPracticeStarted | null>(null);
@@ -175,7 +183,7 @@ export function SmartPracticeModal({
 
   const resetCounts = (m: SmartPracticeMode) => {
     // Both tabs start empty: the student types the count, "Max …" is only the placeholder.
-    setQuestionCount('');
+    setQuestionCount("");
   };
 
   // Fresh form each time the modal opens; stop polling when it closes.
@@ -184,24 +192,27 @@ export function SmartPracticeModal({
       stopPolling();
       return;
     }
-    const preset = initialCourseId != null && courses.some(c => c.courseId === initialCourseId) ? initialCourseId : courses[0]?.courseId;
-    setCourseId(preset != null ? String(preset) : '');
+    const preset =
+      initialCourseId != null && courses.some((c) => c.courseId === initialCourseId)
+        ? initialCourseId
+        : courses[0]?.courseId;
+    setCourseId(preset != null ? String(preset) : "");
     setMode(startMode);
-    setTakeAs('PRACTICE');
+    setTakeAs("PRACTICE");
     setMinutes(String(PRACTICE_MINUTES.default));
-    setTitle(focusModule ? `${focusModule.name} practice`.slice(0, TITLE_MAX) : '');
+    setTitle(focusModule ? `${focusModule.name} practice`.slice(0, TITLE_MAX) : "");
     setFocus(focusModule);
     resetCounts(startMode);
-    setExamType('QUIZ');
-    setDifficulty('');
+    setExamType("QUIZ");
+    setDifficulty("");
     setModuleIds([]);
     setModuleCounts({});
-    setAllocation('SMART');
+    setAllocation("SMART");
     setPlan(null);
     setPlanError(null);
-    setAiContext('');
+    setAiContext("");
     setTouched(false);
-    setPhase('form');
+    setPhase("form");
     setBusy(false);
     setError(null);
     setRandomError(null);
@@ -217,19 +228,21 @@ export function SmartPracticeModal({
     setModuleCounts({});
     setModules([]);
     setModulesError(null);
-    if (!open || mode !== 'RANDOM' || !courseId) return;
+    if (!open || mode !== "RANDOM" || !courseId) return;
     let cancelled = false;
     setLoadingModules(true);
     studentCourseService
       .getCourseDetail(Number(courseId))
-      .then(d => {
+      .then((d) => {
         if (cancelled) return;
         setModules(
-          [...(d.modules ?? [])].sort((a, b) => a.orderIndex - b.orderIndex).map(m => ({ value: String(m.moduleId), label: m.title })),
+          [...(d.modules ?? [])]
+            .sort((a, b) => a.orderIndex - b.orderIndex)
+            .map((m) => ({ value: String(m.moduleId), label: m.title })),
         );
       })
-      .catch(err => {
-        if (!cancelled) setModulesError(getApiErrorMessage(err, 'Failed to load the modules.'));
+      .catch((err) => {
+        if (!cancelled) setModulesError(getApiErrorMessage(err, "Failed to load the modules."));
       })
       .finally(() => {
         if (!cancelled) setLoadingModules(false);
@@ -253,57 +266,66 @@ export function SmartPracticeModal({
       .getSmartPractice(jobId)
       .then(({ status, retryAfterMs }) => {
         if (activeJob.current !== jobId) return;
-        if (status.status === 'PROCESSING') {
+        if (status.status === "PROCESSING") {
           pollTimer.current = window.setTimeout(() => poll(jobId), retryAfterMs ?? DEFAULT_POLL_MS);
           return;
         }
         setResult(status);
-        setPhase(status.status === 'COMPLETED' && status.examId != null ? 'completed' : 'failed');
+        setPhase(status.status === "COMPLETED" && status.examId != null ? "completed" : "failed");
       })
-      .catch(err => {
+      .catch((err) => {
         if (activeJob.current !== jobId) return;
-        setError(getAiError(err, 'Lost track of the practice exam job.'));
-        setPhase('failed');
+        setError(getAiError(err, "Lost track of the practice exam job."));
+        setPhase("failed");
       });
   };
 
   const limits = limitsOf(mode);
-  const smart = mode === 'RANDOM' && (allocation === 'SMART' || focus != null);
+  const smart = mode === "RANDOM" && (allocation === "SMART" || focus != null);
   const focusModuleId = smart && focus ? (focus.id ?? 0) : undefined;
   // Random with modules picked: the count is set per module and the total is their sum.
-  const perModule = mode === 'RANDOM' && !smart && moduleIds.length > 0;
+  const perModule = mode === "RANDOM" && !smart && moduleIds.length > 0;
   const moduleCountErrors: Record<string, string | undefined> = {};
   for (const id of moduleIds) {
-    const raw = moduleCounts[id] ?? '';
+    const raw = moduleCounts[id] ?? "";
     const n = Number(raw);
-    moduleCountErrors[id] = !raw.trim() ? 'Required' : Number.isInteger(n) && n >= 1 ? undefined : 'At least 1';
+    moduleCountErrors[id] = !raw.trim()
+      ? "Required"
+      : Number.isInteger(n) && n >= 1
+        ? undefined
+        : "At least 1";
   }
   const moduleTotal = moduleIds.reduce((sum, id) => sum + (Number(moduleCounts[id]) || 0), 0);
   const countNum = perModule ? moduleTotal : Number(questionCount);
   // Practice is untimed: the student sets no limit, the BE (which still wants one) gets the longest it allows.
   // Taken as an exam, the student's duration is the timer.
-  const timedRandom = mode === 'RANDOM' && takeAs === 'EXAM';
+  const timedRandom = mode === "RANDOM" && takeAs === "EXAM";
   const minutesNum = timedRandom ? Number(minutes) : limits.minutes.max;
   const errors = {
     minutes:
-      !timedRandom || (Number.isInteger(minutesNum) && minutesNum >= limits.minutes.min && minutesNum <= limits.minutes.max)
+      !timedRandom ||
+      (Number.isInteger(minutesNum) &&
+        minutesNum >= limits.minutes.min &&
+        minutesNum <= limits.minutes.max)
         ? undefined
         : `Enter ${limits.minutes.min} – ${limits.minutes.max} minutes.`,
-    title: title.trim() ? undefined : 'Enter a name for the practice exam.',
-    course: courseId ? undefined : 'Select a course.',
+    title: title.trim() ? undefined : "Enter a name for the practice exam.",
+    course: courseId ? undefined : "Select a course.",
     count: perModule
       ? Object.values(moduleCountErrors).some(Boolean)
-        ? 'Enter a question count for every module.'
+        ? "Enter a question count for every module."
         : moduleTotal <= limits.questions.max
           ? undefined
           : `The modules add up to ${moduleTotal}; at most ${limits.questions.max} questions.`
       : !questionCount.trim()
-      ? 'Enter the number of questions.'
-      : Number.isInteger(countNum) && countNum >= limits.questions.min && countNum <= limits.questions.max
-        ? undefined
-        : mode === 'RANDOM'
-          ? `Enter at most ${limits.questions.max} questions.`
-          : `Enter ${limits.questions.min} – ${limits.questions.max} questions.`,
+        ? "Enter the number of questions."
+        : Number.isInteger(countNum) &&
+            countNum >= limits.questions.min &&
+            countNum <= limits.questions.max
+          ? undefined
+          : mode === "RANDOM"
+            ? `Enter at most ${limits.questions.max} questions.`
+            : `Enter ${limits.questions.min} – ${limits.questions.max} questions.`,
   };
   const invalid = Boolean(errors.title || errors.course || errors.count || errors.minutes);
   const countInvalid = Boolean(errors.count);
@@ -312,7 +334,7 @@ export function SmartPracticeModal({
   useEffect(() => {
     setPlan(null);
     setPlanError(null);
-    if (!open || phase !== 'form' || !smart || !courseId || countInvalid) return;
+    if (!open || phase !== "form" || !smart || !courseId || countInvalid) return;
     let cancelled = false;
     const timer = window.setTimeout(() => {
       setPlanLoading(true);
@@ -323,14 +345,15 @@ export function SmartPracticeModal({
           durationMinutes: limits.minutes.max,
           examType,
           difficulty: difficulty || undefined,
-          allocation: 'SMART',
+          allocation: "SMART",
           focusModuleId,
         })
-        .then(p => {
+        .then((p) => {
           if (!cancelled) setPlan(p);
         })
-        .catch(err => {
-          if (!cancelled) setPlanError(getPracticeError(err, 'Could not preview the question split.'));
+        .catch((err) => {
+          if (!cancelled)
+            setPlanError(getPracticeError(err, "Could not preview the question split."));
         })
         .finally(() => {
           if (!cancelled) setPlanLoading(false);
@@ -340,7 +363,18 @@ export function SmartPracticeModal({
       cancelled = true;
       window.clearTimeout(timer);
     };
-  }, [open, phase, smart, courseId, countNum, countInvalid, examType, difficulty, limits.minutes.max, focusModuleId]);
+  }, [
+    open,
+    phase,
+    smart,
+    courseId,
+    countNum,
+    countInvalid,
+    examType,
+    difficulty,
+    limits.minutes.max,
+    focusModuleId,
+  ]);
 
   const generateAi = async () => {
     setBusy(true);
@@ -354,11 +388,11 @@ export function SmartPracticeModal({
         title: title.trim(),
       });
       setStarted(job);
-      setPhase('processing');
+      setPhase("processing");
       activeJob.current = job.jobId;
       poll(job.jobId);
     } catch (err) {
-      setError(getAiError(err, 'Failed to start the practice exam.'));
+      setError(getAiError(err, "Failed to start the practice exam."));
     } finally {
       setBusy(false);
     }
@@ -375,18 +409,21 @@ export function SmartPracticeModal({
         examType,
         categoryIds: !smart && moduleIds.length > 0 ? moduleIds.map(Number) : undefined,
         moduleQuestionCounts: perModule
-          ? moduleIds.map(id => ({ categoryId: Number(id), questionCount: Number(moduleCounts[id]) }))
+          ? moduleIds.map((id) => ({
+              categoryId: Number(id),
+              questionCount: Number(moduleCounts[id]),
+            }))
           : undefined,
         difficulty: difficulty || undefined,
         title: title.trim(),
         mode: takeAs,
-        allocation: smart ? 'SMART' : undefined,
+        allocation: smart ? "SMART" : undefined,
         focusModuleId,
       });
       onClose();
       navigate(studentTakeExamPath(created.examId, takeAs));
     } catch (err) {
-      setRandomError(getPracticeError(err, 'Failed to create the practice exam.', modules));
+      setRandomError(getPracticeError(err, "Failed to create the practice exam.", modules));
       setBusy(false);
     }
   };
@@ -394,13 +431,13 @@ export function SmartPracticeModal({
   const generate = () => {
     setTouched(true);
     if (invalid) return;
-    if (mode === 'AI') generateAi();
+    if (mode === "AI") generateAi();
     else generateRandom();
   };
 
   const backToForm = () => {
     stopPolling();
-    setPhase('form');
+    setPhase("form");
     setError(null);
     setStarted(null);
     setResult(null);
@@ -413,43 +450,62 @@ export function SmartPracticeModal({
   };
 
   const footer =
-    phase === 'form' ? (
+    phase === "form" ? (
       <Button
         loading={busy}
         disabled={busy || courses.length === 0 || (touched && invalid)}
-        icon={mode === 'AI' ? <AiSparkle /> : <Icon.Zap className="w-4 h-4" />}
+        icon={mode === "AI" ? <AiSparkle /> : <Icon.Zap className="w-4 h-4" />}
         onClick={generate}
       >
-        {mode === 'AI' ? 'Generate' : 'Generate and Start'}
+        {mode === "AI" ? "Generate" : "Generate and Start"}
       </Button>
-    ) : phase === 'completed' ? (
+    ) : phase === "completed" ? (
       <Button icon={<Icon.ChevronRight className="w-4 h-4" />} onClick={startPractice}>
         Start practice
       </Button>
-    ) : phase === 'failed' ? (
+    ) : phase === "failed" ? (
       <Button variant="outline" icon={<Icon.RefreshCw className="w-4 h-4" />} onClick={backToForm}>
         Try again
       </Button>
     ) : null;
 
   return (
-    <Modal open={open} onClose={() => !busy && onClose()} title="Create Practice Exam" size="lg" footer={footer}
-      description={phase === 'form' && (mode === 'AI'
-        ? 'The AI looks at the questions you got wrong in a course and builds a practice exam focused on your weak modules (about 70 % weak, 20 % medium, 10 % strong). You need at least 5 finished exams in the course.'
-        : focus
-          ? `Questions from ${focus.name} only: your open mistakes there first, then the ones you have not seen yet. Practice exams do not count towards your course progress.`
-          : 'Questions from the course question bank, personalized to your weak spots or from the modules you pick. Practice exams do not count towards your course progress.')}
-      error={mode === 'RANDOM' ? randomError && <Alert type="error" message={randomError} /> : error && <AiErrorAlert error={error} />}>
+    <Modal
+      open={open}
+      onClose={() => !busy && onClose()}
+      title="Create Practice Exam"
+      size="lg"
+      footer={footer}
+      description={
+        phase === "form" &&
+        (mode === "AI"
+          ? "The AI looks at the questions you got wrong in a course and builds a practice exam focused on your weak modules (about 70 % weak, 20 % medium, 10 % strong). You need at least 5 finished exams in the course."
+          : focus
+            ? `Questions from ${focus.name} only: your open mistakes there first, then the ones you have not seen yet. Practice exams do not count towards your course progress.`
+            : "Questions from the course question bank, personalized to your weak spots or from the modules you pick. Practice exams do not count towards your course progress.")
+      }
+      error={
+        mode === "RANDOM"
+          ? randomError && <Alert type="error" message={randomError} />
+          : error && <AiErrorAlert error={error} />
+      }
+    >
       <div className="space-y-5">
-        {phase === 'form' && (
+        {phase === "form" && (
           <>
             {AI_ENABLED && (
               <div className="flex flex-wrap items-center gap-3">
-                <Tabs tabs={Object.values(MODE_TABS)} active={MODE_TABS[mode]} onChange={t => changeMode(MODE_BY_TAB[t])} />
+                <Tabs
+                  tabs={Object.values(MODE_TABS)}
+                  active={MODE_TABS[mode]}
+                  onChange={(t) => changeMode(MODE_BY_TAB[t])}
+                />
               </div>
             )}
             {courses.length === 0 ? (
-              <p className="text-sm text-content-soft">Enroll in a course first to create a practice exam.</p>
+              <p className="text-sm text-content-soft">
+                Enroll in a course first to create a practice exam.
+              </p>
             ) : (
               <div className="grid gap-x-6 gap-y-5 sm:grid-cols-2">
                 <div className="min-w-0 sm:col-span-2">
@@ -458,7 +514,7 @@ export function SmartPracticeModal({
                     required
                     maxLength={TITLE_MAX}
                     value={title}
-                    onChange={e => setTitle(e.target.value)}
+                    onChange={(e) => setTitle(e.target.value)}
                     placeholder="e.g. Chapter 3 review"
                     error={touched ? errors.title : undefined}
                   />
@@ -467,7 +523,7 @@ export function SmartPracticeModal({
                   <div className="min-w-0 sm:col-span-2">
                     <SearchableSelect
                       label="Course"
-                      options={courses.map(c => ({ value: String(c.courseId), label: c.title }))}
+                      options={courses.map((c) => ({ value: String(c.courseId), label: c.title }))}
                       value={courseId}
                       onChange={setCourseId}
                       placeholder="Choose a course"
@@ -485,7 +541,7 @@ export function SmartPracticeModal({
                     min={limits.questions.min}
                     max={limits.questions.max}
                     value={perModule ? String(moduleTotal) : questionCount}
-                    onChange={e => setQuestionCount(e.target.value)}
+                    onChange={(e) => setQuestionCount(e.target.value)}
                     // With modules picked the total is the sum of their counts, set below.
                     disabled={perModule}
                     // The maximum is shown as the placeholder rather than a hint.
@@ -493,35 +549,44 @@ export function SmartPracticeModal({
                     error={touched ? errors.count : undefined}
                   />
                   {perModule && (
-                    <p className="mt-1 text-xs text-content-subtle">Total of the per-module counts below.</p>
+                    <p className="mt-1 text-xs text-content-subtle">
+                      Total of the per-module counts below.
+                    </p>
                   )}
                 </div>
-                {mode === 'AI' && (
+                {mode === "AI" && (
                   <label className="min-w-0 flex flex-col gap-1.5 sm:col-span-2">
-                    <span className="text-sm font-medium text-content-secondary">Context for the AI (optional)</span>
+                    <span className="text-sm font-medium text-content-secondary">
+                      Context for the AI (optional)
+                    </span>
                     <textarea
                       rows={3}
                       maxLength={AI_CONTEXT_MAX}
                       value={aiContext}
-                      onChange={e => setAiContext(e.target.value)}
+                      onChange={(e) => setAiContext(e.target.value)}
                       placeholder="e.g. Focus on chapter 3, I keep mixing up joins and subqueries. More scenario-based questions please."
                       className="w-full rounded-[10px] border border-line bg-surface p-3 text-sm text-content placeholder:text-content-placeholder focus:border-brand-600 focus:outline-none focus:ring-2 focus:ring-brand-600/20"
                     />
                     <span className="flex justify-between gap-2 text-xs text-content-subtle">
-                      <span>Tell the AI what to focus on, what you struggle with or the kind of questions you want.</span>
+                      <span>
+                        Tell the AI what to focus on, what you struggle with or the kind of
+                        questions you want.
+                      </span>
                       <span className="flex-shrink-0">
                         {aiContext.length}/{AI_CONTEXT_MAX}
                       </span>
                     </span>
                   </label>
                 )}
-                {mode === 'RANDOM' && (
+                {mode === "RANDOM" && (
                   <>
                     <div className="min-w-0 space-y-1.5 sm:col-span-2">
-                      <span className="block text-sm font-medium text-content-secondary">Take as</span>
+                      <span className="block text-sm font-medium text-content-secondary">
+                        Take as
+                      </span>
                       <TakeModePicker value={takeAs} onChange={setTakeAs} />
                     </div>
-                    {takeAs === 'EXAM' && (
+                    {takeAs === "EXAM" && (
                       <div className="min-w-0 sm:col-span-2">
                         <Input
                           label="Duration (minutes)"
@@ -530,19 +595,25 @@ export function SmartPracticeModal({
                           min={limits.minutes.min}
                           max={limits.minutes.max}
                           value={minutes}
-                          onChange={e => setMinutes(e.target.value)}
+                          onChange={(e) => setMinutes(e.target.value)}
                           error={touched ? errors.minutes : undefined}
                         />
                       </div>
                     )}
                     <div className="min-w-0 space-y-1.5 sm:col-span-2">
-                      <span className="block text-sm font-medium text-content-secondary">Questions from</span>
+                      <span className="block text-sm font-medium text-content-secondary">
+                        Questions from
+                      </span>
                       {focus ? (
                         <div className="flex flex-wrap items-center gap-3 rounded-[12px] border border-primary bg-primary-light px-3 py-3">
                           <Icon.Target className="w-5 h-5 flex-shrink-0 text-primary" />
                           <span className="min-w-0 flex-1 text-sm">
-                            <span className="block font-semibold text-content break-words">{focus.name}</span>
-                            <span className="block text-xs text-content-soft">This module only, personalized to your mistakes in it.</span>
+                            <span className="block font-semibold text-content break-words">
+                              {focus.name}
+                            </span>
+                            <span className="block text-xs text-content-soft">
+                              This module only, personalized to your mistakes in it.
+                            </span>
                           </span>
                           <button
                             type="button"
@@ -560,70 +631,93 @@ export function SmartPracticeModal({
                       label="Exam Type"
                       options={EXAM_TYPE_OPTIONS}
                       value={examType}
-                      onChange={v => setExamType(v as PracticeExamType)}
+                      onChange={(v) => setExamType(v as PracticeExamType)}
                     />
                     <Select
                       label="Difficulty"
                       options={DIFFICULTY_OPTIONS}
                       value={difficulty}
-                      onChange={v => setDifficulty(v as '' | PracticeDifficulty)}
+                      onChange={(v) => setDifficulty(v as "" | PracticeDifficulty)}
                     />
                     {smart ? (
                       <div className="min-w-0 sm:col-span-2">
-                        <PlanPreview plan={plan} loading={planLoading} error={planError} waiting={countInvalid} />
+                        <PlanPreview
+                          plan={plan}
+                          loading={planLoading}
+                          error={planError}
+                          waiting={countInvalid}
+                        />
                       </div>
                     ) : (
-                    <div className="min-w-0 space-y-1.5 sm:col-span-2">
-                      <MultiSelect
-                        label="Modules (optional)"
-                        placeholder={loadingModules ? 'Loading modules…' : modules.length === 0 ? 'No module in this course' : 'All modules'}
-                        options={modules}
-                        value={moduleIds}
-                        onChange={setModuleIds}
-                        disabled={loadingModules || modules.length === 0}
-                        searchable
-                        searchPlaceholder="Search modules…"
-                      />
-                      {modulesError ? (
-                        <p className="text-xs text-danger">{modulesError}</p>
-                      ) : (
-                        <p className="text-xs text-content-subtle">
-                          Leave empty to draw from every module of the course, or pick modules to set how many questions each one gives.
-                        </p>
-                      )}
-                      {perModule && (
-                        <>
-                          <p className="mt-3 text-xs font-medium text-content-secondary">Questions from each module</p>
-                          <ul className="mt-1.5 divide-y divide-line rounded-[10px] border border-line">
-                            {moduleIds.map(id => {
-                              const err = touched ? moduleCountErrors[id] : undefined;
-                              const moduleName = modules.find(m => m.value === id)?.label ?? `module ${id}`;
-                              return (
-                                <li key={id} className="flex items-center gap-3 px-3 py-2">
-                                  <span className="min-w-0 flex-1 truncate text-sm text-content" title={moduleName}>
-                                    {moduleName}
-                                  </span>
-                                  {err && <span className="text-xs text-danger">{err}</span>}
-                                  <input
-                                    type="number"
-                                    inputMode="numeric"
-                                    min={1}
-                                    max={limits.questions.max}
-                                    aria-label={`Questions from ${moduleName}`}
-                                    value={moduleCounts[id] ?? ''}
-                                    onChange={e => setModuleCounts(prev => ({ ...prev, [id]: e.target.value }))}
-                                    placeholder="1"
-                                    className={`w-20 rounded-[8px] border bg-surface px-2 py-1 text-right text-sm text-content focus:outline-none focus:ring-2 focus:ring-brand-600/20 ${
-                                      err ? 'border-danger' : 'border-line focus:border-brand-600'
-                                    }`}
-                                  />
-                                </li>
-                              );
-                            })}
-                          </ul>
-                        </>
-                      )}
-                    </div>
+                      <div className="min-w-0 space-y-1.5 sm:col-span-2">
+                        <MultiSelect
+                          label="Modules (optional)"
+                          placeholder={
+                            loadingModules
+                              ? "Loading modules…"
+                              : modules.length === 0
+                                ? "No module in this course"
+                                : "All modules"
+                          }
+                          options={modules}
+                          value={moduleIds}
+                          onChange={setModuleIds}
+                          disabled={loadingModules || modules.length === 0}
+                          searchable
+                          searchPlaceholder="Search modules…"
+                        />
+                        {modulesError ? (
+                          <p className="text-xs text-danger">{modulesError}</p>
+                        ) : (
+                          <p className="text-xs text-content-subtle">
+                            Leave empty to draw from every module of the course, or pick modules to
+                            set how many questions each one gives.
+                          </p>
+                        )}
+                        {perModule && (
+                          <>
+                            <p className="mt-3 text-xs font-medium text-content-secondary">
+                              Questions from each module
+                            </p>
+                            <ul className="mt-1.5 divide-y divide-line rounded-[10px] border border-line">
+                              {moduleIds.map((id) => {
+                                const err = touched ? moduleCountErrors[id] : undefined;
+                                const moduleName =
+                                  modules.find((m) => m.value === id)?.label ?? `module ${id}`;
+                                return (
+                                  <li key={id} className="flex items-center gap-3 px-3 py-2">
+                                    <span
+                                      className="min-w-0 flex-1 truncate text-sm text-content"
+                                      title={moduleName}
+                                    >
+                                      {moduleName}
+                                    </span>
+                                    {err && <span className="text-xs text-danger">{err}</span>}
+                                    <input
+                                      type="number"
+                                      inputMode="numeric"
+                                      min={1}
+                                      max={limits.questions.max}
+                                      aria-label={`Questions from ${moduleName}`}
+                                      value={moduleCounts[id] ?? ""}
+                                      onChange={(e) =>
+                                        setModuleCounts((prev) => ({
+                                          ...prev,
+                                          [id]: e.target.value,
+                                        }))
+                                      }
+                                      placeholder="1"
+                                      className={`w-20 rounded-[8px] border bg-surface px-2 py-1 text-right text-sm text-content focus:outline-none focus:ring-2 focus:ring-brand-600/20 ${
+                                        err ? "border-danger" : "border-line focus:border-brand-600"
+                                      }`}
+                                    />
+                                  </li>
+                                );
+                              })}
+                            </ul>
+                          </>
+                        )}
+                      </div>
                     )}
                   </>
                 )}
@@ -632,16 +726,19 @@ export function SmartPracticeModal({
           </>
         )}
 
-        {phase !== 'form' && started?.analysis && <AnalysisSummary analysis={started.analysis} />}
+        {phase !== "form" && started?.analysis && <AnalysisSummary analysis={started.analysis} />}
 
-        {phase === 'processing' && (
-          <div className="flex items-center gap-3 rounded-[10px] bg-primary-light px-4 py-3 text-sm text-brand-ink" role="status">
+        {phase === "processing" && (
+          <div
+            className="flex items-center gap-3 rounded-[10px] bg-primary-light px-4 py-3 text-sm text-brand-ink"
+            role="status"
+          >
             <span className="w-4 h-4 border-2 border-current border-t-transparent rounded-full spinner" />
             The AI is picking your questions…
           </div>
         )}
 
-        {phase === 'completed' && result && (
+        {phase === "completed" && result && (
           <div className="space-y-3 rounded-[10px] border border-success-line bg-success-light px-4 py-3">
             <p className="flex items-center gap-2 text-sm font-semibold text-success-strong">
               <Icon.CheckCircle className="w-4 h-4" /> Your practice exam is ready
@@ -652,7 +749,7 @@ export function SmartPracticeModal({
             </div>
             {result.focusAreas && result.focusAreas.length > 0 && (
               <div className="flex flex-wrap gap-1.5">
-                {result.focusAreas.map(a => (
+                {result.focusAreas.map((a) => (
                   <Badge key={a} size="sm" variant="info">
                     {a}
                   </Badge>
@@ -662,30 +759,53 @@ export function SmartPracticeModal({
           </div>
         )}
 
-        {phase === 'failed' && !error && (
-          <Alert type="error" message="The AI could not build the practice exam. Your tokens were refunded — please try again." />
+        {phase === "failed" && !error && (
+          <Alert
+            type="error"
+            message="The AI could not build the practice exam. Your tokens were refunded — please try again."
+          />
         )}
-
       </div>
     </Modal>
   );
 }
 
-function AnalysisSummary({ analysis }: { analysis: NonNullable<SmartPracticeStarted['analysis']> }) {
+function AnalysisSummary({
+  analysis,
+}: {
+  analysis: NonNullable<SmartPracticeStarted["analysis"]>;
+}) {
   return (
     <div className="space-y-3">
       <p className="text-sm text-content-soft">
-        Based on <span className="font-semibold text-content">{analysis.totalAttempts}</span> finished exams:
+        Based on <span className="font-semibold text-content">{analysis.totalAttempts}</span>{" "}
+        finished exams:
       </p>
       <div className="grid gap-4 sm:grid-cols-2">
-        <CategoryList title="Focus on" items={analysis.weakCategories} empty="No weak modules found." />
-        <CategoryList title="Already strong" items={analysis.strongCategories} empty="No strong modules yet." />
+        <CategoryList
+          title="Focus on"
+          items={analysis.weakCategories}
+          empty="No weak modules found."
+        />
+        <CategoryList
+          title="Already strong"
+          items={analysis.strongCategories}
+          empty="No strong modules yet."
+        />
       </div>
     </div>
   );
 }
 
-function CategoryList({ title, items, empty }: { title: string; items: CategoryAccuracy[]; empty: string }) {
+function CategoryList({
+  title,
+  items,
+  empty,
+}: {
+  title: string;
+  items: CategoryAccuracy[];
+  empty: string;
+}) {
   return (
     <div className="min-w-0 space-y-1.5">
       <h3 className="text-xs font-semibold uppercase tracking-wide text-content-subtle">{title}</h3>
@@ -693,10 +813,12 @@ function CategoryList({ title, items, empty }: { title: string; items: CategoryA
         <p className="text-xs text-content-subtle">{empty}</p>
       ) : (
         <ul className="space-y-1">
-          {items.map(c => (
+          {items.map((c) => (
             <li key={c.categoryId} className="flex items-center justify-between gap-2 text-sm">
               <span className="truncate text-content">{c.name}</span>
-              <span className={`flex-shrink-0 font-semibold ${accuracyTone(c.accuracy).text}`}>{c.accuracy}%</span>
+              <span className={`flex-shrink-0 font-semibold ${accuracyTone(c.accuracy).text}`}>
+                {c.accuracy}%
+              </span>
             </li>
           ))}
         </ul>
@@ -705,10 +827,16 @@ function CategoryList({ title, items, empty }: { title: string; items: CategoryA
   );
 }
 
-function AllocationPicker({ value, onChange }: { value: Allocation; onChange: (value: Allocation) => void }) {
+function AllocationPicker({
+  value,
+  onChange,
+}: {
+  value: Allocation;
+  onChange: (value: Allocation) => void;
+}) {
   return (
     <div role="radiogroup" aria-label="Questions from" className="grid gap-2 sm:grid-cols-2">
-      {ALLOCATIONS.map(a => {
+      {ALLOCATIONS.map((a) => {
         const selected = value === a.value;
         return (
           <button
@@ -718,10 +846,14 @@ function AllocationPicker({ value, onChange }: { value: Allocation; onChange: (v
             aria-checked={selected}
             onClick={() => onChange(a.value)}
             className={`flex items-start gap-3 rounded-[12px] border px-3 py-3 text-left transition-colors focus-visible:outline-2 focus-visible:outline-primary ${
-              selected ? 'border-primary bg-primary-light' : 'border-line hover:bg-surface-hover'
+              selected ? "border-primary bg-primary-light" : "border-line hover:bg-surface-hover"
             }`}
           >
-            <span className={`mt-0.5 flex-shrink-0 ${selected ? 'text-primary' : 'text-content-subtle'}`}>{a.icon}</span>
+            <span
+              className={`mt-0.5 flex-shrink-0 ${selected ? "text-primary" : "text-content-subtle"}`}
+            >
+              {a.icon}
+            </span>
             <span className="min-w-0">
               <span className="block text-sm font-semibold text-content">{a.title}</span>
               <span className="mt-0.5 block text-xs text-content-soft">{a.description}</span>
@@ -745,12 +877,19 @@ function PlanPreview({
   error: string | null;
   waiting: boolean;
 }) {
-  if (waiting) return <p className="text-xs text-content-subtle">Enter the number of questions to see how they are split over the modules.</p>;
+  if (waiting)
+    return (
+      <p className="text-xs text-content-subtle">
+        Enter the number of questions to see how they are split over the modules.
+      </p>
+    );
   if (error) return <p className="text-xs text-danger">{error}</p>;
   if (!plan) {
     return (
       <p className="flex items-center gap-2 text-xs text-content-subtle" role="status">
-        {loading && <span className="w-3 h-3 border-2 border-current border-t-transparent rounded-full spinner" />}
+        {loading && (
+          <span className="w-3 h-3 border-2 border-current border-t-transparent rounded-full spinner" />
+        )}
         Working out your split…
       </p>
     );
@@ -760,9 +899,9 @@ function PlanPreview({
       <p className="text-xs font-medium text-content-secondary">Your split</p>
       <ul className="divide-y divide-line rounded-[10px] border border-line">
         {plan.modules
-          .filter(m => m.questionCount > 0)
-          .map(m => (
-            <li key={m.categoryId ?? 'general'} className="flex items-center gap-3 px-3 py-2">
+          .filter((m) => m.questionCount > 0)
+          .map((m) => (
+            <li key={m.categoryId ?? "general"} className="flex items-center gap-3 px-3 py-2">
               <span className="min-w-0 flex-1">
                 <span className="flex flex-wrap items-center gap-1.5">
                   <span className="truncate text-sm text-content" title={m.name}>
@@ -773,15 +912,21 @@ function PlanPreview({
                   </Badge>
                 </span>
                 <span className="block text-2xs text-content-subtle">
-                  {m.answered === 0 ? 'Not practised yet' : `${m.accuracy}% correct`}
-                  {m.stillWrong > 0 ? ` · ${m.stillWrong} mistake${m.stillWrong === 1 ? '' : 's'} to fix` : ''}
+                  {m.answered === 0 ? "Not practised yet" : `${m.accuracy}% correct`}
+                  {m.stillWrong > 0
+                    ? ` · ${m.stillWrong} mistake${m.stillWrong === 1 ? "" : "s"} to fix`
+                    : ""}
                 </span>
               </span>
-              <span className="flex-shrink-0 text-sm font-semibold text-content">{m.questionCount}</span>
+              <span className="flex-shrink-0 text-sm font-semibold text-content">
+                {m.questionCount}
+              </span>
             </li>
           ))}
       </ul>
-      <p className="text-2xs text-content-subtle">Inside each module your open mistakes come first, then questions you have not seen.</p>
+      <p className="text-2xs text-content-subtle">
+        Inside each module your open mistakes come first, then questions you have not seen.
+      </p>
     </div>
   );
 }

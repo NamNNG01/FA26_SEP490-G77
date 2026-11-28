@@ -1,5 +1,5 @@
-import { api } from './api';
-import type { ApiResponse } from '@/types/api';
+import { api } from "./api";
+import type { ApiResponse } from "@/types/api";
 
 /**
  * PasswordService
@@ -22,7 +22,7 @@ export const PASSWORD_MIN_LENGTH = 8;
 /** Requires a minimum length, uppercase letter, number, and symbol. */
 export const PASSWORD_POLICY_REGEX = new RegExp(
   `^(?=.*\\p{Lu})(?=.*\\p{N})(?=.*[\\p{P}\\p{S}])[\\s\\S]{${PASSWORD_MIN_LENGTH},}$`,
-  'u',
+  "u",
 );
 
 /** BCrypt only uses the first 72 bytes of a password, so longer ones are rejected up front. */
@@ -36,7 +36,7 @@ export function isPasswordTooLong(password: string): boolean {
 export const PASSWORD_TOO_LONG_MESSAGE = `Password is too long. Use at most ${PASSWORD_MAX_BYTES} UTF-8 bytes.`;
 
 export interface PasswordCheck {
-  id: 'length' | 'uppercase' | 'number' | 'symbol' | 'maxBytes';
+  id: "length" | "uppercase" | "number" | "symbol" | "maxBytes";
   label: string;
   met: boolean;
 }
@@ -47,34 +47,39 @@ export interface PasswordCheck {
  */
 export function getPasswordChecks(password: string): PasswordCheck[] {
   const checks: PasswordCheck[] = [
-    { id: 'length', label: `At least ${PASSWORD_MIN_LENGTH} characters`, met: password.length >= PASSWORD_MIN_LENGTH },
-    { id: 'uppercase', label: 'An uppercase letter', met: /\p{Lu}/u.test(password) },
-    { id: 'number', label: 'A number', met: /\p{N}/u.test(password) },
-    { id: 'symbol', label: 'A symbol (e.g. ! @ # $)', met: /[\p{P}\p{S}]/u.test(password) },
+    {
+      id: "length",
+      label: `At least ${PASSWORD_MIN_LENGTH} characters`,
+      met: password.length >= PASSWORD_MIN_LENGTH,
+    },
+    { id: "uppercase", label: "An uppercase letter", met: /\p{Lu}/u.test(password) },
+    { id: "number", label: "A number", met: /\p{N}/u.test(password) },
+    { id: "symbol", label: "A symbol (e.g. ! @ # $)", met: /[\p{P}\p{S}]/u.test(password) },
   ];
-  if (isPasswordTooLong(password)) checks.push({ id: 'maxBytes', label: `At most ${PASSWORD_MAX_BYTES} UTF-8 bytes`, met: false });
+  if (isPasswordTooLong(password))
+    checks.push({ id: "maxBytes", label: `At most ${PASSWORD_MAX_BYTES} UTF-8 bytes`, met: false });
   return checks;
 }
 
 /** Returns the first password policy error, or null when the password is valid. */
 export function getPasswordValidationError(password: string): string | null {
   if (!password.trim()) {
-    return 'Password is required';
+    return "Password is required";
   }
   if (password.length < PASSWORD_MIN_LENGTH) {
     return `Password must be at least ${PASSWORD_MIN_LENGTH} characters`;
   }
   if (!/\p{Lu}/u.test(password)) {
-    return 'Password must include at least one uppercase letter';
+    return "Password must include at least one uppercase letter";
   }
   if (!/\p{N}/u.test(password)) {
-    return 'Password must include at least one number';
+    return "Password must include at least one number";
   }
   if (!/[\p{P}\p{S}]/u.test(password)) {
-    return 'Password must include at least one symbol';
+    return "Password must include at least one symbol";
   }
   if (!PASSWORD_POLICY_REGEX.test(password)) {
-    return 'Password does not meet the password requirements';
+    return "Password does not meet the password requirements";
   }
   if (isPasswordTooLong(password)) {
     return PASSWORD_TOO_LONG_MESSAGE;
@@ -85,7 +90,7 @@ export function getPasswordValidationError(password: string): string | null {
 export const passwordService = {
   /** Resolves with the backend's confirmation message. */
   async forgotPassword(email: string): Promise<string> {
-    const body = await api.post<ApiResponse<null>>('/auth/password/forgot', {
+    const body = await api.post<ApiResponse<null>>("/auth/password/forgot", {
       email: email.trim(),
     });
     return body.message;
@@ -98,8 +103,8 @@ export const passwordService = {
    */
   async changePassword(currentPassword: string, newPassword: string): Promise<string> {
     const body = await api.request<ApiResponse<null>>({
-      method: 'put',
-      url: '/auth/password/change',
+      method: "put",
+      url: "/auth/password/change",
       data: { currentPassword, newPassword },
     });
     return body.message;
@@ -107,7 +112,7 @@ export const passwordService = {
 
   /** Resolves with the backend's confirmation message. */
   async resetPassword(token: string, newPassword: string): Promise<string> {
-    const body = await api.post<ApiResponse<null>>('/auth/password/reset', {
+    const body = await api.post<ApiResponse<null>>("/auth/password/reset", {
       token: token.trim(),
       newPassword,
     });

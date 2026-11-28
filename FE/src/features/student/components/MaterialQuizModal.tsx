@@ -1,21 +1,21 @@
-import { useEffect, useRef, useState } from 'react';
-import { useNavigate } from 'react-router';
-import { Modal } from '@/components/ui/Modal';
-import { Button } from '@/components/ui/Button';
-import { Input } from '@/components/ui/Input';
-import { Select } from '@/components/ui/Select';
-import { SearchableSelect } from '@/components/ui/SearchableSelect';
-import { Alert } from '@/components/ui/Alert';
-import { Progress } from '@/components/ui/Progress';
-import { Spinner } from '@/components/ui/Spinner';
-import { Icon } from '@/assets/icons';
-import { ROUTES, studentResumeAttemptPath } from '@/app/routes';
-import { getApiErrorMessage } from '@/utils/apiError';
-import type { MyCourse } from '@/services/studentCourse.service';
-import { getAiError, type AiError } from '@/services/studentAi.service';
-import { PRACTICE_MINUTES } from '@/services/studentPracticeExam.service';
-import { rememberTakeAs, takeAsOf, type TakeAs } from '../examModes';
-import { TakeModePicker } from './TakeModeModal';
+import { useEffect, useRef, useState } from "react";
+import { useNavigate } from "react-router";
+import { Modal } from "@/components/ui/Modal";
+import { Button } from "@/components/ui/Button";
+import { Input } from "@/components/ui/Input";
+import { Select } from "@/components/ui/Select";
+import { SearchableSelect } from "@/components/ui/SearchableSelect";
+import { Alert } from "@/components/ui/Alert";
+import { Progress } from "@/components/ui/Progress";
+import { Spinner } from "@/components/ui/Spinner";
+import { Icon } from "@/assets/icons";
+import { ROUTES, studentResumeAttemptPath } from "@/app/routes";
+import { getApiErrorMessage } from "@/utils/apiError";
+import type { MyCourse } from "@/services/studentCourse.service";
+import { getAiError, type AiError } from "@/services/studentAi.service";
+import { PRACTICE_MINUTES } from "@/services/studentPracticeExam.service";
+import { rememberTakeAs, takeAsOf, type TakeAs } from "../examModes";
+import { TakeModePicker } from "./TakeModeModal";
 import {
   MATERIAL_ACCEPT,
   MATERIAL_MAX_BYTES,
@@ -28,35 +28,37 @@ import {
   type MaterialDifficulty,
   type MaterialItem,
   type MaterialJobState,
-} from '@/services/studentMaterial.service';
-import { AiErrorAlert } from './aiUi';
-import { focusFirstInvalidAfter } from '@/utils/focusFirstInvalid';
-import { formatDate } from './studentUi';
+} from "@/services/studentMaterial.service";
+import { AiErrorAlert } from "./aiUi";
+import { focusFirstInvalidAfter } from "@/utils/focusFirstInvalid";
+import { formatDate } from "./studentUi";
 
 const DEFAULT_POLL_MS = 2000;
 const FILE_LIMIT_MESSAGE = `You already have ${MATERIAL_MAX_FILES} files. Delete one in My Materials to upload a new file — files you uploaded before can still be used.`;
-const EXTENSIONS = MATERIAL_ACCEPT.split(',');
+const EXTENSIONS = MATERIAL_ACCEPT.split(",");
 /** Name of the quiz — the exam `title` column is VARCHAR(255). */
 const QUIZ_TITLE_MAX = 255;
 /** Free-text guidance the student gives the AI (sent as `context`). */
 const AI_CONTEXT_MAX = 500;
 
 /** Value of the "No course selected" entry: the quiz belongs to no course. */
-const NO_COURSE = '';
+const NO_COURSE = "";
 
 /** Value of the "+ Upload new file" entry in the material dropdown. */
-const UPLOAD_NEW = '';
+const UPLOAD_NEW = "";
 
 const DIFFICULTY_OPTIONS: { value: MaterialDifficulty; label: string }[] = [
-  { value: 'EASY', label: 'Easy' },
-  { value: 'MEDIUM', label: 'Medium' },
-  { value: 'HARD', label: 'Hard' },
+  { value: "EASY", label: "Easy" },
+  { value: "MEDIUM", label: "Medium" },
+  { value: "HARD", label: "Hard" },
 ];
 
-type Phase = 'form' | 'processing' | 'completed' | 'failed';
+type Phase = "form" | "processing" | "completed" | "failed";
 
 function formatSize(bytes: number) {
-  return bytes < 1024 * 1024 ? `${Math.max(1, Math.round(bytes / 1024))} KB` : `${(bytes / 1024 / 1024).toFixed(1)} MB`;
+  return bytes < 1024 * 1024
+    ? `${Math.max(1, Math.round(bytes / 1024))} KB`
+    : `${(bytes / 1024 / 1024).toFixed(1)} MB`;
 }
 
 /**
@@ -83,18 +85,18 @@ export function MaterialQuizModal({
   const navigate = useNavigate();
   const fileInput = useRef<HTMLInputElement>(null);
 
-  const [courseId, setCourseId] = useState('');
+  const [courseId, setCourseId] = useState("");
   const [file, setFile] = useState<File | null>(null);
   const [fileError, setFileError] = useState<string | null>(null);
   const [dragOver, setDragOver] = useState(false);
-  const [title, setTitle] = useState('');
+  const [title, setTitle] = useState("");
   const [documentId, setDocumentId] = useState<number | null>(null);
-  const [questionCount, setQuestionCount] = useState('');
-  const [difficulty, setDifficulty] = useState<MaterialDifficulty>('MEDIUM');
-  const [quizTitle, setQuizTitle] = useState('');
-  const [aiContext, setAiContext] = useState('');
+  const [questionCount, setQuestionCount] = useState("");
+  const [difficulty, setDifficulty] = useState<MaterialDifficulty>("MEDIUM");
+  const [quizTitle, setQuizTitle] = useState("");
+  const [aiContext, setAiContext] = useState("");
   /** Take the quiz as an Exam (timed) or as Practice. */
-  const [takeAs, setTakeAs] = useState<TakeAs>('PRACTICE');
+  const [takeAs, setTakeAs] = useState<TakeAs>("PRACTICE");
   /** Exam only: the time limit typed in; null follows the question count (the BE's own default). */
   const [minutes, setMinutes] = useState<string | null>(null);
   const [touched, setTouched] = useState(false);
@@ -111,7 +113,7 @@ export function MaterialQuizModal({
   /** Latest picked file; a hash check for an older pick is dropped. */
   const pickedFile = useRef<File | null>(null);
 
-  const [phase, setPhase] = useState<Phase>('form');
+  const [phase, setPhase] = useState<Phase>("form");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<AiError | null>(null);
   const [job, setJob] = useState<MaterialJobState | null>(null);
@@ -133,24 +135,27 @@ export function MaterialQuizModal({
       return;
     }
     // No course by default; a material picked on My Materials keeps its course.
-    const preset = initialCourseId != null && courses.some(c => c.courseId === initialCourseId) ? initialCourseId : null;
+    const preset =
+      initialCourseId != null && courses.some((c) => c.courseId === initialCourseId)
+        ? initialCourseId
+        : null;
     setCourseId(preset != null ? String(preset) : NO_COURSE);
     setFile(null);
     setFileError(null);
-    setTitle('');
+    setTitle("");
     setReused(false);
     setCheckingFile(false);
     pickedFile.current = null;
     // A material picked on My Materials stays picked, with its course or (none given) with no course.
     setDocumentId(initialCourseId == null || preset != null ? initialDocumentId : null);
-    setQuestionCount('');
-    setDifficulty('MEDIUM');
-    setQuizTitle('');
-    setAiContext('');
-    setTakeAs('PRACTICE');
+    setQuestionCount("");
+    setDifficulty("MEDIUM");
+    setQuizTitle("");
+    setAiContext("");
+    setTakeAs("PRACTICE");
     setMinutes(null);
     setTouched(false);
-    setPhase('form');
+    setPhase("form");
     setBusy(false);
     setError(null);
     setJob(null);
@@ -169,14 +174,15 @@ export function MaterialQuizModal({
     let cancelled = false;
     setLoadingMaterials(true);
     materialService
-      .listWithCourses(courses.map(c => ({ courseId: c.courseId, title: c.title })))
-      .then(res => {
+      .listWithCourses(courses.map((c) => ({ courseId: c.courseId, title: c.title })))
+      .then((res) => {
         if (cancelled) return;
         setMaterials(res.items);
         setLinked(res.linked);
       })
-      .catch(err => {
-        if (!cancelled) setMaterialsError(getApiErrorMessage(err, 'Failed to load your materials.'));
+      .catch((err) => {
+        if (!cancelled)
+          setMaterialsError(getApiErrorMessage(err, "Failed to load your materials."));
       })
       .finally(() => {
         if (!cancelled) setLoadingMaterials(false);
@@ -192,35 +198,44 @@ export function MaterialQuizModal({
       .then(({ job: state, retryAfterMs }) => {
         if (activeJob.current !== jobId) return;
         setJob(state);
-        if (state.status === 'COMPLETED' && state.quizId != null) setPhase('completed');
-        else if (state.status === 'FAILED') setPhase('failed');
-        else pollTimer.current = window.setTimeout(() => poll(jobId), retryAfterMs ?? DEFAULT_POLL_MS);
+        if (state.status === "COMPLETED" && state.quizId != null) setPhase("completed");
+        else if (state.status === "FAILED") setPhase("failed");
+        else
+          pollTimer.current = window.setTimeout(() => poll(jobId), retryAfterMs ?? DEFAULT_POLL_MS);
       })
-      .catch(err => {
+      .catch((err) => {
         if (activeJob.current !== jobId) return;
-        setError(getAiError(err, 'Lost track of the quiz generation.'));
-        setPhase('failed');
+        setError(getAiError(err, "Lost track of the quiz generation."));
+        setPhase("failed");
       });
   };
 
   const track = (jobId: number, questionCountOfJob: number) => {
     stopPolling();
-    setJob({ jobId, status: 'PENDING', progress: 0, questionCount: questionCountOfJob, errorMessage: null, quizId: null });
+    setJob({
+      jobId,
+      status: "PENDING",
+      progress: 0,
+      questionCount: questionCountOfJob,
+      errorMessage: null,
+      quizId: null,
+    });
     setError(null);
-    setPhase('processing');
+    setPhase("processing");
     activeJob.current = jobId;
     poll(jobId);
   };
 
   // MATERIAL_MAX_FILES per account: a new file is refused once the list is full; a file uploaded before
   // (found by the hash check) is reused and does not count.
-  const atFileLimit = !loadingMaterials && !materialsError && materials.length >= MATERIAL_MAX_FILES;
+  const atFileLimit =
+    !loadingMaterials && !materialsError && materials.length >= MATERIAL_MAX_FILES;
 
   const pickFile = (f: File | undefined | null) => {
     if (!f) return;
-    const ext = f.name.slice(f.name.lastIndexOf('.')).toLowerCase();
+    const ext = f.name.slice(f.name.lastIndexOf(".")).toLowerCase();
     if (!EXTENSIONS.includes(ext)) {
-      setFileError('Only PDF or DOCX files are supported.');
+      setFileError("Only PDF or DOCX files are supported.");
       return;
     }
     if (f.size > MATERIAL_MAX_BYTES) {
@@ -251,16 +266,18 @@ export function MaterialQuizModal({
       }
       pickedFile.current = null;
       setFile(null);
-      setTitle('');
+      setTitle("");
       setDocumentId(found.documentId);
       setReused(true);
-      if (!materials.some(m => m.documentId === found.documentId)) setMaterialsReload(r => r + 1);
+      if (!materials.some((m) => m.documentId === found.documentId))
+        setMaterialsReload((r) => r + 1);
     } finally {
       if (pickedFile.current === f || pickedFile.current === null) setCheckingFile(false);
     }
   };
 
-  const inCourse = (m: MaterialItem) => (m.courses ?? []).some(c => String(c.courseId) === courseId);
+  const inCourse = (m: MaterialItem) =>
+    (m.courses ?? []).some((c) => String(c.courseId) === courseId);
 
   const changeCourse = (value: string) => {
     setCourseId(value);
@@ -274,39 +291,51 @@ export function MaterialQuizModal({
   const minutesValue = minutes ?? String(Math.max(10, Number.isInteger(countNum) ? countNum : 0));
   const minutesNum = Number(minutesValue);
   const errors = {
-    quizTitle: quizTitle.trim() ? undefined : 'Enter a name for the quiz.',
-    material: documentId != null || file ? undefined : 'Upload a PDF or DOCX file, or pick one of your materials.',
+    quizTitle: quizTitle.trim() ? undefined : "Enter a name for the quiz.",
+    material:
+      documentId != null || file
+        ? undefined
+        : "Upload a PDF or DOCX file, or pick one of your materials.",
     count:
-      Number.isInteger(countNum) && countNum >= MATERIAL_QUESTIONS.min && countNum <= MATERIAL_QUESTIONS.max
+      Number.isInteger(countNum) &&
+      countNum >= MATERIAL_QUESTIONS.min &&
+      countNum <= MATERIAL_QUESTIONS.max
         ? undefined
         : `Enter ${MATERIAL_QUESTIONS.min} – ${MATERIAL_QUESTIONS.max} questions.`,
     minutes:
-      takeAs !== 'EXAM' ||
-      (Number.isInteger(minutesNum) && minutesNum >= PRACTICE_MINUTES.min && minutesNum <= PRACTICE_MINUTES.max)
+      takeAs !== "EXAM" ||
+      (Number.isInteger(minutesNum) &&
+        minutesNum >= PRACTICE_MINUTES.min &&
+        minutesNum <= PRACTICE_MINUTES.max)
         ? undefined
         : `Enter ${PRACTICE_MINUTES.min} – ${PRACTICE_MINUTES.max} minutes.`,
   };
   const invalid = Boolean(errors.quizTitle || errors.material || errors.count || errors.minutes);
 
   const hasCourse = courseId !== NO_COURSE;
-  const selected = materials.find(m => m.documentId === documentId) ?? null;
+  const selected = materials.find((m) => m.documentId === documentId) ?? null;
   // No course: every material. Otherwise materials of the course first; with linked courses the others
   // follow and get added on Generate.
   const pickable = !hasCourse
     ? materials
     : linked
-      ? [...materials.filter(inCourse), ...materials.filter(m => !inCourse(m))]
+      ? [...materials.filter(inCourse), ...materials.filter((m) => !inCourse(m))]
       : materials.filter(inCourse);
   const materialOptions = [
-    { value: UPLOAD_NEW, label: '+ Upload new file' },
-    ...pickable.map(m => {
-      const where = hasCourse && inCourse(m) ? '' : (m.courses ?? []).length > 0 ? ` · in ${(m.courses ?? []).map(c => c.title).join(', ')}` : '';
-      const running = m.jobs.some(j => isJobRunning(j.status)) ? ' (generating…)' : '';
+    { value: UPLOAD_NEW, label: "+ Upload new file" },
+    ...pickable.map((m) => {
+      const where =
+        hasCourse && inCourse(m)
+          ? ""
+          : (m.courses ?? []).length > 0
+            ? ` · in ${(m.courses ?? []).map((c) => c.title).join(", ")}`
+            : "";
+      const running = m.jobs.some((j) => isJobRunning(j.status)) ? " (generating…)" : "";
       return { value: String(m.documentId), label: `${m.title}${where}${running}` };
     }),
   ];
   const needsAttach = hasCourse && linked && selected != null && !inCourse(selected);
-  const runningJob = selected?.jobs.find(j => isJobRunning(j.status)) ?? null;
+  const runningJob = selected?.jobs.find((j) => isJobRunning(j.status)) ?? null;
 
   const generate = async () => {
     if (invalid) {
@@ -324,19 +353,23 @@ export function MaterialQuizModal({
     let docId = documentId;
     try {
       if (docId == null && file) {
-        const uploaded = await materialService.upload(file, hasCourse ? Number(courseId) : undefined, title);
+        const uploaded = await materialService.upload(
+          file,
+          hasCourse ? Number(courseId) : undefined,
+          title,
+        );
         docId = uploaded.documentId;
         if (uploaded.duplicate) setReused(true);
         // A retry after this point reuses the uploaded material instead of uploading again.
         setFile(null);
-        setTitle('');
+        setTitle("");
         setDocumentId(docId);
-        setMaterialsReload(r => r + 1);
+        setMaterialsReload((r) => r + 1);
       }
       if (docId == null) return;
       if (needsAttach && docId === selected?.documentId) {
         await materialService.attachCourse(docId, Number(courseId));
-        setMaterialsReload(r => r + 1);
+        setMaterialsReload((r) => r + 1);
       }
       const accepted = await materialService.generateQuiz(docId, {
         questionCount: countNum,
@@ -344,7 +377,7 @@ export function MaterialQuizModal({
         courseId: hasCourse ? Number(courseId) : undefined,
         title: quizTitle.trim(),
         context: aiContext.trim() || undefined,
-        durationMinutes: takeAs === 'EXAM' ? minutesNum : undefined,
+        durationMinutes: takeAs === "EXAM" ? minutesNum : undefined,
       });
       track(accepted.jobId, accepted.questionCount);
     } catch (err) {
@@ -356,7 +389,7 @@ export function MaterialQuizModal({
           return;
         }
       }
-      setError(getAiError(err, 'Failed to start the quiz generation.'));
+      setError(getAiError(err, "Failed to start the quiz generation."));
     } finally {
       setBusy(false);
     }
@@ -364,9 +397,13 @@ export function MaterialQuizModal({
 
   const findRunningJob = async (docId: number) => {
     try {
-      const { items: list } = await materialService.listWithCourses(courses.map(c => ({ courseId: c.courseId, title: c.title })));
+      const { items: list } = await materialService.listWithCourses(
+        courses.map((c) => ({ courseId: c.courseId, title: c.title })),
+      );
       setMaterials(list);
-      return list.find(m => m.documentId === docId)?.jobs.find(j => isJobRunning(j.status)) ?? null;
+      return (
+        list.find((m) => m.documentId === docId)?.jobs.find((j) => isJobRunning(j.status)) ?? null
+      );
     } catch {
       return null;
     }
@@ -374,11 +411,11 @@ export function MaterialQuizModal({
 
   const backToForm = () => {
     stopPolling();
-    setPhase('form');
+    setPhase("form");
     setError(null);
     setJob(null);
     setTouched(false);
-    setMaterialsReload(r => r + 1);
+    setMaterialsReload((r) => r + 1);
   };
 
   const startQuiz = async () => {
@@ -387,20 +424,21 @@ export function MaterialQuizModal({
     setError(null);
     try {
       const started = await materialService.start(job.jobId, takeAs);
-      const serverTakeAs = started.takeAs === 'EXAM' || started.takeAs === 'PRACTICE' ? started.takeAs : takeAs;
+      const serverTakeAs =
+        started.takeAs === "EXAM" || started.takeAs === "PRACTICE" ? started.takeAs : takeAs;
       // The take screen opens by attempt id here, so the choice is kept for that attempt first
       // (a resumed attempt keeps the choice it was started with).
       if (!takeAsOf(started.attemptId)) rememberTakeAs(started.attemptId, serverTakeAs);
       onClose();
       navigate(studentResumeAttemptPath(started.attemptId));
     } catch (err) {
-      setError(getAiError(err, 'Failed to start the quiz.'));
+      setError(getAiError(err, "Failed to start the quiz."));
       setStarting(false);
     }
   };
 
   const footer =
-    phase === 'form' ? (
+    phase === "form" ? (
       <>
         <Button variant="outline" disabled={busy} onClick={onClose}>
           Cancel
@@ -414,7 +452,7 @@ export function MaterialQuizModal({
           Generate
         </Button>
       </>
-    ) : phase === 'completed' ? (
+    ) : phase === "completed" ? (
       <>
         <Button
           variant="outline"
@@ -426,11 +464,16 @@ export function MaterialQuizModal({
         >
           Later
         </Button>
-        <Button loading={starting} disabled={starting} icon={<Icon.ChevronRight className="w-4 h-4" />} onClick={startQuiz}>
+        <Button
+          loading={starting}
+          disabled={starting}
+          icon={<Icon.ChevronRight className="w-4 h-4" />}
+          onClick={startQuiz}
+        >
           Start quiz
         </Button>
       </>
-    ) : phase === 'failed' ? (
+    ) : phase === "failed" ? (
       <Button variant="outline" icon={<Icon.RefreshCw className="w-4 h-4" />} onClick={backToForm}>
         Try again
       </Button>
@@ -441,17 +484,29 @@ export function MaterialQuizModal({
     );
 
   // No closing while the file uploads, the quiz is being generated or the quiz is starting.
-  const locked = busy || starting || phase === 'processing';
+  const locked = busy || starting || phase === "processing";
 
   return (
-    <Modal open={open} onClose={onClose} dismissible={!locked} title="AI Quiz Generator" size="lg" footer={footer}
-      description={phase === 'form' && 'Upload your lecture notes or slides as PDF / DOCX and the AI writes multiple-choice questions from them. Longer files use more of your AI quota.'}
-      error={(phase === 'form' || phase === 'completed') && error && <AiErrorAlert error={error} />}>
+    <Modal
+      open={open}
+      onClose={onClose}
+      dismissible={!locked}
+      title="AI Quiz Generator"
+      size="lg"
+      footer={footer}
+      description={
+        phase === "form" &&
+        "Upload your lecture notes or slides as PDF / DOCX and the AI writes multiple-choice questions from them. Longer files use more of your AI quota."
+      }
+      error={(phase === "form" || phase === "completed") && error && <AiErrorAlert error={error} />}
+    >
       <div className="space-y-5">
-        {phase === 'form' && (
+        {phase === "form" && (
           <>
             {courses.length === 0 ? (
-              <p className="text-sm text-content-soft">Enroll in a course first to create a quiz from your materials.</p>
+              <p className="text-sm text-content-soft">
+                Enroll in a course first to create a quiz from your materials.
+              </p>
             ) : (
               <>
                 <Input
@@ -459,7 +514,7 @@ export function MaterialQuizModal({
                   required
                   maxLength={QUIZ_TITLE_MAX}
                   value={quizTitle}
-                  onChange={e => setQuizTitle(e.target.value)}
+                  onChange={(e) => setQuizTitle(e.target.value)}
                   placeholder="e.g. Chapter 3 lecture quiz"
                   error={touched ? errors.quizTitle : undefined}
                 />
@@ -467,8 +522,8 @@ export function MaterialQuizModal({
                 <SearchableSelect
                   label="Course"
                   options={[
-                    { value: NO_COURSE, label: 'No course selected' },
-                    ...courses.map(c => ({ value: String(c.courseId), label: c.title })),
+                    { value: NO_COURSE, label: "No course selected" },
+                    ...courses.map((c) => ({ value: String(c.courseId), label: c.title })),
                   ]}
                   value={courseId}
                   onChange={changeCourse}
@@ -482,7 +537,7 @@ export function MaterialQuizModal({
                     label="Material"
                     options={materialOptions}
                     value={documentId == null ? UPLOAD_NEW : String(documentId)}
-                    onChange={v => {
+                    onChange={(v) => {
                       setDocumentId(v === UPLOAD_NEW ? null : Number(v));
                       setReused(false);
                     }}
@@ -492,7 +547,11 @@ export function MaterialQuizModal({
                   {materialsError && (
                     <div className="flex flex-wrap items-center gap-3">
                       <p className="text-xs text-danger">{materialsError}</p>
-                      <Button size="sm" variant="outline" onClick={() => setMaterialsReload(r => r + 1)}>
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        onClick={() => setMaterialsReload((r) => r + 1)}
+                      >
                         Retry
                       </Button>
                     </div>
@@ -500,34 +559,48 @@ export function MaterialQuizModal({
 
                   {!reused && needsAttach && (
                     <p className="text-xs text-content-subtle">
-                      This material will also be added to {courses.find(c => String(c.courseId) === courseId)?.title}.
+                      This material will also be added to{" "}
+                      {courses.find((c) => String(c.courseId) === courseId)?.title}.
                     </p>
                   )}
-                  {checkingFile && <p className="text-xs text-content-subtle">Checking whether you uploaded this file before…</p>}
-                  {documentId == null && atFileLimit && !fileError && <Alert type="warning" message={FILE_LIMIT_MESSAGE} />}
+                  {checkingFile && (
+                    <p className="text-xs text-content-subtle">
+                      Checking whether you uploaded this file before…
+                    </p>
+                  )}
+                  {documentId == null && atFileLimit && !fileError && (
+                    <Alert type="warning" message={FILE_LIMIT_MESSAGE} />
+                  )}
                   {documentId == null ? (
                     <>
                       <div
-                        onDragOver={e => {
+                        onDragOver={(e) => {
                           e.preventDefault();
                           setDragOver(true);
                         }}
                         onDragLeave={() => setDragOver(false)}
-                        onDrop={e => {
+                        onDrop={(e) => {
                           e.preventDefault();
                           setDragOver(false);
                           pickFile(e.dataTransfer.files?.[0]);
                         }}
                         aria-invalid={touched && errors.material ? true : undefined}
                         className={`rounded-[12px] border-2 border-dashed px-4 py-5 text-center transition-colors ${
-                          dragOver ? 'border-brand-600 bg-primary-light' : touched && errors.material ? 'border-danger-solid' : 'border-line'
+                          dragOver
+                            ? "border-brand-600 bg-primary-light"
+                            : touched && errors.material
+                              ? "border-danger-solid"
+                              : "border-line"
                         }`}
                       >
                         {file ? (
                           <div className="flex items-center gap-3 text-left">
                             <Icon.FileText className="w-8 h-8 text-primary flex-shrink-0" />
                             <div className="min-w-0 flex-1">
-                              <p className="text-sm font-medium text-content truncate" title={file.name}>
+                              <p
+                                className="text-sm font-medium text-content truncate"
+                                title={file.name}
+                              >
                                 {file.name}
                               </p>
                               <p className="text-xs text-content-subtle">{formatSize(file.size)}</p>
@@ -547,11 +620,20 @@ export function MaterialQuizModal({
                         ) : (
                           <>
                             <Icon.Upload className="w-6 h-6 mx-auto text-content-subtle" />
-                            <p className="mt-2 text-sm text-content-secondary">Drag &amp; Drop PDF or DOCX</p>
-                            <p className="text-xs text-content-subtle">
-                              Up to {formatSize(MATERIAL_MAX_BYTES)} · {Math.min(materials.length, MATERIAL_MAX_FILES)}/{MATERIAL_MAX_FILES} files used
+                            <p className="mt-2 text-sm text-content-secondary">
+                              Drag &amp; Drop PDF or DOCX
                             </p>
-                            <Button size="sm" variant="outline" className="mt-3" onClick={() => fileInput.current?.click()}>
+                            <p className="text-xs text-content-subtle">
+                              Up to {formatSize(MATERIAL_MAX_BYTES)} ·{" "}
+                              {Math.min(materials.length, MATERIAL_MAX_FILES)}/{MATERIAL_MAX_FILES}{" "}
+                              files used
+                            </p>
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              className="mt-3"
+                              onClick={() => fileInput.current?.click()}
+                            >
                               Browse File
                             </Button>
                           </>
@@ -561,19 +643,23 @@ export function MaterialQuizModal({
                           type="file"
                           accept={MATERIAL_ACCEPT}
                           className="hidden"
-                          onChange={e => {
+                          onChange={(e) => {
                             pickFile(e.target.files?.[0]);
-                            e.target.value = '';
+                            e.target.value = "";
                           }}
                         />
                       </div>
                       {fileError && <p className="text-xs text-danger">{fileError}</p>}
-                      {touched && !fileError && errors.material && <p className="text-xs text-danger">{errors.material}</p>}
+                      {touched && !fileError && errors.material && (
+                        <p className="text-xs text-danger">{errors.material}</p>
+                      )}
                       <Input
                         label="Material title (optional)"
-                        placeholder={file ? file.name.replace(/\.[^.]+$/, '') : 'Defaults to the file name'}
+                        placeholder={
+                          file ? file.name.replace(/\.[^.]+$/, "") : "Defaults to the file name"
+                        }
                         value={title}
-                        onChange={e => setTitle(e.target.value)}
+                        onChange={(e) => setTitle(e.target.value)}
                         maxLength={255}
                       />
                     </>
@@ -581,18 +667,22 @@ export function MaterialQuizModal({
                     <div className="flex items-center gap-3 rounded-[12px] border border-line px-4 py-3">
                       <Icon.FileText className="w-8 h-8 text-primary flex-shrink-0" />
                       <div className="min-w-0 flex-1">
-                        <p className="text-sm font-medium text-content truncate" title={selected.fileName}>
+                        <p
+                          className="text-sm font-medium text-content truncate"
+                          title={selected.fileName}
+                        >
                           {selected.fileName}
                         </p>
                         <p className="flex flex-wrap gap-x-3 text-xs text-content-subtle">
                           {selected.pageCount != null && (
                             <span>
-                              {selected.pageCount} page{selected.pageCount === 1 ? '' : 's'}
+                              {selected.pageCount} page{selected.pageCount === 1 ? "" : "s"}
                             </span>
                           )}
                           <span>Uploaded {formatDate(selected.uploadedAt)}</span>
                           <span>
-                            {completedCount(selected)} quiz{completedCount(selected) === 1 ? '' : 'zes'} generated
+                            {completedCount(selected)} quiz
+                            {completedCount(selected) === 1 ? "" : "zes"} generated
                           </span>
                         </p>
                       </div>
@@ -621,21 +711,21 @@ export function MaterialQuizModal({
                     min={MATERIAL_QUESTIONS.min}
                     max={MATERIAL_QUESTIONS.max}
                     value={questionCount}
-                    onChange={e => setQuestionCount(e.target.value)}
+                    onChange={(e) => setQuestionCount(e.target.value)}
                     error={touched ? errors.count : undefined}
                   />
                   <Select
                     label="Difficulty"
                     options={DIFFICULTY_OPTIONS}
                     value={difficulty}
-                    onChange={v => setDifficulty(v as MaterialDifficulty)}
+                    onChange={(v) => setDifficulty(v as MaterialDifficulty)}
                   />
                 </div>
 
                 <div className="space-y-1.5">
                   <span className="block text-sm font-medium text-content-secondary">Take as</span>
                   <TakeModePicker value={takeAs} onChange={setTakeAs} />
-                  {takeAs === 'EXAM' && (
+                  {takeAs === "EXAM" && (
                     <Input
                       label="Duration (minutes)"
                       type="number"
@@ -643,24 +733,29 @@ export function MaterialQuizModal({
                       min={PRACTICE_MINUTES.min}
                       max={PRACTICE_MINUTES.max}
                       value={minutesValue}
-                      onChange={e => setMinutes(e.target.value)}
+                      onChange={(e) => setMinutes(e.target.value)}
                       error={touched ? errors.minutes : undefined}
                     />
                   )}
                 </div>
 
                 <label className="flex flex-col gap-1.5">
-                  <span className="text-sm font-medium text-content-secondary">Context for the AI (optional)</span>
+                  <span className="text-sm font-medium text-content-secondary">
+                    Context for the AI (optional)
+                  </span>
                   <textarea
                     rows={3}
                     maxLength={AI_CONTEXT_MAX}
                     value={aiContext}
-                    onChange={e => setAiContext(e.target.value)}
+                    onChange={(e) => setAiContext(e.target.value)}
                     placeholder="e.g. Focus on the definitions in section 2. More scenario-based questions please."
                     className="w-full rounded-[10px] border border-line bg-surface p-3 text-sm text-content placeholder:text-content-placeholder focus:border-brand-600 focus:outline-none focus:ring-2 focus:ring-brand-600/20"
                   />
                   <span className="flex justify-between gap-2 text-xs text-content-subtle">
-                    <span>Tell the AI which parts of the material to focus on or the kind of questions you want.</span>
+                    <span>
+                      Tell the AI which parts of the material to focus on or the kind of questions
+                      you want.
+                    </span>
                     <span className="flex-shrink-0">
                       {aiContext.length}/{AI_CONTEXT_MAX}
                     </span>
@@ -668,7 +763,11 @@ export function MaterialQuizModal({
                 </label>
 
                 {runningJob && (
-                  <Button variant="outline" icon={<Icon.Eye className="w-4 h-4" />} onClick={() => track(runningJob.jobId, runningJob.questionCount)}>
+                  <Button
+                    variant="outline"
+                    icon={<Icon.Eye className="w-4 h-4" />}
+                    onClick={() => track(runningJob.jobId, runningJob.questionCount)}
+                  >
                     Follow the running generation
                   </Button>
                 )}
@@ -677,15 +776,18 @@ export function MaterialQuizModal({
           </>
         )}
 
-        {phase === 'processing' && job && (
+        {phase === "processing" && job && (
           <div className="flex flex-col items-center gap-4 py-8 text-center">
             <Spinner />
             <div className="space-y-1">
               <p className="text-sm font-medium text-content">
-                {job.status === 'PENDING' ? 'Queued…' : 'Reading the material and writing questions…'}
+                {job.status === "PENDING"
+                  ? "Queued…"
+                  : "Reading the material and writing questions…"}
               </p>
               <p className="text-xs text-content-subtle">
-                {job.questionCount} questions · Please keep this window open until the quiz is ready.
+                {job.questionCount} questions · Please keep this window open until the quiz is
+                ready.
               </p>
             </div>
             <div className="w-full max-w-sm">
@@ -694,16 +796,21 @@ export function MaterialQuizModal({
           </div>
         )}
 
-        {phase === 'completed' && job && (
+        {phase === "completed" && job && (
           <div className="space-y-4">
-            <Alert type="success" title={quizTitle.trim() || 'Your quiz is ready'} message={`${job.questionCount} questions were generated from your material.`} />
+            <Alert
+              type="success"
+              title={quizTitle.trim() || "Your quiz is ready"}
+              message={`${job.questionCount} questions were generated from your material.`}
+            />
             <p className="text-sm text-content-soft">
-              Answers are checked when you submit. You can take the quiz again any time from My Materials or Exam History.
+              Answers are checked when you submit. You can take the quiz again any time from My
+              Materials or Exam History.
             </p>
           </div>
         )}
 
-        {phase === 'failed' && (
+        {phase === "failed" && (
           <div className="space-y-4">
             {error ? (
               <AiErrorAlert error={error} />
@@ -711,7 +818,7 @@ export function MaterialQuizModal({
               <Alert
                 type="error"
                 title="The quiz could not be generated"
-                message={`${(job?.errorMessage?.trim() || 'Something went wrong while generating the questions').replace(/[.!]?$/, '.')} Your AI quota was refunded.`}
+                message={`${(job?.errorMessage?.trim() || "Something went wrong while generating the questions").replace(/[.!]?$/, ".")} Your AI quota was refunded.`}
               />
             )}
           </div>
@@ -721,4 +828,4 @@ export function MaterialQuizModal({
   );
 }
 
-const completedCount = (m: MaterialItem) => m.jobs.filter(j => j.status === 'COMPLETED').length;
+const completedCount = (m: MaterialItem) => m.jobs.filter((j) => j.status === "COMPLETED").length;

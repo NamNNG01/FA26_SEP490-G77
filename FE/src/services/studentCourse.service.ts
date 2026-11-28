@@ -1,6 +1,6 @@
-import { api } from './api';
-import type { ApiResponse } from '@/types/api';
-import type { PageResponse } from './course.service';
+import { api } from "./api";
+import type { ApiResponse } from "@/types/api";
+import type { PageResponse } from "./course.service";
 
 /**
  * StudentCourseService — learner-side reads. Students cannot call the
@@ -30,10 +30,10 @@ export interface ManagerRef {
 }
 
 /** `sort` accepted by CL-01 and MC-02. */
-export type StudentSort = 'newest' | 'title';
+export type StudentSort = "newest" | "title";
 
 /** Enrollment.status — MC-02/03/04 refuse anything but ACTIVE. */
-export type EnrollmentStatus = 'ACTIVE' | 'COMPLETED';
+export type EnrollmentStatus = "ACTIVE" | "COMPLETED";
 
 /** CL-01 CourseCardDto */
 export interface StudentCourseCard {
@@ -82,13 +82,17 @@ export interface StudentCourseDetail {
   publishedExamCount?: number;
   deckCount?: number;
   /** null for guests. */
-  enrollment: { isEnrolled: boolean; status: EnrollmentStatus | null; progress: number | null } | null;
+  enrollment: {
+    isEnrolled: boolean;
+    status: EnrollmentStatus | null;
+    progress: number | null;
+  } | null;
 }
 
 /** EN-03 */
 export interface EnrollmentState {
   isEnrolled: boolean;
-  status: EnrollmentStatus | 'CANCELLED' | null;
+  status: EnrollmentStatus | "CANCELLED" | null;
   progress: number;
   enrolledAt: string | null;
 }
@@ -104,7 +108,7 @@ export interface MyCourse {
   manager: ManagerRef | null;
   enrolledAt: string;
   /** Without a `status` filter MC-01 also returns courses the student left (EN-04). */
-  status: EnrollmentStatus | 'CANCELLED';
+  status: EnrollmentStatus | "CANCELLED";
   progress: number | null;
   publishedExamCount: number;
   deckCount: number;
@@ -128,7 +132,7 @@ export interface CourseExam {
   examKind?: StudentExamKind | null;
 }
 
-export type StudentExamKind = 'QUIZ' | 'ESSAY' | 'CODE' | 'DIAGRAM' | 'MIXED';
+export type StudentExamKind = "QUIZ" | "ESSAY" | "CODE" | "DIAGRAM" | "MIXED";
 
 /** MC-03 DeckDto */
 export interface StudentDeck {
@@ -191,10 +195,10 @@ export interface PageParams {
 function query(params: Record<string, string | number | undefined | null>): string {
   const qs = new URLSearchParams();
   for (const [key, value] of Object.entries(params)) {
-    if (value !== undefined && value !== null && value !== '') qs.append(key, String(value));
+    if (value !== undefined && value !== null && value !== "") qs.append(key, String(value));
   }
   const s = qs.toString();
-  return s ? `?${s}` : '';
+  return s ? `?${s}` : "";
 }
 
 export const studentCourseService = {
@@ -202,13 +206,15 @@ export const studentCourseService = {
   async getCourses(
     params: PageParams & { categoryId?: number; keyword?: string; sort?: StudentSort } = {},
   ): Promise<PageResponse<StudentCourseCard>> {
-    const res = await api.get<ApiResponse<PageResponse<StudentCourseCard>>>(`/student/courses${query({ ...params })}`);
+    const res = await api.get<ApiResponse<PageResponse<StudentCourseCard>>>(
+      `/student/courses${query({ ...params })}`,
+    );
     return res.data;
   },
 
   /** Active categories available for the public student course catalog filter. */
   async getCategories(): Promise<CategoryRef[]> {
-    const res = await api.get<ApiResponse<CategoryRef[]>>('/student/categories');
+    const res = await api.get<ApiResponse<CategoryRef[]>>("/student/categories");
     return res.data;
   },
 
@@ -223,8 +229,12 @@ export const studentCourseService = {
   },
 
   /** MC-01 — omit `status` for every enrollment. */
-  async getMyCourses(params: PageParams & { status?: EnrollmentStatus } = {}): Promise<PageResponse<MyCourse>> {
-    const res = await api.get<ApiResponse<PageResponse<MyCourse>>>(`/student/my-courses${query({ ...params })}`);
+  async getMyCourses(
+    params: PageParams & { status?: EnrollmentStatus } = {},
+  ): Promise<PageResponse<MyCourse>> {
+    const res = await api.get<ApiResponse<PageResponse<MyCourse>>>(
+      `/student/my-courses${query({ ...params })}`,
+    );
     return res.data;
   },
 
@@ -246,19 +256,27 @@ export const studentCourseService = {
   },
 
   /** Fetch summaries already scoped to one module; use `general` for unassigned content. */
-  async getModuleContent(courseId: number | string, moduleId: number | 'general'): Promise<StudentModuleContent> {
+  async getModuleContent(
+    courseId: number | string,
+    moduleId: number | "general",
+  ): Promise<StudentModuleContent> {
     const res = await api.get<ApiResponse<StudentModuleContent>>(
       `/student/courses/${courseId}/modules/${moduleId}/content`,
     );
     if (!res.data || !Array.isArray(res.data.exams) || !Array.isArray(res.data.decks)) {
-      throw new Error('Module content response is invalid.');
+      throw new Error("Module content response is invalid.");
     }
     return res.data;
   },
 
   /** MC-04 */
-  async getDeckCards(deckId: number | string, params: PageParams = {}): Promise<PageResponse<StudentCard>> {
-    const res = await api.get<ApiResponse<PageResponse<StudentCard>>>(`/student/decks/${deckId}/cards${query({ ...params })}`);
+  async getDeckCards(
+    deckId: number | string,
+    params: PageParams = {},
+  ): Promise<PageResponse<StudentCard>> {
+    const res = await api.get<ApiResponse<PageResponse<StudentCard>>>(
+      `/student/decks/${deckId}/cards${query({ ...params })}`,
+    );
     return res.data;
   },
 
@@ -274,7 +292,9 @@ export const studentCourseService = {
 
   /** ME-01 */
   async getMyExams(params: PageParams = {}): Promise<PageResponse<MyExam>> {
-    const res = await api.get<ApiResponse<PageResponse<MyExam>>>(`/student/my-exams${query({ ...params })}`);
+    const res = await api.get<ApiResponse<PageResponse<MyExam>>>(
+      `/student/my-exams${query({ ...params })}`,
+    );
     return res.data;
   },
 
@@ -290,24 +310,28 @@ export const studentCourseService = {
 
   /** EN-03 — `isEnrolled` false (status null) when the student never joined or cancelled. */
   async getEnrollment(courseId: number): Promise<EnrollmentState> {
-    const res = await api.get<ApiResponse<EnrollmentState>>(`/student/courses/${courseId}/enrollment`);
+    const res = await api.get<ApiResponse<EnrollmentState>>(
+      `/student/courses/${courseId}/enrollment`,
+    );
     return res.data;
   },
 
   /** EN-04 — 404 when not enrolled. Attempts and progress stay for a later re-enroll; no refund. */
-  async cancelEnrollment(courseId: number): Promise<{ courseId: number; status: 'CANCELLED' }> {
-    const res = await api.request<ApiResponse<{ courseId: number; status: 'CANCELLED' }>>({
-      method: 'delete',
+  async cancelEnrollment(courseId: number): Promise<{ courseId: number; status: "CANCELLED" }> {
+    const res = await api.request<ApiResponse<{ courseId: number; status: "CANCELLED" }>>({
+      method: "delete",
       url: `/student/my-courses/${courseId}`,
     });
     return res.data;
   },
 
   /** EN-02 — 409 COURSE_NOT_FREE for a paid course; already enrolled returns the existing row. */
-  async enrollFree(courseId: number): Promise<{ courseId: number; status: EnrollmentStatus; enrolledAt: string }> {
-    const res = await api.post<ApiResponse<{ courseId: number; status: EnrollmentStatus; enrolledAt: string }>>(
-      `/student/courses/${courseId}/enroll`,
-    );
+  async enrollFree(
+    courseId: number,
+  ): Promise<{ courseId: number; status: EnrollmentStatus; enrolledAt: string }> {
+    const res = await api.post<
+      ApiResponse<{ courseId: number; status: EnrollmentStatus; enrolledAt: string }>
+    >(`/student/courses/${courseId}/enroll`);
     return res.data;
   },
 };

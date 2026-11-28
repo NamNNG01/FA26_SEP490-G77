@@ -1,19 +1,37 @@
-import React from 'react';
-import { Button } from '@/components/ui/Button';
-import { Icon } from '@/assets/icons';
-import { QuestionLocationCard } from './QuestionLocationCard';
+import React from "react";
+import { Button } from "@/components/ui/Button";
+import { Icon } from "@/assets/icons";
+import { QuestionLocationCard } from "./QuestionLocationCard";
 
 /**
  * Right-hand column of the question pages. The page scrolls inside <main>;
  * the column stays pinned 10px below its top and scrolls on its own if taller
  * than the viewport (header h-14 + main's 20px top padding).
  */
-export const SIDEBAR_CLS = 'space-y-4 pb-4 lg:sticky lg:top-[10px] lg:max-h-[calc(100vh-3.5rem-20px)] lg:overflow-y-auto';
+export const SIDEBAR_CLS =
+  "space-y-4 pb-4 lg:sticky lg:top-[10px] lg:max-h-[calc(100vh-3.5rem-20px)] lg:overflow-y-auto";
 
 /** Right-hand column: optional tabs, Location card + Actions card. */
 export function QuestionSidePanel({
-  mode, count, courseId, moduleId, onLocationChange, showErrors, prerequisiteNote,
-  onAdd, onImport, onSave, saveLabel, onCancel, onPublishOne, saving, statusBusy, tabs, onPublish, publishCount = 0, publishing,
+  mode,
+  count,
+  courseId,
+  moduleId,
+  onLocationChange,
+  showErrors,
+  prerequisiteNote,
+  onAdd,
+  onImport,
+  onSave,
+  saveLabel,
+  onCancel,
+  onPublishOne,
+  saving,
+  statusBusy,
+  tabs,
+  onPublish,
+  publishCount = 0,
+  publishing,
 }: {
   /** Create mode: publishes the saved drafts ticked in the list — disabled until some are. */
   onPublish?: () => void;
@@ -21,7 +39,7 @@ export function QuestionSidePanel({
   publishing?: boolean;
   /** Shown above the Location card (the create page's Manual / AI Generate switch). */
   tabs?: React.ReactNode;
-  mode: 'create' | 'edit';
+  mode: "create" | "edit";
   count: number;
   courseId: string;
   moduleId: string;
@@ -42,17 +60,27 @@ export function QuestionSidePanel({
   saving?: boolean;
   statusBusy?: boolean;
 }) {
-  const isEdit = mode === 'edit';
+  const isEdit = mode === "edit";
   // New questions need both a course and a module before anything can be added or saved.
-  const locationHint = isEdit ? undefined
-    : !courseId ? 'Select a course first'
-      : !moduleId ? 'Select a module first'
+  const locationHint = isEdit
+    ? undefined
+    : !courseId
+      ? "Select a course first"
+      : !moduleId
+        ? "Select a module first"
         : undefined;
   return (
     <div className={SIDEBAR_CLS}>
       {tabs}
       <div className="card p-4">
-        <QuestionLocationCard courseId={courseId} moduleId={moduleId} onChange={onLocationChange} courseLocked={isEdit} moduleRequired={!isEdit} showErrors={showErrors} />
+        <QuestionLocationCard
+          courseId={courseId}
+          moduleId={moduleId}
+          onChange={onLocationChange}
+          courseLocked={isEdit}
+          moduleRequired={!isEdit}
+          showErrors={showErrors}
+        />
       </div>
 
       <div className="card p-4 space-y-2">
@@ -60,7 +88,16 @@ export function QuestionSidePanel({
         {!isEdit && (
           <>
             {onAdd && (
-              <Button variant="secondary" className="w-full" icon={<Icon.Plus className="w-4 h-4" />} onClick={onAdd} disabled={saving || !!locationHint} title={locationHint}>Add Question</Button>
+              <Button
+                variant="secondary"
+                className="w-full"
+                icon={<Icon.Plus className="w-4 h-4" />}
+                onClick={onAdd}
+                disabled={saving || !!locationHint}
+                title={locationHint}
+              >
+                Add Question
+              </Button>
             )}
             {onImport && (
               <Button
@@ -76,12 +113,20 @@ export function QuestionSidePanel({
             )}
           </>
         )}
-        <Button className="w-full" icon={<Icon.CheckCircle className="w-4 h-4" />} onClick={onSave} loading={saving} disabled={saving || statusBusy || !!locationHint} title={locationHint}>
-          {saveLabel ?? (isEdit ? 'Save Changes' : `Save All (${count})`)}
+        <Button
+          className="w-full"
+          icon={<Icon.CheckCircle className="w-4 h-4" />}
+          onClick={onSave}
+          loading={saving}
+          disabled={saving || statusBusy || !!locationHint}
+          title={locationHint}
+        >
+          {saveLabel ?? (isEdit ? "Save Changes" : `Save All (${count})`)}
         </Button>
         {prerequisiteNote && (
           <p className="flex items-start gap-1.5 text-xs text-warning">
-            <Icon.AlertCircle className="w-3.5 h-3.5 mt-0.5 flex-shrink-0" />{prerequisiteNote}
+            <Icon.AlertCircle className="w-3.5 h-3.5 mt-0.5 flex-shrink-0" />
+            {prerequisiteNote}
           </p>
         )}
         {isEdit && onPublishOne && (
@@ -104,12 +149,16 @@ export function QuestionSidePanel({
             onClick={onPublish}
             loading={publishing}
             disabled={saving || publishing || publishCount === 0}
-            title={publishCount === 0 ? 'Save questions, then tick the drafts to publish' : undefined}
+            title={
+              publishCount === 0 ? "Save questions, then tick the drafts to publish" : undefined
+            }
           >
             Publish ({publishCount})
           </Button>
         )}
-        <Button variant="ghost" className="w-full" onClick={onCancel} disabled={saving}>Cancel</Button>
+        <Button variant="ghost" className="w-full" onClick={onCancel} disabled={saving}>
+          Cancel
+        </Button>
       </div>
     </div>
   );

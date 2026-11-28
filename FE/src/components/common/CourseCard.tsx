@@ -1,7 +1,7 @@
-import React from 'react';
-import { Icon } from '@/assets/icons';
-import { Badge } from '@/components/ui/Badge';
-import { Progress } from '@/components/ui/Progress';
+import React from "react";
+import { Icon } from "@/assets/icons";
+import { Badge } from "@/components/ui/Badge";
+import { Progress } from "@/components/ui/Progress";
 
 export interface CourseMetricItem {
   label: string;
@@ -28,7 +28,7 @@ export function CourseCard({
   title: string;
   description?: string;
   subject: string;
-  difficulty?: 'Easy' | 'Medium' | 'Hard';
+  difficulty?: "Easy" | "Medium" | "Hard";
   progress?: number;
   modules?: number;
   lessons?: number;
@@ -40,23 +40,26 @@ export function CourseCard({
   updated?: string;
   onClick?: () => void;
 }) {
-  const diffColor = { Easy: 'success', Medium: 'warning', Hard: 'danger' } as const;
+  const diffColor = { Easy: "success", Medium: "warning", Hard: "danger" } as const;
   const statusVariant =
-    status === 'Published'
-      ? ('success' as const)
-      : status === 'Draft'
-        ? ('warning' as const)
-        : ('default' as const);
+    status === "Published"
+      ? ("success" as const)
+      : status === "Draft"
+        ? ("warning" as const)
+        : ("default" as const);
 
   const displayMetrics: CourseMetricItem[] = customMetrics ?? [
-    { label: 'Modules', value: modules, color: '#F27124' },
-    { label: 'Lessons', value: lessons, color: '#7C3AED' },
-    { label: 'Questions', value: questions, color: '#D97706' },
-    { label: 'Exams', value: examCount, color: '#059669' },
+    { label: "Modules", value: modules, color: "#F27124" },
+    { label: "Lessons", value: lessons, color: "#7C3AED" },
+    { label: "Questions", value: questions, color: "#D97706" },
+    { label: "Exams", value: examCount, color: "#059669" },
   ];
 
   return (
-    <div className="card p-5 flex flex-col gap-3 cursor-pointer hover:shadow-md transition-all" onClick={onClick}>
+    <div
+      className="card p-5 flex flex-col gap-3 cursor-pointer hover:shadow-md transition-all"
+      onClick={onClick}
+    >
       <div className="flex items-center justify-between gap-2">
         {difficulty ? (
           <Badge variant={diffColor[difficulty]}>{difficulty}</Badge>
@@ -66,32 +69,71 @@ export function CourseCard({
         {status && <Badge variant={statusVariant}>{status}</Badge>}
       </div>
       <div>
-        <h3 className="text-lg font-semibold text-content leading-snug [overflow-wrap:anywhere]">{title}</h3>
+        <h3 className="text-lg font-semibold text-content leading-snug [overflow-wrap:anywhere]">
+          {title}
+        </h3>
         {difficulty && <p className="text-xs text-content-subtle mt-0.5">{subject}</p>}
       </div>
-      {description && <p className="text-xs text-content-soft leading-relaxed line-clamp-2">{description}</p>}
-      <div className={`grid gap-2 ${displayMetrics.length === 3 ? 'grid-cols-3' : 'grid-cols-4'}`}>
-        {displayMetrics.map(m => (
+      {description && (
+        <p className="text-xs text-content-soft leading-relaxed line-clamp-2">{description}</p>
+      )}
+      <div className={`grid gap-2 ${displayMetrics.length === 3 ? "grid-cols-3" : "grid-cols-4"}`}>
+        {displayMetrics.map((m) => (
           <div key={m.label} className="bg-surface-alt rounded-[8px] px-2 py-2 text-center">
-            <span className="inline-block w-1.5 h-1.5 rounded-full mb-1" style={{ background: m.color ?? '#F27124' }} />
-            <p className="text-base font-semibold text-content leading-none">{m.value !== undefined ? (typeof m.value === 'number' ? m.value.toLocaleString() : m.value) : '—'}</p>
+            <span
+              className="inline-block w-1.5 h-1.5 rounded-full mb-1"
+              style={{ background: m.color ?? "#F27124" }}
+            />
+            <p className="text-base font-semibold text-content leading-none">
+              {m.value !== undefined
+                ? typeof m.value === "number"
+                  ? m.value.toLocaleString()
+                  : m.value
+                : "—"}
+            </p>
             <p className="text-2xs text-content-subtle mt-0.5">{m.label}</p>
           </div>
         ))}
       </div>
       {progress !== undefined && <Progress value={progress} label="Progress" size="sm" />}
       <div className="flex items-center justify-between text-2xs text-content-subtle border-t border-line-faint pt-2.5">
-        <span>{managerName ? `Manager: ${managerName}` : progress !== undefined ? `${progress}% complete` : 'Course'}</span>
-        <span className="flex items-center gap-1"><Icon.Clock className="w-3 h-3" />{updated ?? '—'}</span>
+        <span>
+          {managerName
+            ? `Manager: ${managerName}`
+            : progress !== undefined
+              ? `${progress}% complete`
+              : "Course"}
+        </span>
+        <span className="flex items-center gap-1">
+          <Icon.Clock className="w-3 h-3" />
+          {updated ?? "—"}
+        </span>
       </div>
     </div>
   );
 }
 
-export function ExamCard({ title, duration, questions, status, score, onClick }: {
-  title: string; duration: number; questions: number; status: 'upcoming' | 'completed' | 'ongoing' | 'locked'; score?: number; onClick?: () => void;
+export function ExamCard({
+  title,
+  duration,
+  questions,
+  status,
+  score,
+  onClick,
+}: {
+  title: string;
+  duration: number;
+  questions: number;
+  status: "upcoming" | "completed" | "ongoing" | "locked";
+  score?: number;
+  onClick?: () => void;
 }) {
-  const statusMap = { upcoming: { label: 'Upcoming', variant: 'info' as const }, completed: { label: 'Completed', variant: 'success' as const }, ongoing: { label: 'In Progress', variant: 'warning' as const }, locked: { label: 'Locked', variant: 'default' as const } };
+  const statusMap = {
+    upcoming: { label: "Upcoming", variant: "info" as const },
+    completed: { label: "Completed", variant: "success" as const },
+    ongoing: { label: "In Progress", variant: "warning" as const },
+    locked: { label: "Locked", variant: "default" as const },
+  };
   const s = statusMap[status];
   return (
     <div className="card p-5 cursor-pointer hover:shadow-md transition-all" onClick={onClick}>
@@ -102,7 +144,9 @@ export function ExamCard({ title, duration, questions, status, score, onClick }:
         <Badge variant={s.variant}>{s.label}</Badge>
       </div>
       <h3 className="text-lg font-semibold text-content mb-3">{title}</h3>
-      <div className={`grid ${score !== undefined ? 'grid-cols-3' : 'grid-cols-2'} gap-3 text-center`}>
+      <div
+        className={`grid ${score !== undefined ? "grid-cols-3" : "grid-cols-2"} gap-3 text-center`}
+      >
         <div className="bg-surface-alt rounded-[8px] px-2 py-2">
           <p className="text-xs text-content-subtle">Duration</p>
           <p className="text-sm font-semibold text-content-secondary">{duration}m</p>

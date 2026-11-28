@@ -1,6 +1,6 @@
-import React from 'react';
-import { Button } from '@/components/ui/Button';
-import { Icon } from '@/assets/icons';
+import React from "react";
+import { Button } from "@/components/ui/Button";
+import { Icon } from "@/assets/icons";
 
 /**
  * DashboardState
@@ -35,7 +35,7 @@ export function DashboardSkeleton({ cards = 3 }: { cards?: number }) {
 }
 
 export function DashboardError({
-  message = 'Unable to load dashboard.',
+  message = "Unable to load dashboard.",
   onRetry,
   bare = false,
 }: {
@@ -49,7 +49,12 @@ export function DashboardError({
       <div className="px-5 py-8 flex flex-col items-center text-center gap-3">
         <Icon.AlertCircle className="w-8 h-8 text-muted-foreground" />
         <p className="text-sm text-muted-foreground">{message}</p>
-        <Button variant="outline" size="sm" icon={<Icon.RefreshCw className="w-4 h-4" />} onClick={onRetry}>
+        <Button
+          variant="outline"
+          size="sm"
+          icon={<Icon.RefreshCw className="w-4 h-4" />}
+          onClick={onRetry}
+        >
           Retry
         </Button>
       </div>
@@ -61,9 +66,7 @@ export function DashboardError({
         <div className="w-20 h-20 bg-surface-muted rounded-[20px] flex items-center justify-center mb-5">
           <Icon.AlertCircle className="w-10 h-10 text-muted-foreground" />
         </div>
-        <h3 className="text-lg font-semibold text-foreground mb-1.5">
-          Something went wrong
-        </h3>
+        <h3 className="text-lg font-semibold text-foreground mb-1.5">Something went wrong</h3>
         <p className="text-sm text-muted-foreground mb-6">{message}</p>
         <Button variant="outline" icon={<Icon.RefreshCw className="w-4 h-4" />} onClick={onRetry}>
           Retry

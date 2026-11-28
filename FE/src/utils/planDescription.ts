@@ -7,7 +7,7 @@ export function planDescriptionLines(description: string | null | undefined): st
   if (!description) return [];
   return description
     .split(/\.(?=\s|$)|\r?\n/)
-    .map(line => line.trim())
+    .map((line) => line.trim())
     .filter(Boolean);
 }
 
@@ -15,11 +15,17 @@ export function planDescriptionLines(description: string | null | undefined): st
  * Lines to show for a plan: its description, then the old feature list of
  * plans saved before the description replaced it (empty once re-saved).
  */
-export function planLines(plan: { description?: string | null; features?: string[] | null }): string[] {
-  return [...planDescriptionLines(plan.description), ...(plan.features ?? []).map(f => f.trim()).filter(Boolean)];
+export function planLines(plan: {
+  description?: string | null;
+  features?: string[] | null;
+}): string[] {
+  return [
+    ...planDescriptionLines(plan.description),
+    ...(plan.features ?? []).map((f) => f.trim()).filter(Boolean),
+  ];
 }
 
 /** Description text holding the same lines as {@link planLines}, one sentence each. */
 export function planLinesToDescription(lines: string[]): string {
-  return lines.map(line => (line.endsWith('.') ? line : `${line}.`)).join(' ');
+  return lines.map((line) => (line.endsWith(".") ? line : `${line}.`)).join(" ");
 }

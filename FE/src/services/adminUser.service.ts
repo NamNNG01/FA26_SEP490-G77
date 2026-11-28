@@ -1,9 +1,9 @@
-import { api } from './api';
-import type { ApiResponse } from '@/types/api';
-import type { Page } from './adminDiscount.service';
+import { api } from "./api";
+import type { ApiResponse } from "@/types/api";
+import type { Page } from "./adminDiscount.service";
 
-export type AdminUserRole = 'STUDENT' | 'COURSE_MANAGER' | 'ADMIN';
-export type AdminUserStatus = 'ACTIVE' | 'INACTIVE';
+export type AdminUserRole = "STUDENT" | "COURSE_MANAGER" | "ADMIN";
+export type AdminUserStatus = "ACTIVE" | "INACTIVE";
 
 /** Profile fields shared by the list row, the update response and the detail. */
 export interface AdminUserProfile {
@@ -25,7 +25,7 @@ export interface AdminUserSubscription {
   planName: string;
   /** ISO instant; the plan is usable until then. */
   endDate: string | null;
-  status: 'ACTIVE' | 'EXPIRED' | 'CANCELLED' | string;
+  status: "ACTIVE" | "EXPIRED" | "CANCELLED" | string;
 }
 
 export interface AdminManagerAiQuota {
@@ -111,14 +111,20 @@ export interface AdminUserUpdatePayload {
 function query(params: Record<string, string | number | undefined>) {
   const search = new URLSearchParams();
   Object.entries(params).forEach(([key, value]) => {
-    if (value !== undefined && value !== '') search.set(key, String(value));
+    if (value !== undefined && value !== "") search.set(key, String(value));
   });
   return search.toString();
 }
 
 export const adminUserService = {
   /** UM-01 — search/filter/paginate the user list. Search matches name or e-mail partially. */
-  async list(params: { search?: string; role?: string; status?: string; page: number; size: number }) {
+  async list(params: {
+    search?: string;
+    role?: string;
+    status?: string;
+    page: number;
+    size: number;
+  }) {
     const res = await api.get<ApiResponse<AdminUserPage>>(`/admin/users?${query(params)}`);
     return res.data;
   },
@@ -130,14 +136,18 @@ export const adminUserService = {
   /** UM-03 — update full name, e-mail, role and status. */
   async update(userId: number, payload: AdminUserUpdatePayload) {
     const res = await api.request<ApiResponse<AdminUserProfile>>({
-      method: 'put', url: `/admin/users/${userId}`, data: payload,
+      method: "put",
+      url: `/admin/users/${userId}`,
+      data: payload,
     });
     return res.data;
   },
   /** UM-04 — activate or deactivate an account. */
   async setStatus(userId: number, status: AdminUserStatus) {
     const res = await api.request<ApiResponse<AdminUserProfile>>({
-      method: 'patch', url: `/admin/users/${userId}/status`, data: { status },
+      method: "patch",
+      url: `/admin/users/${userId}/status`,
+      data: { status },
     });
     return res.data;
   },
@@ -147,20 +157,24 @@ export const adminUserService = {
   },
   /** UM-06 (pending BE) — create an account; the generated password is e-mailed to it (409 e-mail taken). */
   async create(payload: AdminUserCreatePayload) {
-    const res = await api.post<ApiResponse<AdminUserProfile>>('/admin/users', payload);
+    const res = await api.post<ApiResponse<AdminUserProfile>>("/admin/users", payload);
     return res.data;
   },
   /** UM-07 (pending BE) — set a student's plan and end date, free of charge. */
   async setSubscription(userId: number, payload: AdminUserSubscriptionPayload) {
     const res = await api.request<ApiResponse<AdminUserSubscription | null>>({
-      method: 'put', url: `/admin/users/${userId}/subscription`, data: payload,
+      method: "put",
+      url: `/admin/users/${userId}/subscription`,
+      data: payload,
     });
     return res.data;
   },
   /** UM-08 — set or clear a Content Manager's monthly AI token quota override (null = Global Default). */
   async setManagerAiQuota(userId: number, payload: { monthlyTokenLimit: number | null }) {
     const res = await api.request<ApiResponse<AdminManagerAiQuota>>({
-      method: 'put', url: `/admin/users/${userId}/manager-ai-quota`, data: payload,
+      method: "put",
+      url: `/admin/users/${userId}/manager-ai-quota`,
+      data: payload,
     });
     return res.data;
   },

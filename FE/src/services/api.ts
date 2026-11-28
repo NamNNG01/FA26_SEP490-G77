@@ -1,4 +1,4 @@
-import { apiClient } from './axios';
+import { apiClient } from "./axios";
 
 /**
  * High-level API client that wraps the authenticated Axios instance.
@@ -52,7 +52,7 @@ export const api = {
    * Raw request (use for non-standard options, e.g. a longer timeout).
    */
   async request<T>(options: {
-    method: 'get' | 'post' | 'put' | 'patch' | 'delete';
+    method: "get" | "post" | "put" | "patch" | "delete";
     url: string;
     data?: unknown;
     /** Overrides the client's default timeout (ms). */
@@ -64,16 +64,15 @@ export const api = {
 };
 
 function assertApiResponse<T>(body: T): T {
-  if (body && typeof body === 'object' && 'success' in body) {
+  if (body && typeof body === "object" && "success" in body) {
     const response = body as { success?: unknown; message?: unknown };
     if (response.success === false) {
       throw new Error(
-        typeof response.message === 'string' && response.message.trim()
+        typeof response.message === "string" && response.message.trim()
           ? response.message
-          : 'The request failed.',
+          : "The request failed.",
       );
     }
   }
   return body;
 }
-

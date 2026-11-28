@@ -1,22 +1,29 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
-import { DASHBOARD_REFRESH_MS, useAutoRefresh } from '@/hooks/useAutoRefresh';
-import { Link, useLocation, useNavigate } from 'react-router';
-import { isAfterAuthState } from '@/auth/authContext';
-import { Badge } from '@/components/ui/Badge';
-import { Button } from '@/components/ui/Button';
-import { Pagination } from '@/components/ui/Pagination';
-import { EmptyState } from '@/components/ui/Card';
-import { SearchInput } from '@/components/common/SearchInput';
-import { Icon } from '@/assets/icons';
-import { ROUTES, studentCoursePath, studentWeaknessReportPath } from '@/app/routes';
-import { useDashboard } from '@/hooks/useDashboard';
-import type { StudentRecentAttempt } from '@/services/dashboard.service';
-import { getApiErrorMessage } from '@/utils/apiError';
-import { studentCourseService, type MyCourse } from '@/services/studentCourse.service';
-import { cacheGeneration, getCached, setCached } from '@/hooks/useCachedQuery';
-import { courseCacheKey } from '../components/courseProgress';
-import { CardGridSkeleton, CourseThumb, LoadError, PageTitle, STUDENT_PAGE_CLASS, formatDate } from '../components/studentUi';
-import { MaterialQuizModal } from '../components/MaterialQuizModal';
+import { useEffect, useMemo, useRef, useState } from "react";
+import { DASHBOARD_REFRESH_MS, useAutoRefresh } from "@/hooks/useAutoRefresh";
+import { Link, useLocation, useNavigate } from "react-router";
+import { isAfterAuthState } from "@/auth/authContext";
+import { Badge } from "@/components/ui/Badge";
+import { Button } from "@/components/ui/Button";
+import { Pagination } from "@/components/ui/Pagination";
+import { EmptyState } from "@/components/ui/Card";
+import { SearchInput } from "@/components/common/SearchInput";
+import { Icon } from "@/assets/icons";
+import { ROUTES, studentCoursePath, studentWeaknessReportPath } from "@/app/routes";
+import { useDashboard } from "@/hooks/useDashboard";
+import type { StudentRecentAttempt } from "@/services/dashboard.service";
+import { getApiErrorMessage } from "@/utils/apiError";
+import { studentCourseService, type MyCourse } from "@/services/studentCourse.service";
+import { cacheGeneration, getCached, setCached } from "@/hooks/useCachedQuery";
+import { courseCacheKey } from "../components/courseProgress";
+import {
+  CardGridSkeleton,
+  CourseThumb,
+  LoadError,
+  PageTitle,
+  STUDENT_PAGE_CLASS,
+  formatDate,
+} from "../components/studentUi";
+import { MaterialQuizModal } from "../components/MaterialQuizModal";
 
 const PAGE_SIZE = 12;
 /** MC-01 caps `size` at 100 and has no keyword filter, so the list is loaded once and searched client-side. */
@@ -24,7 +31,9 @@ const MY_COURSES_FETCH_SIZE = 100;
 const RECENT_ATTEMPTS = 3;
 
 function matchesSearch(course: MyCourse, term: string) {
-  return [course.title, course.category?.name, course.manager?.fullName].some(v => v?.toLowerCase().includes(term));
+  return [course.title, course.category?.name, course.manager?.fullName].some((v) =>
+    v?.toLowerCase().includes(term),
+  );
 }
 
 /**
@@ -43,19 +52,21 @@ export function MyCoursesPage() {
   // Just signed in / signed up: with no course yet, the catalog is a better start than an empty list.
   const afterAuthRef = useRef(isAfterAuthState(location.state));
   const { data: dashboard } = useDashboard();
-  const student = dashboard?.kind === 'student' ? dashboard : null;
+  const student = dashboard?.kind === "student" ? dashboard : null;
 
   const [page, setPage] = useState(1);
   const [reload, setReload] = useState(0);
   // Each refresh also reads every active course's live percent (LP-01), so it runs on the slower
   // dashboard clock. A cached list is already re-read without a loader.
-  useAutoRefresh(() => setReload(r => r + 1), true, DASHBOARD_REFRESH_MS);
-  const [search, setSearch] = useState('');
-  const [quizModal, setQuizModal] = useState<'material' | null>(null);
+  useAutoRefresh(() => setReload((r) => r + 1), true, DASHBOARD_REFRESH_MS);
+  const [search, setSearch] = useState("");
+  const [quizModal, setQuizModal] = useState<"material" | null>(null);
 
   // Cached for this tab (useCachedQuery's store): back on My Courses, the list and its live percents
   // show at once, and are read again behind them.
-  const [courses, setCourses] = useState<MyCourse[]>(() => getCached<MyCourse[]>(courseCacheKey.myCourses) ?? []);
+  const [courses, setCourses] = useState<MyCourse[]>(
+    () => getCached<MyCourse[]>(courseCacheKey.myCourses) ?? [],
+  );
   const [loading, setLoading] = useState(() => getCached(courseCacheKey.myCourses) === undefined);
   const [error, setError] = useState<string | null>(null);
 
@@ -72,10 +83,10 @@ export function MyCoursesPage() {
     setError(null);
     studentCourseService
       .getMyCourses({ page: 0, size: MY_COURSES_FETCH_SIZE })
-      .then(res => {
+      .then((res) => {
         if (cancelled) return;
         // Courses left with EN-04 come back as CANCELLED; they are no longer the student's.
-        const owned = res.content.filter(c => c.status !== 'CANCELLED');
+        const owned = res.content.filter((c) => c.status !== "CANCELLED");
         if (afterAuthRef.current) {
           afterAuthRef.current = false;
           if (owned.length === 0) {
@@ -85,9 +96,10 @@ export function MyCoursesPage() {
         }
         update(owned);
       })
-      .catch(err => {
+      .catch((err) => {
         // With a cached list on screen, keep it; the next visit tries again.
-        if (!cancelled && !cached) setError(getApiErrorMessage(err, 'Failed to load your courses.'));
+        if (!cancelled && !cached)
+          setError(getApiErrorMessage(err, "Failed to load your courses."));
       })
       .finally(() => {
         if (!cancelled) setLoading(false);
@@ -98,7 +110,10 @@ export function MyCoursesPage() {
   }, [reload]);
 
   const term = search.trim().toLowerCase();
-  const filtered = useMemo(() => (term ? courses.filter(c => matchesSearch(c, term)) : courses), [courses, term]);
+  const filtered = useMemo(
+    () => (term ? courses.filter((c) => matchesSearch(c, term)) : courses),
+    [courses, term],
+  );
   const pageItems = filtered.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE);
 
   const changeSearch = (value: string) => {
@@ -113,7 +128,11 @@ export function MyCoursesPage() {
         subtitle="Your enrolled courses and latest results."
         action={
           <div className="flex w-full flex-wrap items-center gap-2 sm:w-auto">
-            <Button variant="outline" icon={<Icon.Brain className="w-4 h-4" />} onClick={() => setQuizModal('material')}>
+            <Button
+              variant="outline"
+              icon={<Icon.Brain className="w-4 h-4" />}
+              onClick={() => setQuizModal("material")}
+            >
               AI Quiz Generator
             </Button>
             <div role="search" className="w-full sm:w-auto">
@@ -122,7 +141,7 @@ export function MyCoursesPage() {
                 placeholder="Search my courses…"
                 aria-label="Search my courses"
                 value={search}
-                onChange={e => changeSearch(e.target.value)}
+                onChange={(e) => changeSearch(e.target.value)}
               />
             </div>
           </div>
@@ -132,7 +151,7 @@ export function MyCoursesPage() {
       {loading ? (
         <CardGridSkeleton />
       ) : error ? (
-        <LoadError message={error} onRetry={() => setReload(r => r + 1)} />
+        <LoadError message={error} onRetry={() => setReload((r) => r + 1)} />
       ) : courses.length === 0 ? (
         <div className="card">
           <EmptyState
@@ -149,7 +168,7 @@ export function MyCoursesPage() {
             title="No matching courses"
             message={`None of your courses match "${search.trim()}".`}
             action={
-              <Button variant="outline" onClick={() => changeSearch('')}>
+              <Button variant="outline" onClick={() => changeSearch("")}>
                 Clear search
               </Button>
             }
@@ -158,48 +177,86 @@ export function MyCoursesPage() {
       ) : (
         <>
           <div className="grid grid-cols-[repeat(auto-fill,minmax(260px,1fr))] gap-[clamp(1rem,2vw,1.25rem)]">
-            {pageItems.map(c => (
-              <MyCourseCard key={c.courseId} course={c} onOpen={() => navigate(studentCoursePath(c.courseId))} />
+            {pageItems.map((c) => (
+              <MyCourseCard
+                key={c.courseId}
+                course={c}
+                onOpen={() => navigate(studentCoursePath(c.courseId))}
+              />
             ))}
           </div>
           <div className="card">
-            <Pagination page={page} total={filtered.length} perPage={PAGE_SIZE} onChange={setPage} unit="courses" />
+            <Pagination
+              page={page}
+              total={filtered.length}
+              perPage={PAGE_SIZE}
+              onChange={setPage}
+              unit="courses"
+            />
           </div>
         </>
       )}
 
-      <MaterialQuizModal open={quizModal === 'material'} onClose={() => setQuizModal(null)} courses={courses} />
+      <MaterialQuizModal
+        open={quizModal === "material"}
+        onClose={() => setQuizModal(null)}
+        courses={courses}
+      />
 
       {student && student.recentAttempts.length > 0 && (
-        <RecentAttempts attempts={student.recentAttempts.slice(0, RECENT_ATTEMPTS)} onViewAll={() => navigate(ROUTES.studentExams)} />
+        <RecentAttempts
+          attempts={student.recentAttempts.slice(0, RECENT_ATTEMPTS)}
+          onViewAll={() => navigate(ROUTES.studentExams)}
+        />
       )}
     </div>
   );
 }
 
-function RecentAttempts({ attempts, onViewAll }: { attempts: StudentRecentAttempt[]; onViewAll: () => void }) {
+function RecentAttempts({
+  attempts,
+  onViewAll,
+}: {
+  attempts: StudentRecentAttempt[];
+  onViewAll: () => void;
+}) {
   return (
     <section className="space-y-3">
       <div className="flex items-center justify-between gap-3">
         <h2 className="text-base font-semibold text-content">Recent attempts</h2>
-        <button type="button" onClick={onViewAll} className="text-xs font-medium text-primary hover:underline">
+        <button
+          type="button"
+          onClick={onViewAll}
+          className="text-xs font-medium text-primary hover:underline"
+        >
           View all in My Exams
         </button>
       </div>
       <ul className="card divide-y divide-line">
-        {attempts.map(a => (
-          <li key={a.attemptId} className="flex flex-wrap items-center gap-x-4 gap-y-1 px-[clamp(0.875rem,1.5vw,1.25rem)] py-3.5">
+        {attempts.map((a) => (
+          <li
+            key={a.attemptId}
+            className="flex flex-wrap items-center gap-x-4 gap-y-1 px-[clamp(0.875rem,1.5vw,1.25rem)] py-3.5"
+          >
             <div className="w-9 h-9 rounded-[10px] bg-primary-light flex items-center justify-center flex-shrink-0">
               <Icon.ClipboardList className="w-4.5 h-4.5 text-primary" />
             </div>
             <div className="flex-1 min-w-[10rem]">
               <p className="text-sm font-medium text-content break-words">{a.examTitle}</p>
-              <p className="text-xs text-content-subtle">{a.submittedAt ? new Date(a.submittedAt).toLocaleString() : '—'}</p>
+              <p className="text-xs text-content-subtle">
+                {a.submittedAt ? new Date(a.submittedAt).toLocaleString() : "—"}
+              </p>
             </div>
-            <Badge variant={a.status === 'PASSED' ? 'success' : a.status === 'FAILED' ? 'danger' : 'info'}>
-              {a.status.replace(/_/g, ' ')}
+            <Badge
+              variant={
+                a.status === "PASSED" ? "success" : a.status === "FAILED" ? "danger" : "info"
+              }
+            >
+              {a.status.replace(/_/g, " ")}
             </Badge>
-            <span className="w-14 text-right text-sm font-semibold text-content">{a.score != null ? `${a.score}%` : '—'}</span>
+            <span className="w-14 text-right text-sm font-semibold text-content">
+              {a.score != null ? `${a.score}%` : "—"}
+            </span>
           </li>
         ))}
       </ul>
@@ -218,10 +275,16 @@ function MyCourseCard({ course, onOpen }: { course: MyCourse; onOpen: () => void
       >
         <CourseThumb url={course.thumbnailUrl} title={course.title} />
         <div className="p-4 flex flex-col gap-3 flex-1">
-          <span className="text-2xs font-medium text-content-subtle truncate">{course.category?.name ?? 'Uncategorized'}</span>
+          <span className="text-2xs font-medium text-content-subtle truncate">
+            {course.category?.name ?? "Uncategorized"}
+          </span>
           <div>
-            <h3 className="text-base font-semibold text-content leading-snug line-clamp-2">{course.title}</h3>
-            {course.manager && <p className="text-xs text-content-subtle mt-0.5">by {course.manager.fullName}</p>}
+            <h3 className="text-base font-semibold text-content leading-snug line-clamp-2">
+              {course.title}
+            </h3>
+            {course.manager && (
+              <p className="text-xs text-content-subtle mt-0.5">by {course.manager.fullName}</p>
+            )}
           </div>
           <div className="flex flex-wrap gap-x-4 gap-y-1 text-xs text-content-soft">
             <span className="inline-flex items-center gap-1">
@@ -236,7 +299,8 @@ function MyCourseCard({ course, onOpen }: { course: MyCourse; onOpen: () => void
           </div>
           {course.nextExam && (
             <p className="mt-auto pt-2 border-t border-line text-xs text-content-soft truncate">
-              Next exam: <span className="font-medium text-content-secondary">{course.nextExam.title}</span>
+              Next exam:{" "}
+              <span className="font-medium text-content-secondary">{course.nextExam.title}</span>
             </p>
           )}
         </div>

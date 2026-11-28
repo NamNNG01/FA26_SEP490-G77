@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useRef, useState } from "react";
-import { useAutoRefresh } from '@/hooks/useAutoRefresh';
+import { useAutoRefresh } from "@/hooks/useAutoRefresh";
 import { Button } from "@/components/ui/Button";
 import { Badge } from "@/components/ui/Badge";
 import { Input } from "@/components/ui/Input";
@@ -85,8 +85,7 @@ const toLocalInput = (value?: string | null) => {
     minute: "2-digit",
     hourCycle: "h23",
   }).formatToParts(new Date(value));
-  const part = (type: string) =>
-    parts.find((item) => item.type === type)?.value ?? "";
+  const part = (type: string) => parts.find((item) => item.type === type)?.value ?? "";
   return `${part("year")}-${part("month")}-${part("day")}T${part("hour")}:${part("minute")}`;
 };
 const hcmInputToIso = (value: string) => {
@@ -116,9 +115,7 @@ const toPayload = (f: FormState): DiscountPayload => ({
   discountType: f.discountType,
   value: Number(f.value),
   maxDiscountAmount:
-    f.discountType === "PERCENT" && f.maxDiscountAmount
-      ? Number(f.maxDiscountAmount)
-      : null,
+    f.discountType === "PERCENT" && f.maxDiscountAmount ? Number(f.maxDiscountAmount) : null,
   minOrderAmount: f.minOrderAmount ? Number(f.minOrderAmount) : null,
   appliesTo: f.appliesTo,
   accessType: f.accessType,
@@ -128,9 +125,7 @@ const toPayload = (f: FormState): DiscountPayload => ({
   isActive: f.isActive,
 });
 const dateLabel = (value?: string | null) =>
-  value
-    ? new Date(value).toLocaleString("en-US", { timeZone: "Asia/Ho_Chi_Minh" })
-    : "—";
+  value ? new Date(value).toLocaleString("en-US", { timeZone: "Asia/Ho_Chi_Minh" }) : "—";
 const badgeVariant = (status: string) =>
   status === "ACTIVE"
     ? "success"
@@ -149,9 +144,7 @@ export function DiscountsPage() {
   const [typeFilter, setTypeFilter] = useState("");
   const [activeFilter, setActiveFilter] = useState("");
   const [validityFilter, setValidityFilter] = useState("");
-  const [accessTypeFilter, setAccessTypeFilter] = useState<
-    DiscountAccessType | ""
-  >("");
+  const [accessTypeFilter, setAccessTypeFilter] = useState<DiscountAccessType | "">("");
   const [loading, setLoading] = useState(true);
   const [editing, setEditing] = useState<Discount | null>(null);
   const [formOpen, setFormOpen] = useState(false);
@@ -160,8 +153,7 @@ export function DiscountsPage() {
   const [detail, setDetail] = useState<Discount | null>(null);
   const [detailLoading, setDetailLoading] = useState(false);
   const [listError, setListError] = useState<string | null>(null);
-  const [assignments, setAssignments] =
-    useState<Page<DiscountAssignment> | null>(null);
+  const [assignments, setAssignments] = useState<Page<DiscountAssignment> | null>(null);
   const [assignmentPage, setAssignmentPage] = useState(0);
   const [assignmentKeyword, setAssignmentKeyword] = useState("");
   const [debouncedAssignmentKeyword, setDebouncedAssignmentKeyword] = useState("");
@@ -194,12 +186,16 @@ export function DiscountsPage() {
   }, [assignmentKeyword]);
 
   /** `'quiet'` = shared auto-refresh: no loader, no error toast. */
-  const load = useCallback(async (mode?: 'quiet') => {
-    const requestId = ++listRequestId.current;
-    const quiet = mode === 'quiet';
-    if (!quiet) { setLoading(true); setListError(null); }
-    try {
-      const result = await adminDiscountService.list({
+  const load = useCallback(
+    async (mode?: "quiet") => {
+      const requestId = ++listRequestId.current;
+      const quiet = mode === "quiet";
+      if (!quiet) {
+        setLoading(true);
+        setListError(null);
+      }
+      try {
+        const result = await adminDiscountService.list({
           keyword: debouncedKeyword,
           discountType: typeFilter,
           isActive: activeFilter,
@@ -208,27 +204,29 @@ export function DiscountsPage() {
           page: pageIndex - 1,
           size: PAGE_SIZE,
         });
-      if (requestId === listRequestId.current) setPage(result);
-    } catch (error) {
-      if (requestId === listRequestId.current && !quiet) {
-        setListError(getApiErrorMessage(error, "Could not load discounts."));
+        if (requestId === listRequestId.current) setPage(result);
+      } catch (error) {
+        if (requestId === listRequestId.current && !quiet) {
+          setListError(getApiErrorMessage(error, "Could not load discounts."));
+        }
+      } finally {
+        if (requestId === listRequestId.current) setLoading(false);
       }
-    } finally {
-      if (requestId === listRequestId.current) setLoading(false);
-    }
-  }, [
-    accessTypeFilter,
-    activeFilter,
-    debouncedKeyword,
-    pageIndex,
-    toast,
-    typeFilter,
-    validityFilter,
-  ]);
+    },
+    [
+      accessTypeFilter,
+      activeFilter,
+      debouncedKeyword,
+      pageIndex,
+      toast,
+      typeFilter,
+      validityFilter,
+    ],
+  );
   useEffect(() => {
     void load();
   }, [load]);
-  useAutoRefresh(() => void load('quiet'));
+  useAutoRefresh(() => void load("quiet"));
 
   const loadAssignments = useCallback(
     async (discountId: number) => {
@@ -237,12 +235,13 @@ export function DiscountsPage() {
       setAssignmentError(null);
       try {
         const result = await adminDiscountService.assignments(discountId, {
-            isUsed: assignmentUsed,
-            keyword: debouncedAssignmentKeyword,
-            page: assignmentPage,
-            size: PAGE_SIZE,
-          });
-        if (!result || !Array.isArray(result.content)) throw new Error("The server returned an invalid assignment list.");
+          isUsed: assignmentUsed,
+          keyword: debouncedAssignmentKeyword,
+          page: assignmentPage,
+          size: PAGE_SIZE,
+        });
+        if (!result || !Array.isArray(result.content))
+          throw new Error("The server returned an invalid assignment list.");
         if (requestId === assignmentRequestId.current) setAssignments(result);
       } catch (error) {
         if (requestId === assignmentRequestId.current) {
@@ -271,9 +270,7 @@ export function DiscountsPage() {
       setForm(formFromDiscount(full));
       setFormOpen(true);
     } catch (error) {
-      toast.error(
-        getApiErrorMessage(error, "Could not load discount details."),
-      );
+      toast.error(getApiErrorMessage(error, "Could not load discount details."));
     }
   };
   const openDetail = async (discount: Discount) => {
@@ -291,7 +288,8 @@ export function DiscountsPage() {
       const result = await adminDiscountService.get(discount.discountId);
       if (requestId === detailRequestId.current) setDetail(result);
     } catch (error) {
-      if (requestId === detailRequestId.current) toast.error(getApiErrorMessage(error, "Could not load discount details."));
+      if (requestId === detailRequestId.current)
+        toast.error(getApiErrorMessage(error, "Could not load discount details."));
     } finally {
       if (requestId === detailRequestId.current) setDetailLoading(false);
     }
@@ -312,8 +310,7 @@ export function DiscountsPage() {
       (editing.stats?.usedCount ?? editing.usedCount) > 0),
   );
   const minimumUsageLimit = editing
-    ? (editing.stats?.usedCount ?? editing.usedCount) +
-      (editing.stats?.unusedAssignedCount ?? 0)
+    ? (editing.stats?.usedCount ?? editing.usedCount) + (editing.stats?.unusedAssignedCount ?? 0)
     : 1;
   const save = async (event: React.FormEvent) => {
     event.preventDefault();
@@ -324,9 +321,7 @@ export function DiscountsPage() {
       payload.code.length > 30 ||
       !/^[A-Za-z0-9_-]+$/.test(payload.code)
     ) {
-      toast.error(
-        "Code must be 4–30 characters using letters, numbers, _ or -.",
-      );
+      toast.error("Code must be 4–30 characters using letters, numbers, _ or -.");
       return;
     }
     if (!payload.name) {
@@ -361,8 +356,7 @@ export function DiscountsPage() {
     }
     setSaving(true);
     try {
-      if (editing)
-        await adminDiscountService.update(editing.discountId, payload);
+      if (editing) await adminDiscountService.update(editing.discountId, payload);
       else await adminDiscountService.create(payload);
       toast.success(editing ? "Discount updated." : "Discount created.");
       setFormOpen(false);
@@ -385,9 +379,7 @@ export function DiscountsPage() {
       setAffected(result.affectedContests ?? []);
       await load();
     } catch (error) {
-      toast.error(
-        getApiErrorMessage(error, "Could not change discount status."),
-      );
+      toast.error(getApiErrorMessage(error, "Could not change discount status."));
     } finally {
       setWorking(false);
     }
@@ -444,9 +436,7 @@ export function DiscountsPage() {
       key: "accessType",
       label: "Access",
       render: (row) => (
-        <Badge
-          variant={row.accessType === "CLAIM_REQUIRED" ? "warning" : "default"}
-        >
+        <Badge variant={row.accessType === "CLAIM_REQUIRED" ? "warning" : "default"}>
           {row.accessType === "CLAIM_REQUIRED" ? "Claim required" : "Public"}
         </Badge>
       ),
@@ -558,8 +548,7 @@ export function DiscountsPage() {
         <div>
           <h1 className="text-2xl font-bold text-content">Discounts</h1>
           <p className="mt-1 text-sm text-content-soft">
-            Create and manage discount codes, eligibility, and assigned
-            vouchers.
+            Create and manage discount codes, eligibility, and assigned vouchers.
           </p>
         </div>
         <Button icon={<Icon.Plus className="h-4 w-4" />} onClick={openCreate}>
@@ -653,29 +642,36 @@ export function DiscountsPage() {
         aria-busy={loading}
       >
         {listError ? (
-          <div role="alert" className="flex flex-wrap items-center justify-between gap-3 p-5 text-sm text-danger">
+          <div
+            role="alert"
+            className="flex flex-wrap items-center justify-between gap-3 p-5 text-sm text-danger"
+          >
             <span>{listError}</span>
-            <Button size="sm" variant="outline" onClick={() => void load()}>Retry</Button>
+            <Button size="sm" variant="outline" onClick={() => void load()}>
+              Retry
+            </Button>
           </div>
-        ) : <Table
-          columns={columns}
-          data={rows as unknown as Record<string, unknown>[]}
-          perPage={PAGE_SIZE}
-          unit="discounts"
-          serverPagination={{
-            page: pageIndex,
-            total: page.totalElements,
-            onChange: setPageIndex,
-          }}
-          onRowClick={(row) => void openDetail(row as unknown as Discount)}
-          emptyState={
-            loading
-              ? "Loading discounts…"
-              : filtersActive
-                ? "No discounts match your filters."
-                : "No discounts yet. Click “New discount” to add one."
-          }
-        />}
+        ) : (
+          <Table
+            columns={columns}
+            data={rows as unknown as Record<string, unknown>[]}
+            perPage={PAGE_SIZE}
+            unit="discounts"
+            serverPagination={{
+              page: pageIndex,
+              total: page.totalElements,
+              onChange: setPageIndex,
+            }}
+            onRowClick={(row) => void openDetail(row as unknown as Discount)}
+            emptyState={
+              loading
+                ? "Loading discounts…"
+                : filtersActive
+                  ? "No discounts match your filters."
+                  : "No discounts yet. Click “New discount” to add one."
+            }
+          />
+        )}
       </div>
 
       <Modal
@@ -685,19 +681,13 @@ export function DiscountsPage() {
         size="xl"
         footer={
           <>
-            <Button
-              variant="outline"
-              disabled={saving}
-              onClick={() => setFormOpen(false)}
-            >
+            <Button variant="outline" disabled={saving} onClick={() => setFormOpen(false)}>
               Cancel
             </Button>
             <Button
               loading={saving}
               disabled={saving}
-              onClick={() =>
-                document.getElementById("discount-form-submit")?.click()
-              }
+              onClick={() => document.getElementById("discount-form-submit")?.click()}
             >
               {editing ? "Save changes" : "Create discount"}
             </Button>
@@ -795,9 +785,7 @@ export function DiscountsPage() {
             <Select
               label="Access type"
               value={form.accessType}
-              onChange={(v) =>
-                updateForm("accessType", v as DiscountAccessType)
-              }
+              onChange={(v) => updateForm("accessType", v as DiscountAccessType)}
               options={[
                 { label: "Public", value: "PUBLIC" },
                 { label: "Claim required", value: "CLAIM_REQUIRED" },
@@ -866,36 +854,18 @@ export function DiscountsPage() {
               <Info
                 label="Discount"
                 value={
-                  detail.discountType === "PERCENT"
-                    ? `${detail.value}%`
-                    : formatVnd(detail.value)
+                  detail.discountType === "PERCENT" ? `${detail.value}%` : formatVnd(detail.value)
                 }
               />
               <Info label="Applies to" value={detail.appliesTo} />
               <Info
                 label="Access type"
-                value={
-                  detail.accessType === "CLAIM_REQUIRED"
-                    ? "Claim required"
-                    : "Public"
-                }
+                value={detail.accessType === "CLAIM_REQUIRED" ? "Claim required" : "Public"}
               />
-              <Info
-                label="Validity"
-                value={validityLabels[detail.validity] ?? detail.validity}
-              />
-              <Info
-                label="Status"
-                value={detail.isActive ? "Active" : "Inactive"}
-              />
-              <Info
-                label="Usage"
-                value={`${detail.usedCount} / ${detail.usageLimit}`}
-              />
-              <Info
-                label="Assigned"
-                value={String(detail.stats?.assignedCount ?? "—")}
-              />
+              <Info label="Validity" value={validityLabels[detail.validity] ?? detail.validity} />
+              <Info label="Status" value={detail.isActive ? "Active" : "Inactive"} />
+              <Info label="Usage" value={`${detail.usedCount} / ${detail.usageLimit}`} />
+              <Info label="Assigned" value={String(detail.stats?.assignedCount ?? "—")} />
               <Info
                 label="Unused assigned"
                 value={String(detail.stats?.unusedAssignedCount ?? "—")}
@@ -910,14 +880,10 @@ export function DiscountsPage() {
               <Info label="Updated" value={dateLabel(detail.updatedAt)} />
             </div>
             {detail.description && (
-              <p className="text-sm text-content-secondary">
-                {detail.description}
-              </p>
+              <p className="text-sm text-content-secondary">{detail.description}</p>
             )}
             <div>
-              <h3 className="mb-2 font-semibold text-content">
-                Contests using this discount
-              </h3>
+              <h3 className="mb-2 font-semibold text-content">Contests using this discount</h3>
               {detail.usedInContests?.length ? (
                 <ul className="space-y-2">
                   {detail.usedInContests.map((contest) => (
@@ -933,9 +899,7 @@ export function DiscountsPage() {
                   ))}
                 </ul>
               ) : (
-                <p className="text-sm text-content-soft">
-                  No contests use this discount.
-                </p>
+                <p className="text-sm text-content-soft">No contests use this discount.</p>
               )}
             </div>
             <div className="space-y-3 border-t border-line-soft pt-4">
@@ -966,9 +930,18 @@ export function DiscountsPage() {
                 </div>
               </div>
               {assignmentError ? (
-                <div role="alert" className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-danger-line bg-danger-light p-4 text-sm text-danger">
+                <div
+                  role="alert"
+                  className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-danger-line bg-danger-light p-4 text-sm text-danger"
+                >
                   <span>{assignmentError}</span>
-                  <Button size="sm" variant="outline" onClick={() => detail && void loadAssignments(detail.discountId)}>Retry</Button>
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    onClick={() => detail && void loadAssignments(detail.discountId)}
+                  >
+                    Retry
+                  </Button>
                 </div>
               ) : assignmentLoading ? (
                 <div className="flex justify-center py-6">
@@ -988,32 +961,19 @@ export function DiscountsPage() {
                     </thead>
                     <tbody>
                       {assignments.content.map((a) => (
-                        <tr
-                          key={a.userDiscountId}
-                          className="border-b border-line-faint"
-                        >
+                        <tr key={a.userDiscountId} className="border-b border-line-faint">
                           <td className="py-2 pr-3">
-                            <p className="font-medium text-content">
-                              {a.user.fullName}
-                            </p>
-                            <p className="text-xs text-content-soft">
-                              {a.user.email}
-                            </p>
+                            <p className="font-medium text-content">{a.user.fullName}</p>
+                            <p className="text-xs text-content-soft">{a.user.email}</p>
                           </td>
                           <td className="py-2 pr-3">
                             <Badge variant={a.isUsed ? "default" : "success"}>
                               {a.isUsed ? "Used" : "Unused"}
                             </Badge>
                           </td>
-                          <td className="py-2 pr-3 whitespace-nowrap">
-                            {dateLabel(a.assignedAt)}
-                          </td>
-                          <td className="py-2 pr-3 whitespace-nowrap">
-                            {dateLabel(a.usedAt)}
-                          </td>
-                          <td className="py-2">
-                            {a.source?.title ?? a.source?.type ?? "—"}
-                          </td>
+                          <td className="py-2 pr-3 whitespace-nowrap">{dateLabel(a.assignedAt)}</td>
+                          <td className="py-2 pr-3 whitespace-nowrap">{dateLabel(a.usedAt)}</td>
+                          <td className="py-2">{a.source?.title ?? a.source?.type ?? "—"}</td>
                         </tr>
                       ))}
                     </tbody>
@@ -1022,26 +982,19 @@ export function DiscountsPage() {
                     <Button
                       size="sm"
                       variant="outline"
-                      disabled={
-                        !assignments || assignments.first || assignmentLoading
-                      }
-                      onClick={() =>
-                        setAssignmentPage((v) => Math.max(0, v - 1))
-                      }
+                      disabled={!assignments || assignments.first || assignmentLoading}
+                      onClick={() => setAssignmentPage((v) => Math.max(0, v - 1))}
                     >
                       Previous
                     </Button>
                     <span className="self-center text-xs text-content-soft">
                       {assignments.totalElements} users ·{" "}
-                      {assignments.totalPages ? assignmentPage + 1 : 0}/
-                      {assignments.totalPages}
+                      {assignments.totalPages ? assignmentPage + 1 : 0}/{assignments.totalPages}
                     </span>
                     <Button
                       size="sm"
                       variant="outline"
-                      disabled={
-                        !assignments || assignments.last || assignmentLoading
-                      }
+                      disabled={!assignments || assignments.last || assignmentLoading}
                       onClick={() => setAssignmentPage((v) => v + 1)}
                     >
                       Next
@@ -1064,11 +1017,7 @@ export function DiscountsPage() {
         onConfirm={() => void confirmStatus()}
         loading={working}
         tone={changingStatus?.isActive ? "danger" : "warning"}
-        title={
-          changingStatus?.isActive
-            ? "Deactivate discount?"
-            : "Activate discount?"
-        }
+        title={changingStatus?.isActive ? "Deactivate discount?" : "Activate discount?"}
         description={
           changingStatus?.isActive
             ? `Deactivating ${changingStatus?.code} will prevent redemption and block reward payments in contests that use it.`
@@ -1099,9 +1048,7 @@ export function DiscountsPage() {
             </ul>
           </div>
         ) : (
-          <p className="text-sm text-content-secondary">
-            No active contests are affected.
-          </p>
+          <p className="text-sm text-content-secondary">No active contests are affected.</p>
         )}
       </Modal>
       <ConfirmDialog
@@ -1113,8 +1060,8 @@ export function DiscountsPage() {
         title="Delete discount?"
         description={
           <>
-            Delete <strong>{deleting?.code}</strong>? Discounts with active
-            contest usage or assigned vouchers cannot be deleted.
+            Delete <strong>{deleting?.code}</strong>? Discounts with active contest usage or
+            assigned vouchers cannot be deleted.
           </>
         }
         confirmLabel="Delete"
@@ -1127,9 +1074,7 @@ function Info({ label, value }: { label: string; value: string }) {
   return (
     <div className="min-w-0">
       <p className="text-xs text-content-soft">{label}</p>
-      <p className="mt-1 break-words text-sm font-medium text-content">
-        {value}
-      </p>
+      <p className="mt-1 break-words text-sm font-medium text-content">{value}</p>
     </div>
   );
 }

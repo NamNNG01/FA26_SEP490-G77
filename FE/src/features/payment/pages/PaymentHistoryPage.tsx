@@ -1,26 +1,40 @@
-import { useEffect, useState } from 'react';
-import { useQuietRefresh } from '@/hooks/useAutoRefresh';
-import { useNavigate } from 'react-router';
-import { Badge } from '@/components/ui/Badge';
-import { Button } from '@/components/ui/Button';
-import { EmptyState } from '@/components/ui/Card';
-import { Pagination } from '@/components/ui/Pagination';
-import { useToast } from '@/components/ui/ToastHost';
-import { Icon } from '@/assets/icons';
-import { ROUTES, coursePath, studentCoursePath } from '@/app/routes';
-import { getApiErrorMessage } from '@/utils/apiError';
-import { formatVnd, paymentService, type PaymentHistoryItem, type PaymentStatus } from '@/services/payment.service';
-import { refreshCurrentSubscription } from '@/services/studentSubscription.service';
-import { ListSkeleton, LoadError, PageTitle, STUDENT_PAGE_CLASS, formatDateTime } from '@/features/student/components/studentUi';
+import { useEffect, useState } from "react";
+import { useQuietRefresh } from "@/hooks/useAutoRefresh";
+import { useNavigate } from "react-router";
+import { Badge } from "@/components/ui/Badge";
+import { Button } from "@/components/ui/Button";
+import { EmptyState } from "@/components/ui/Card";
+import { Pagination } from "@/components/ui/Pagination";
+import { useToast } from "@/components/ui/ToastHost";
+import { Icon } from "@/assets/icons";
+import { ROUTES, coursePath, studentCoursePath } from "@/app/routes";
+import { getApiErrorMessage } from "@/utils/apiError";
+import {
+  formatVnd,
+  paymentService,
+  type PaymentHistoryItem,
+  type PaymentStatus,
+} from "@/services/payment.service";
+import { refreshCurrentSubscription } from "@/services/studentSubscription.service";
+import {
+  ListSkeleton,
+  LoadError,
+  PageTitle,
+  STUDENT_PAGE_CLASS,
+  formatDateTime,
+} from "@/features/student/components/studentUi";
 
 const PAGE_SIZE = 10;
 
-export const PAYMENT_STATUS_BADGE: Record<PaymentStatus, { variant: 'info' | 'success' | 'warning' | 'danger' | 'default'; label: string }> = {
-  PENDING: { variant: 'info', label: 'Pending' },
-  SUCCEEDED: { variant: 'success', label: 'Paid' },
-  FAILED: { variant: 'danger', label: 'Failed' },
-  EXPIRED: { variant: 'default', label: 'Expired' },
-  CANCELLED: { variant: 'default', label: 'Cancelled' },
+export const PAYMENT_STATUS_BADGE: Record<
+  PaymentStatus,
+  { variant: "info" | "success" | "warning" | "danger" | "default"; label: string }
+> = {
+  PENDING: { variant: "info", label: "Pending" },
+  SUCCEEDED: { variant: "success", label: "Paid" },
+  FAILED: { variant: "danger", label: "Failed" },
+  EXPIRED: { variant: "default", label: "Expired" },
+  CANCELLED: { variant: "default", label: "Cancelled" },
 };
 
 /**
@@ -32,7 +46,7 @@ export function PaymentHistoryPage() {
   const toast = useToast();
   const [page, setPage] = useState(1);
   const [reload, setReload] = useState(0);
-  const takeQuiet = useQuietRefresh(() => setReload(r => r + 1));
+  const takeQuiet = useQuietRefresh(() => setReload((r) => r + 1));
   const [rows, setRows] = useState<PaymentHistoryItem[]>([]);
   const [total, setTotal] = useState(0);
   const [loading, setLoading] = useState(true);
@@ -50,26 +64,33 @@ export function PaymentHistoryPage() {
     }
     paymentService
       .getHistory(page - 1, PAGE_SIZE)
-      .then(res => {
+      .then((res) => {
         if (cancelled) return;
         setRows(res.content);
         setTotal(res.totalElements);
       })
-      .catch(err => { if (!cancelled && !quiet) setError(getApiErrorMessage(err, 'Could not load your payments.')); })
-      .finally(() => { if (!cancelled) setLoading(false); });
-    return () => { cancelled = true; };
+      .catch((err) => {
+        if (!cancelled && !quiet)
+          setError(getApiErrorMessage(err, "Could not load your payments."));
+      })
+      .finally(() => {
+        if (!cancelled) setLoading(false);
+      });
+    return () => {
+      cancelled = true;
+    };
   }, [page, reload]);
 
   async function handleCancel(orderCode: string) {
     setCancelling(orderCode);
     try {
       await paymentService.cancel(orderCode);
-      toast.success('Payment cancelled');
+      toast.success("Payment cancelled");
     } catch (err) {
-      toast.error(getApiErrorMessage(err, 'Could not cancel the payment.'));
+      toast.error(getApiErrorMessage(err, "Could not cancel the payment."));
     } finally {
       setCancelling(null);
-      setReload(r => r + 1);
+      setReload((r) => r + 1);
     }
   }
 
@@ -77,22 +98,23 @@ export function PaymentHistoryPage() {
     setChecking(row.orderCode);
     try {
       const result = await paymentService.getStatus(row.orderCode);
-      if (result.status === 'SUCCEEDED') {
-        if (row.type === 'SUBSCRIPTION') void refreshCurrentSubscription();
-        toast.success('Payment confirmed');
+      if (result.status === "SUCCEEDED") {
+        if (row.type === "SUBSCRIPTION") void refreshCurrentSubscription();
+        toast.success("Payment confirmed");
       } else {
-        toast.info('Payment has not been confirmed yet.');
+        toast.info("Payment has not been confirmed yet.");
       }
     } catch (err) {
-      toast.error(getApiErrorMessage(err, 'Could not check the payment.'));
+      toast.error(getApiErrorMessage(err, "Could not check the payment."));
     } finally {
       setChecking(null);
-      setReload(r => r + 1);
+      setReload((r) => r + 1);
     }
   }
 
   /** Where the item is bought again — PY-01 there reuses the open order. */
-  const itemPath = (row: PaymentHistoryItem) => (row.type === 'COURSE' ? coursePath(row.refId) : ROUTES.studentSubscription);
+  const itemPath = (row: PaymentHistoryItem) =>
+    row.type === "COURSE" ? coursePath(row.refId) : ROUTES.studentSubscription;
 
   return (
     <div className={`${STUDENT_PAGE_CLASS} space-y-6`}>
@@ -101,14 +123,18 @@ export function PaymentHistoryPage() {
       {loading ? (
         <ListSkeleton rows={5} />
       ) : error ? (
-        <LoadError message={error} onRetry={() => setReload(r => r + 1)} />
+        <LoadError message={error} onRetry={() => setReload((r) => r + 1)} />
       ) : rows.length === 0 ? (
         <div className="card">
           <EmptyState
             icon={<Icon.FileText className="w-6 h-6" />}
             title="No payments yet"
             message="Courses and plans you buy will show up here."
-            action={<Button variant="outline" onClick={() => navigate(ROUTES.courses)}>Browse courses</Button>}
+            action={
+              <Button variant="outline" onClick={() => navigate(ROUTES.courses)}>
+                Browse courses
+              </Button>
+            }
           />
         </div>
       ) : (
@@ -126,41 +152,84 @@ export function PaymentHistoryPage() {
                 </tr>
               </thead>
               <tbody className="divide-y divide-line">
-                {rows.map(row => {
-                  const badge = PAYMENT_STATUS_BADGE[row.status] ?? { variant: 'default' as const, label: row.status };
+                {rows.map((row) => {
+                  const badge = PAYMENT_STATUS_BADGE[row.status] ?? {
+                    variant: "default" as const,
+                    label: row.status,
+                  };
                   return (
                     <tr key={row.orderCode} className="align-top">
                       <td className="px-5 py-3">
                         <div className="flex items-center gap-2">
                           <span className="font-medium text-content">{row.title}</span>
-                          <Badge variant={row.type === 'COURSE' ? 'purple' : 'info'}>{row.type === 'COURSE' ? 'Course' : 'Plan'}</Badge>
+                          <Badge variant={row.type === "COURSE" ? "purple" : "info"}>
+                            {row.type === "COURSE" ? "Course" : "Plan"}
+                          </Badge>
                         </div>
-                        <p className="mt-0.5 font-mono text-2xs text-content-subtle break-all">{row.orderCode}</p>
+                        <p className="mt-0.5 font-mono text-2xs text-content-subtle break-all">
+                          {row.orderCode}
+                        </p>
                       </td>
-                      <td className="px-5 py-3 text-right tabular-nums text-content whitespace-nowrap">{formatVnd(row.amount)}</td>
-                      <td className="px-5 py-3"><Badge variant={badge.variant}>{badge.label}</Badge></td>
-                      <td className="px-5 py-3 text-content-soft whitespace-nowrap">{formatDateTime(row.createdAt)}</td>
-                      <td className="px-5 py-3 text-content-soft whitespace-nowrap">{formatDateTime(row.paidAt)}</td>
+                      <td className="px-5 py-3 text-right tabular-nums text-content whitespace-nowrap">
+                        {formatVnd(row.amount)}
+                      </td>
+                      <td className="px-5 py-3">
+                        <Badge variant={badge.variant}>{badge.label}</Badge>
+                      </td>
+                      <td className="px-5 py-3 text-content-soft whitespace-nowrap">
+                        {formatDateTime(row.createdAt)}
+                      </td>
+                      <td className="px-5 py-3 text-content-soft whitespace-nowrap">
+                        {formatDateTime(row.paidAt)}
+                      </td>
                       <td className="px-5 py-3">
                         <div className="flex justify-end gap-2">
-                          {(row.status === 'PENDING' || row.status === 'EXPIRED') && (
-                            <Button size="sm" variant="outline" loading={checking === row.orderCode} onClick={() => handleCheck(row)}>
+                          {(row.status === "PENDING" || row.status === "EXPIRED") && (
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              loading={checking === row.orderCode}
+                              onClick={() => handleCheck(row)}
+                            >
                               Check payment
                             </Button>
                           )}
-                          {row.status === 'PENDING' && (
+                          {row.status === "PENDING" && (
                             <>
-                              <Button size="sm" variant="ghost" loading={cancelling === row.orderCode} onClick={() => handleCancel(row.orderCode)}>
+                              <Button
+                                size="sm"
+                                variant="ghost"
+                                loading={cancelling === row.orderCode}
+                                onClick={() => handleCancel(row.orderCode)}
+                              >
                                 Cancel
                               </Button>
-                              <Button size="sm" variant="outline" onClick={() => navigate(itemPath(row))}>Pay</Button>
+                              <Button
+                                size="sm"
+                                variant="outline"
+                                onClick={() => navigate(itemPath(row))}
+                              >
+                                Pay
+                              </Button>
                             </>
                           )}
-                          {row.status === 'SUCCEEDED' && row.type === 'COURSE' && (
-                            <Button size="sm" variant="outline" onClick={() => navigate(studentCoursePath(row.refId))}>Open course</Button>
+                          {row.status === "SUCCEEDED" && row.type === "COURSE" && (
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              onClick={() => navigate(studentCoursePath(row.refId))}
+                            >
+                              Open course
+                            </Button>
                           )}
-                          {row.status === 'SUCCEEDED' && row.type === 'SUBSCRIPTION' && (
-                            <Button size="sm" variant="outline" onClick={() => navigate(ROUTES.studentSubscription)}>View plan</Button>
+                          {row.status === "SUCCEEDED" && row.type === "SUBSCRIPTION" && (
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              onClick={() => navigate(ROUTES.studentSubscription)}
+                            >
+                              View plan
+                            </Button>
                           )}
                         </div>
                       </td>
@@ -172,7 +241,13 @@ export function PaymentHistoryPage() {
           </div>
           {total > PAGE_SIZE && (
             <div className="border-t border-line">
-              <Pagination page={page} total={total} perPage={PAGE_SIZE} onChange={setPage} unit="payments" />
+              <Pagination
+                page={page}
+                total={total}
+                perPage={PAGE_SIZE}
+                onChange={setPage}
+                unit="payments"
+              />
             </div>
           )}
         </div>

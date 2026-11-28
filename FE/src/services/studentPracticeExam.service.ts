@@ -1,8 +1,8 @@
-import { api } from './api';
-import type { ApiResponse } from '@/types/api';
-import type { PageResponse } from './course.service';
-import type { AnswerResponse, AttemptQuestion, ResultQuestion } from './studentAttempt.service';
-import type { Mastery } from './studentAi.service';
+import { api } from "./api";
+import type { ApiResponse } from "@/types/api";
+import type { PageResponse } from "./course.service";
+import type { AnswerResponse, AttemptQuestion, ResultQuestion } from "./studentAttempt.service";
+import type { Mastery } from "./studentAi.service";
 
 /**
  * StudentPracticeExamService — custom practice exams (Deadline1 §18, PracticeExamController).
@@ -22,8 +22,8 @@ import type { Mastery } from './studentAi.service';
 export const PRACTICE_QUESTIONS = { min: 1, max: 100, default: 20 };
 export const PRACTICE_MINUTES = { min: 1, max: 180, default: 30 };
 
-export type PracticeExamType = 'QUIZ' | 'ESSAY' | 'MIXED';
-export type PracticeDifficulty = 'EASY' | 'MEDIUM' | 'HARD';
+export type PracticeExamType = "QUIZ" | "ESSAY" | "MIXED";
+export type PracticeDifficulty = "EASY" | "MEDIUM" | "HARD";
 
 export interface PracticeExamRequest {
   courseId: number;
@@ -37,9 +37,9 @@ export interface PracticeExamRequest {
   /** Name the student gives the practice exam; blank falls back to the BE default name. */
   title?: string;
   /** How it is taken: EXAM is saved as PRACTICE_EXAM, PRACTICE as PRACTICE (BE default EXAM). */
-  mode?: 'EXAM' | 'PRACTICE';
+  mode?: "EXAM" | "PRACTICE";
   /** SMART: the BE spreads questionCount over the modules by the student's weak spots (module fields are ignored). */
-  allocation?: 'SMART' | 'CUSTOM';
+  allocation?: "SMART" | "CUSTOM";
   /** With SMART: only this module (0 = the course questions outside any module). */
   focusModuleId?: number;
 }
@@ -85,7 +85,7 @@ export interface PracticeExamItem {
 }
 
 /** Key of ORDERING / MATCHING / FILL_BLANK — same shape as SA-05 `ResultQuestion.correctAnswer`. */
-export type CorrectAnswer = NonNullable<ResultQuestion['correctAnswer']>;
+export type CorrectAnswer = NonNullable<ResultQuestion["correctAnswer"]>;
 
 /** Result of "Check answer" on one question of a practice attempt. */
 export interface AnswerCheck {
@@ -101,29 +101,29 @@ export interface AnswerCheck {
 
 /** Question types "Check answer" can grade (the others are shown after submitting). */
 export const CHECKABLE_TYPES: ReadonlySet<string> = new Set([
-  'SINGLE_CHOICE',
-  'MULTIPLE_CHOICE',
-  'TRUE_FALSE',
-  'MATCHING',
-  'ORDERING',
-  'FILL_BLANK',
+  "SINGLE_CHOICE",
+  "MULTIPLE_CHOICE",
+  "TRUE_FALSE",
+  "MATCHING",
+  "ORDERING",
+  "FILL_BLANK",
 ]);
 
 /** Checked as soon as an option is picked: the answer is one choice. */
-export const INSTANT_CHECK_TYPES: ReadonlySet<string> = new Set(['SINGLE_CHOICE', 'TRUE_FALSE']);
+export const INSTANT_CHECK_TYPES: ReadonlySet<string> = new Set(["SINGLE_CHOICE", "TRUE_FALSE"]);
 
 /** Fill-blank spellings are compared trimmed, with single spaces, ignoring case. */
 export function normalizeBlank(text: string | null | undefined): string {
-  return (text ?? '').trim().replace(/\s+/g, ' ').toLowerCase();
+  return (text ?? "").trim().replace(/\s+/g, " ").toLowerCase();
 }
 
 /** Placeholder numbers of a fill-blank question (`{{n}}`); "1" when the text has none. */
 export function blankKeys(question: AttemptQuestion): string[] {
-  const keys = [...new Set([...question.content.matchAll(/\{\{(\d+)\}\}/g)].map(m => m[1]))];
-  return keys.length > 0 ? keys : ['1'];
+  const keys = [...new Set([...question.content.matchAll(/\{\{(\d+)\}\}/g)].map((m) => m[1]))];
+  return keys.length > 0 ? keys : ["1"];
 }
 
-export type CheckOutcome = 'correct' | 'partial' | 'wrong';
+export type CheckOutcome = "correct" | "partial" | "wrong";
 
 /**
  * How many parts of a checked answer are right — options, pairs, positions or blanks —
@@ -138,55 +138,64 @@ export function checkParts(
   let correct = 0;
   let total = 1;
   switch (question.questionType) {
-    case 'SINGLE_CHOICE':
-    case 'TRUE_FALSE': {
+    case "SINGLE_CHOICE":
+    case "TRUE_FALSE": {
       const picked = response?.selectedOptionIds ?? [];
       correct = picked.length === 1 && check.correctOptionIds.includes(picked[0]) ? 1 : 0;
       break;
     }
-    case 'MULTIPLE_CHOICE': {
+    case "MULTIPLE_CHOICE": {
       // One part per correct option, plus one per wrong option picked.
       const keyIds = new Set(check.correctOptionIds);
       const picked = response?.selectedOptionIds ?? [];
-      correct = picked.filter(id => keyIds.has(id)).length;
-      total = keyIds.size + picked.filter(id => !keyIds.has(id)).length;
+      correct = picked.filter((id) => keyIds.has(id)).length;
+      total = keyIds.size + picked.filter((id) => !keyIds.has(id)).length;
       break;
     }
-    case 'MATCHING': {
-      const given = new Map((response?.matches ?? []).map(m => [m.left, m.right]));
+    case "MATCHING": {
+      const given = new Map((response?.matches ?? []).map((m) => [m.left, m.right]));
       const pairs = key?.pairs ?? [];
-      correct = pairs.filter(p => given.get(p.left) === p.right).length;
+      correct = pairs.filter((p) => given.get(p.left) === p.right).length;
       total = pairs.length;
       break;
     }
-    case 'ORDERING': {
+    case "ORDERING": {
       const given = response?.orderedOptionIds ?? [];
       const order = key?.orderedOptionIds ?? [];
       correct = order.filter((id, i) => given[i] === id).length;
       total = order.length;
       break;
     }
-    case 'FILL_BLANK': {
+    case "FILL_BLANK": {
       const given = response?.blanks ?? {};
       const blanks = key?.blanks ?? {};
       const keys = Object.keys(blanks);
-      correct = keys.filter(k => blanks[k].some(a => normalizeBlank(a) === normalizeBlank(given[k]))).length;
+      correct = keys.filter((k) =>
+        blanks[k].some((a) => normalizeBlank(a) === normalizeBlank(given[k])),
+      ).length;
       total = keys.length;
       break;
     }
   }
   total = Math.max(total, 1);
   // The server verdict wins over the part count.
-  if (check.isCorrect) return { correct: total, total, outcome: 'correct' };
+  if (check.isCorrect) return { correct: total, total, outcome: "correct" };
   if (check.isCorrect === false) correct = Math.min(correct, total - 1);
-  return { correct, total, outcome: correct === total ? 'correct' : correct > 0 ? 'partial' : 'wrong' };
+  return {
+    correct,
+    total,
+    outcome: correct === total ? "correct" : correct > 0 ? "partial" : "wrong",
+  };
 }
 
 /**
  * The check of a practice answer from the key sent with the paper (`AttemptQuestion.key`), so it shows
  * at once; SA-09 then stores, locks and confirms it. Null when the question has no key.
  */
-export function checkFromKey(question: AttemptQuestion, response: AnswerResponse | null | undefined): AnswerCheck | null {
+export function checkFromKey(
+  question: AttemptQuestion,
+  response: AnswerResponse | null | undefined,
+): AnswerCheck | null {
   const key = question.key;
   if (!key) return null;
   const check: AnswerCheck = {
@@ -196,18 +205,18 @@ export function checkFromKey(question: AttemptQuestion, response: AnswerResponse
     correctAnswer: key.correctAnswer ?? null,
     explanation: key.explanation,
   };
-  return { ...check, isCorrect: checkParts(question, response, check).outcome === 'correct' };
+  return { ...check, isCorrect: checkParts(question, response, check).outcome === "correct" };
 }
 
 /** PQ-04 item: the question as the student saw it (no key, no answer). */
 interface WrongQuestionItem {
   questionId: number;
   orderIndex: number | null;
-  questionType: AttemptQuestion['questionType'];
+  questionType: AttemptQuestion["questionType"];
   content: string | null;
   options?: { optionId: number; optionText: string }[] | null;
-  matching?: AttemptQuestion['matching'];
-  answerSpace?: AttemptQuestion['answerSpace'];
+  matching?: AttemptQuestion["matching"];
+  answerSpace?: AttemptQuestion["answerSpace"];
 }
 
 type ErrorBody = {
@@ -220,37 +229,51 @@ type ErrorBody = {
 };
 
 /** Readable PQ-01 error, including the module when a per-module request is short. */
-export function getPracticeError(error: unknown, fallback: string, modules: { value: string; label: string }[] = []): string {
+export function getPracticeError(
+  error: unknown,
+  fallback: string,
+  modules: { value: string; label: string }[] = [],
+): string {
   const res = (error as { response?: { status?: number; data?: ErrorBody } } | null)?.response;
   if (!res) return fallback;
   const body = res.data;
-  if (body?.data?.code === 'NOT_ENOUGH_QUESTIONS' || body?.data?.categoryId != null) {
+  if (body?.data?.code === "NOT_ENOUGH_QUESTIONS" || body?.data?.categoryId != null) {
     const available = body.data.available;
     const categoryId = body.data.categoryId;
     if (categoryId != null) {
-      const label = modules.find(module => module.value === String(categoryId))?.label ?? `Module ${categoryId}`;
-      return `${label} has only ${available ?? 'not enough'} matching question${available === 1 ? '' : 's'}. Reduce its count or adjust the filters.`;
+      const label =
+        modules.find((module) => module.value === String(categoryId))?.label ??
+        `Module ${categoryId}`;
+      return `${label} has only ${available ?? "not enough"} matching question${available === 1 ? "" : "s"}. Reduce its count or adjust the filters.`;
     }
-    return `The question bank does not have enough questions${available != null ? ` (only ${available} match)` : ''}. Lower the question count or remove some filters.`;
+    return `The question bank does not have enough questions${available != null ? ` (only ${available} match)` : ""}. Lower the question count or remove some filters.`;
   }
-  if (res.status === 403) return body?.message?.trim() || 'You are not enrolled in this course.';
+  if (res.status === 403) return body?.message?.trim() || "You are not enrolled in this course.";
   return body?.message?.trim() || fallback;
 }
 
 export const studentPracticeExamService = {
   /** PQ-01 */
   async create(body: PracticeExamRequest): Promise<PracticeExamCreated> {
-    return api.post<ApiResponse<PracticeExamCreated>>('/student/practice-exams', body).then(r => r.data);
+    return api
+      .post<ApiResponse<PracticeExamCreated>>("/student/practice-exams", body)
+      .then((r) => r.data);
   },
 
   /** Preview of a SMART split for the same body as create; creates nothing. */
   async plan(body: PracticeExamRequest): Promise<PracticePlan> {
-    return api.post<ApiResponse<PracticePlan>>('/student/practice-exams/plan', body).then(r => r.data);
+    return api
+      .post<ApiResponse<PracticePlan>>("/student/practice-exams/plan", body)
+      .then((r) => r.data);
   },
 
   /** PQ-02 */
   async list(page = 0, size = 10): Promise<PageResponse<PracticeExamItem>> {
-    return api.get<ApiResponse<PageResponse<PracticeExamItem>>>(`/student/practice-exams?page=${page}&size=${size}`).then(r => r.data);
+    return api
+      .get<ApiResponse<PageResponse<PracticeExamItem>>>(
+        `/student/practice-exams?page=${page}&size=${size}`,
+      )
+      .then((r) => r.data);
   },
 
   /** PQ-02, every page — Exam History merges it with ME-01. */
@@ -265,18 +288,29 @@ export const studentPracticeExamService = {
 
   /** PQ-03 */
   async remove(practiceId: number): Promise<void> {
-    await api.request<ApiResponse<null>>({ method: 'delete', url: `/student/practice-exams/${practiceId}` });
+    await api.request<ApiResponse<null>>({
+      method: "delete",
+      url: `/student/practice-exams/${practiceId}`,
+    });
   },
 
   /** PQ-04, as answerable questions. */
   async getWrongQuestions(attemptId: number | string): Promise<AttemptQuestion[]> {
-    const res = await api.get<ApiResponse<WrongQuestionItem[]>>(`/student/attempts/${attemptId}/wrong-questions`);
-    return res.data.map(q => ({
+    const res = await api.get<ApiResponse<WrongQuestionItem[]>>(
+      `/student/attempts/${attemptId}/wrong-questions`,
+    );
+    return res.data.map((q) => ({
       questionId: q.questionId,
       orderIndex: q.orderIndex ?? 0,
       questionType: q.questionType,
-      content: q.content ?? '',
-      options: q.options ? q.options.map(o => ({ optionId: o.optionId, optionText: o.optionText, isCorrectAnswer: null })) : null,
+      content: q.content ?? "",
+      options: q.options
+        ? q.options.map((o) => ({
+            optionId: o.optionId,
+            optionText: o.optionText,
+            isCorrectAnswer: null,
+          }))
+        : null,
       matching: q.matching ?? null,
       maxPoints: null,
       answerSpace: q.answerSpace ?? null,
@@ -289,7 +323,11 @@ export const studentPracticeExamService = {
    * The BE stores and locks the answer and grades it with the same rule as submitting.
    * Rubric types come back `supported: false` (graded after submitting).
    */
-  async checkAnswer(attemptId: number, question: AttemptQuestion, response: AnswerResponse | null): Promise<AnswerCheck> {
+  async checkAnswer(
+    attemptId: number,
+    question: AttemptQuestion,
+    response: AnswerResponse | null,
+  ): Promise<AnswerCheck> {
     const res = await api.post<ApiResponse<AnswerCheck>>(
       `/student/attempts/${attemptId}/questions/${question.questionId}/check`,
       { response },

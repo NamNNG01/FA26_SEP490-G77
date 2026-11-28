@@ -1,8 +1,8 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
-import type { CmCourseStat, CmDashboardSummary, CmExamStat } from '@/services/cmDashboard.types';
-import { CM_MIN_ATTEMPTS } from '@/services/cmDashboard.types';
-import { cmDashboardService } from '@/services/cmDashboard.service';
-import { DASHBOARD_REFRESH_MS, useAutoRefresh } from '@/hooks/useAutoRefresh';
+import { useCallback, useEffect, useRef, useState } from "react";
+import type { CmCourseStat, CmDashboardSummary, CmExamStat } from "@/services/cmDashboard.types";
+import { CM_MIN_ATTEMPTS } from "@/services/cmDashboard.types";
+import { cmDashboardService } from "@/services/cmDashboard.service";
+import { DASHBOARD_REFRESH_MS, useAutoRefresh } from "@/hooks/useAutoRefresh";
 
 /**
  * useCmDashboard
@@ -20,7 +20,7 @@ import { DASHBOARD_REFRESH_MS, useAutoRefresh } from '@/hooks/useAutoRefresh';
  * caller needs only one course.
  */
 
-export type CmDashboardSection = 'summary' | 'courses' | 'exams';
+export type CmDashboardSection = "summary" | "courses" | "exams";
 
 type SectionFlags<T> = Record<CmDashboardSection, T>;
 
@@ -34,14 +34,22 @@ export interface UseCmDashboardResult {
   refresh: (section?: CmDashboardSection) => void;
 }
 
-const SECTIONS: CmDashboardSection[] = ['summary', 'courses', 'exams'];
+const SECTIONS: CmDashboardSection[] = ["summary", "courses", "exams"];
 
 export function useCmDashboard(): UseCmDashboardResult {
   const [summary, setSummary] = useState<CmDashboardSummary | null>(null);
   const [courses, setCourses] = useState<CmCourseStat[] | null>(null);
   const [exams, setExams] = useState<CmExamStat[] | null>(null);
-  const [loading, setLoading] = useState<SectionFlags<boolean>>({ summary: true, courses: true, exams: true });
-  const [error, setError] = useState<SectionFlags<string | null>>({ summary: null, courses: null, exams: null });
+  const [loading, setLoading] = useState<SectionFlags<boolean>>({
+    summary: true,
+    courses: true,
+    exams: true,
+  });
+  const [error, setError] = useState<SectionFlags<string | null>>({
+    summary: null,
+    courses: null,
+    exams: null,
+  });
 
   // Latest request id per section, so a slow stale response never overwrites a newer one.
   const requestIds = useRef<SectionFlags<number>>({ summary: 0, courses: 0, exams: 0 });
@@ -56,21 +64,26 @@ export function useCmDashboard(): UseCmDashboardResult {
     }
 
     const isCurrent = () => mounted.current && id === requestIds.current[section];
-    const keep = <T,>(set: (v: T) => void) => (v: T) => {
-      if (isCurrent()) set(v);
-    };
+    const keep =
+      <T>(set: (v: T) => void) =>
+      (v: T) => {
+        if (isCurrent()) set(v);
+      };
 
     const request: Promise<void> =
-      section === 'summary'
+      section === "summary"
         ? cmDashboardService.getSummary().then(keep(setSummary))
-        : section === 'courses'
+        : section === "courses"
           ? cmDashboardService.getCourses().then(keep(setCourses))
           : cmDashboardService.getExams({ minAttempts: CM_MIN_ATTEMPTS }).then(keep(setExams));
 
     request
       .catch((e: unknown) => {
         if (!isCurrent() || quiet) return;
-        setError((s) => ({ ...s, [section]: e instanceof Error ? e.message : 'Failed to load data.' }));
+        setError((s) => ({
+          ...s,
+          [section]: e instanceof Error ? e.message : "Failed to load data.",
+        }));
       })
       .finally(() => {
         if (isCurrent()) setLoading((s) => ({ ...s, [section]: false }));
@@ -78,11 +91,11 @@ export function useCmDashboard(): UseCmDashboardResult {
   }, []);
 
   const refresh = useCallback(
-    (section?: CmDashboardSection) => (section ? [section] : SECTIONS).forEach(s => load(s)),
+    (section?: CmDashboardSection) => (section ? [section] : SECTIONS).forEach((s) => load(s)),
     [load],
   );
 
-  useAutoRefresh(() => SECTIONS.forEach(s => load(s, true)), true, DASHBOARD_REFRESH_MS);
+  useAutoRefresh(() => SECTIONS.forEach((s) => load(s, true)), true, DASHBOARD_REFRESH_MS);
 
   useEffect(() => {
     mounted.current = true;

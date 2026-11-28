@@ -1,9 +1,9 @@
-import { useEffect, useState, type ReactNode } from 'react';
-import { useNavigate } from 'react-router';
-import { Button } from '@/components/ui/Button';
-import { Icon } from '@/assets/icons';
-import { ROUTES, coursePath, studentCoursePath } from '@/app/routes';
-import { refreshCurrentSubscription } from '@/services/studentSubscription.service';
+import { useEffect, useState, type ReactNode } from "react";
+import { useNavigate } from "react-router";
+import { Button } from "@/components/ui/Button";
+import { Icon } from "@/assets/icons";
+import { ROUTES, coursePath, studentCoursePath } from "@/app/routes";
+import { refreshCurrentSubscription } from "@/services/studentSubscription.service";
 import {
   PAYMENT_POLL_MS,
   forgetPendingPayment,
@@ -11,13 +11,13 @@ import {
   paymentService,
   readPendingPayment,
   type PaymentStatus,
-} from '@/services/payment.service';
-import { STUDENT_PAGE_CLASS } from '@/features/student/components/studentUi';
+} from "@/services/payment.service";
+import { STUDENT_PAGE_CLASS } from "@/features/student/components/studentUi";
 
 /** Stop waiting for the webhook after this long and point to the Payments page. */
 const MAX_WAIT_MS = 2 * 60 * 1000;
 
-type View = PaymentStatus | 'UNKNOWN' | 'TIMEOUT';
+type View = PaymentStatus | "UNKNOWN" | "TIMEOUT";
 
 /**
  * Where PayOS sends the student back (BE `app.payos.return-url` / `cancel-url`).
@@ -30,7 +30,7 @@ type View = PaymentStatus | 'UNKNOWN' | 'TIMEOUT';
 export function PaymentReturnPage({ cancelled = false }: { cancelled?: boolean }) {
   const navigate = useNavigate();
   const [pending] = useState(readPendingPayment);
-  const [view, setView] = useState<View>(pending ? 'PENDING' : 'UNKNOWN');
+  const [view, setView] = useState<View>(pending ? "PENDING" : "UNKNOWN");
 
   useEffect(() => {
     if (!pending) return;
@@ -40,7 +40,8 @@ export function PaymentReturnPage({ cancelled = false }: { cancelled?: boolean }
 
     const finish = (status: PaymentStatus) => {
       forgetPendingPayment();
-      if (status === 'SUCCEEDED' && pending.type === 'SUBSCRIPTION') void refreshCurrentSubscription();
+      if (status === "SUCCEEDED" && pending.type === "SUBSCRIPTION")
+        void refreshCurrentSubscription();
       setView(status);
     };
 
@@ -53,7 +54,7 @@ export function PaymentReturnPage({ cancelled = false }: { cancelled?: boolean }
         // Retried on the next tick.
       }
       if (stopped) return;
-      if (Date.now() - startedAt > MAX_WAIT_MS) return setView('TIMEOUT');
+      if (Date.now() - startedAt > MAX_WAIT_MS) return setView("TIMEOUT");
       timer = setTimeout(poll, PAYMENT_POLL_MS);
     };
 
@@ -61,7 +62,7 @@ export function PaymentReturnPage({ cancelled = false }: { cancelled?: boolean }
       if (cancelled) {
         try {
           await paymentService.cancel(pending.orderCode);
-          if (!stopped) finish('CANCELLED');
+          if (!stopped) finish("CANCELLED");
           return;
         } catch {
           // 409: paid after all — or the order is gone; PY-04 tells which.
@@ -77,21 +78,34 @@ export function PaymentReturnPage({ cancelled = false }: { cancelled?: boolean }
     };
   }, [pending, cancelled]);
 
-  const isCourse = pending?.type === 'COURSE';
+  const isCourse = pending?.type === "COURSE";
   const backToItem = () =>
-    navigate(pending ? (isCourse ? coursePath(pending.refId) : ROUTES.studentSubscription) : ROUTES.studentPayments);
+    navigate(
+      pending
+        ? isCourse
+          ? coursePath(pending.refId)
+          : ROUTES.studentSubscription
+        : ROUTES.studentPayments,
+    );
 
-  const content: Record<View, { icon: ReactNode; title: string; message: string; actions: ReactNode }> = {
+  const content: Record<
+    View,
+    { icon: ReactNode; title: string; message: string; actions: ReactNode }
+  > = {
     PENDING: {
-      icon: <span className="w-8 h-8 border-[3px] border-brand-600 border-t-transparent rounded-full spinner" />,
-      title: 'Confirming your payment…',
-      message: 'This usually takes a few seconds. Please keep this page open.',
+      icon: (
+        <span className="w-8 h-8 border-[3px] border-brand-600 border-t-transparent rounded-full spinner" />
+      ),
+      title: "Confirming your payment…",
+      message: "This usually takes a few seconds. Please keep this page open.",
       actions: null,
     },
     SUCCEEDED: {
       icon: <Icon.CheckCircle className="w-10 h-10 text-success" />,
-      title: 'Payment successful',
-      message: isCourse ? `You are enrolled in ${pending?.title}.` : `${pending?.title} is now active.`,
+      title: "Payment successful",
+      message: isCourse
+        ? `You are enrolled in ${pending?.title}.`
+        : `${pending?.title} is now active.`,
       actions: isCourse ? (
         <Button onClick={() => navigate(studentCoursePath(pending!.refId))}>Go to course</Button>
       ) : (
@@ -100,33 +114,46 @@ export function PaymentReturnPage({ cancelled = false }: { cancelled?: boolean }
     },
     CANCELLED: {
       icon: <Icon.XCircle className="w-10 h-10 text-content-subtle" />,
-      title: 'Payment cancelled',
-      message: 'You have not been charged.',
-      actions: <Button variant="outline" onClick={backToItem}>{isCourse ? 'Back to course' : 'Back to plans'}</Button>,
+      title: "Payment cancelled",
+      message: "You have not been charged.",
+      actions: (
+        <Button variant="outline" onClick={backToItem}>
+          {isCourse ? "Back to course" : "Back to plans"}
+        </Button>
+      ),
     },
     EXPIRED: {
       icon: <Icon.Clock className="w-10 h-10 text-warning" />,
-      title: 'Payment link expired',
-      message: 'Start a new payment to continue.',
+      title: "Payment link expired",
+      message: "Start a new payment to continue.",
       actions: <Button onClick={backToItem}>Try again</Button>,
     },
     FAILED: {
       icon: <Icon.AlertCircle className="w-10 h-10 text-danger" />,
-      title: 'Payment failed',
-      message: 'The payment did not go through. You can try again.',
+      title: "Payment failed",
+      message: "The payment did not go through. You can try again.",
       actions: <Button onClick={backToItem}>Try again</Button>,
     },
     TIMEOUT: {
       icon: <Icon.Clock className="w-10 h-10 text-warning" />,
-      title: 'Still waiting for PayOS',
-      message: 'We have not received the confirmation yet. Check your payments again in a moment.',
-      actions: <Button variant="outline" onClick={() => navigate(ROUTES.studentPayments)}>View payments</Button>,
+      title: "Still waiting for PayOS",
+      message: "We have not received the confirmation yet. Check your payments again in a moment.",
+      actions: (
+        <Button variant="outline" onClick={() => navigate(ROUTES.studentPayments)}>
+          View payments
+        </Button>
+      ),
     },
     UNKNOWN: {
       icon: <Icon.HelpCircle className="w-10 h-10 text-content-subtle" />,
-      title: cancelled ? 'Payment cancelled' : 'Payment received by PayOS',
-      message: 'We could not match this page to an order. Your payments list shows the latest status.',
-      actions: <Button variant="outline" onClick={() => navigate(ROUTES.studentPayments)}>View payments</Button>,
+      title: cancelled ? "Payment cancelled" : "Payment received by PayOS",
+      message:
+        "We could not match this page to an order. Your payments list shows the latest status.",
+      actions: (
+        <Button variant="outline" onClick={() => navigate(ROUTES.studentPayments)}>
+          View payments
+        </Button>
+      ),
     },
   };
 
@@ -138,8 +165,12 @@ export function PaymentReturnPage({ cancelled = false }: { cancelled?: boolean }
         <h1 className="text-lg font-semibold text-content">{c.title}</h1>
         <p className="text-sm text-content-soft">{c.message}</p>
         {c.actions && <div className="mt-2 flex flex-wrap justify-center gap-2">{c.actions}</div>}
-        {view !== 'UNKNOWN' && view !== 'TIMEOUT' && view !== 'PENDING' && (
-          <button type="button" onClick={() => navigate(ROUTES.studentPayments)} className="text-xs text-content-soft underline">
+        {view !== "UNKNOWN" && view !== "TIMEOUT" && view !== "PENDING" && (
+          <button
+            type="button"
+            onClick={() => navigate(ROUTES.studentPayments)}
+            className="text-xs text-content-soft underline"
+          >
             Payment history
           </button>
         )}

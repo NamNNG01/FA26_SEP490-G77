@@ -1,20 +1,20 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
-import { useQuietRefresh } from '@/hooks/useAutoRefresh';
-import { useNavigate } from 'react-router';
-import { Button } from '@/components/ui/Button';
-import { Pagination } from '@/components/ui/Pagination';
-import { EmptyState } from '@/components/ui/Card';
-import { Select } from '@/components/ui/Select';
-import { SearchableSelect } from '@/components/ui/SearchableSelect';
-import { Badge } from '@/components/ui/Badge';
-import { useToast } from '@/components/ui/ToastHost';
-import { SearchInput } from '@/components/common/SearchInput';
-import { Icon } from '@/assets/icons';
-import { ROUTES, studentCoursePath, studentResumeAttemptPath } from '@/app/routes';
-import { getApiErrorMessage } from '@/utils/apiError';
-import { studentCourseService, type MyCourse } from '@/services/studentCourse.service';
-import { Modal } from '@/components/ui/Modal';
-import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
+import { useEffect, useMemo, useRef, useState } from "react";
+import { useQuietRefresh } from "@/hooks/useAutoRefresh";
+import { useNavigate } from "react-router";
+import { Button } from "@/components/ui/Button";
+import { Pagination } from "@/components/ui/Pagination";
+import { EmptyState } from "@/components/ui/Card";
+import { Select } from "@/components/ui/Select";
+import { SearchableSelect } from "@/components/ui/SearchableSelect";
+import { Badge } from "@/components/ui/Badge";
+import { useToast } from "@/components/ui/ToastHost";
+import { SearchInput } from "@/components/common/SearchInput";
+import { Icon } from "@/assets/icons";
+import { ROUTES, studentCoursePath, studentResumeAttemptPath } from "@/app/routes";
+import { getApiErrorMessage } from "@/utils/apiError";
+import { studentCourseService, type MyCourse } from "@/services/studentCourse.service";
+import { Modal } from "@/components/ui/Modal";
+import { ConfirmDialog } from "@/components/ui/ConfirmDialog";
 import {
   MATERIAL_MAX_FILES,
   errorStatus,
@@ -23,23 +23,32 @@ import {
   type MaterialItem,
   type MaterialJobBrief,
   type MaterialStorageQuota,
-} from '@/services/studentMaterial.service';
-import { ListSkeleton, LoadError, PageTitle, STUDENT_PAGE_CLASS, formatDate } from '../components/studentUi';
-import { MaterialQuizModal } from '../components/MaterialQuizModal';
-import { TakeModeModal } from '../components/TakeModeModal';
-import { rememberTakeAs, takeAsOf, type TakeAs } from '../examModes';
+} from "@/services/studentMaterial.service";
+import {
+  ListSkeleton,
+  LoadError,
+  PageTitle,
+  STUDENT_PAGE_CLASS,
+  formatDate,
+} from "../components/studentUi";
+import { MaterialQuizModal } from "../components/MaterialQuizModal";
+import { TakeModeModal } from "../components/TakeModeModal";
+import { rememberTakeAs, takeAsOf, type TakeAs } from "../examModes";
 
 const PAGE_SIZE = 10;
-const ALL = '';
+const ALL = "";
 const MY_COURSES_FETCH_SIZE = 100;
 /** How often the list refreshes while a quiz is being generated. */
 const REFRESH_MS = 4000;
 
-const JOB_BADGE: Record<MaterialJobBrief['status'], { variant: 'info' | 'success' | 'danger'; label: string }> = {
-  PENDING: { variant: 'info', label: 'Queued' },
-  PROCESSING: { variant: 'info', label: 'Generating' },
-  COMPLETED: { variant: 'success', label: 'Ready' },
-  FAILED: { variant: 'danger', label: 'Failed' },
+const JOB_BADGE: Record<
+  MaterialJobBrief["status"],
+  { variant: "info" | "success" | "danger"; label: string }
+> = {
+  PENDING: { variant: "info", label: "Queued" },
+  PROCESSING: { variant: "info", label: "Generating" },
+  COMPLETED: { variant: "success", label: "Ready" },
+  FAILED: { variant: "danger", label: "Failed" },
 };
 
 /** The quizzes modal shows this many quiz rows, then scrolls. */
@@ -49,10 +58,10 @@ const QUIZ_ROW_REM = 4;
 
 /** Row button of a material — e.g. "3 quizzes", "1 quiz · generating". */
 function quizCountLabel(row: MaterialItem): string {
-  const visibleJobs = row.jobs.filter(j => j.status !== 'FAILED');
+  const visibleJobs = row.jobs.filter((j) => j.status !== "FAILED");
   const count = visibleJobs.length;
-  const label = count === 0 ? 'No quizzes' : `${count} quiz${count === 1 ? '' : 'zes'}`;
-  return visibleJobs.some(j => isJobRunning(j.status)) ? `${label} · generating` : label;
+  const label = count === 0 ? "No quizzes" : `${count} quiz${count === 1 ? "" : "zes"}`;
+  return visibleJobs.some((j) => isJobRunning(j.status)) ? `${label} · generating` : label;
 }
 
 /**
@@ -68,17 +77,19 @@ export function MyMaterialsPage() {
   const toast = useToast();
   const [page, setPage] = useState(1);
   const [reload, setReload] = useState(0);
-  const takeQuiet = useQuietRefresh(() => setReload(r => r + 1));
+  const takeQuiet = useQuietRefresh(() => setReload((r) => r + 1));
   const [courses, setCourses] = useState<MyCourse[]>([]);
   const [rows, setRows] = useState<MaterialItem[]>([]);
   const [storageQuota, setStorageQuota] = useState<MaterialStorageQuota | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
-  const [search, setSearch] = useState('');
+  const [search, setSearch] = useState("");
   const [course, setCourse] = useState(ALL);
 
-  const [modal, setModal] = useState<{ courseId: number | null; documentId: number | null } | null>(null);
+  const [modal, setModal] = useState<{ courseId: number | null; documentId: number | null } | null>(
+    null,
+  );
   const [startingJob, setStartingJob] = useState<number | null>(null);
   /** Quiz whose Start asks Exam or Practice first. */
   const [choosingJob, setChoosingJob] = useState<number | null>(null);
@@ -97,7 +108,9 @@ export function MyMaterialsPage() {
     if (!quiet) setError(null);
     // Refreshes (polling, after an upload or a delete) only reload MQ-02: the enrolled courses do not change here.
     Promise.all([
-      loadedOnce.current ? null : studentCourseService.getMyCourses({ page: 0, size: MY_COURSES_FETCH_SIZE }),
+      loadedOnce.current
+        ? null
+        : studentCourseService.getMyCourses({ page: 0, size: MY_COURSES_FETCH_SIZE }),
       materialService.listAll(null),
       materialService.getStorageQuota().catch(() => null),
     ])
@@ -108,8 +121,9 @@ export function MyMaterialsPage() {
         if (quota) setStorageQuota(quota);
         loadedOnce.current = true;
       })
-      .catch(err => {
-        if (!cancelled && !quiet) setError(getApiErrorMessage(err, 'Failed to load your materials.'));
+      .catch((err) => {
+        if (!cancelled && !quiet)
+          setError(getApiErrorMessage(err, "Failed to load your materials."));
       })
       .finally(() => {
         if (!cancelled) setLoading(false);
@@ -120,15 +134,18 @@ export function MyMaterialsPage() {
   }, [reload]);
 
   // Keep running jobs up to date (not while the creator is open — it polls on its own).
-  const anyRunning = rows.some(r => r.jobs.some(j => isJobRunning(j.status)));
+  const anyRunning = rows.some((r) => r.jobs.some((j) => isJobRunning(j.status)));
   useEffect(() => {
     if (!anyRunning || modal) return;
-    const timer = window.setTimeout(() => setReload(r => r + 1), REFRESH_MS);
+    const timer = window.setTimeout(() => setReload((r) => r + 1), REFRESH_MS);
     return () => window.clearTimeout(timer);
   }, [anyRunning, modal, rows]);
 
   const courseOptions = useMemo(
-    () => [{ label: 'All courses', value: ALL }, ...courses.map(c => ({ label: c.title, value: String(c.courseId) }))],
+    () => [
+      { label: "All courses", value: ALL },
+      ...courses.map((c) => ({ label: c.title, value: String(c.courseId) })),
+    ],
     [courses],
   );
 
@@ -136,17 +153,19 @@ export function MyMaterialsPage() {
   const filtered = useMemo(
     () =>
       rows.filter(
-        r =>
-          (course === ALL || (r.courses ?? []).some(c => String(c.courseId) === course)) &&
-          (!term || r.title.toLowerCase().includes(term) || r.fileName.toLowerCase().includes(term)),
+        (r) =>
+          (course === ALL || (r.courses ?? []).some((c) => String(c.courseId) === course)) &&
+          (!term ||
+            r.title.toLowerCase().includes(term) ||
+            r.fileName.toLowerCase().includes(term)),
       ),
     [rows, course, term],
   );
   const pageItems = filtered.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE);
-  const filtersActive = term !== '' || course !== ALL;
+  const filtersActive = term !== "" || course !== ALL;
 
   const clearFilters = () => {
-    setSearch('');
+    setSearch("");
     setCourse(ALL);
     setPage(1);
   };
@@ -155,33 +174,36 @@ export function MyMaterialsPage() {
     setStartingJob(jobId);
     try {
       const started = await materialService.start(jobId, takeAs);
-      const serverTakeAs = started.takeAs === 'EXAM' || started.takeAs === 'PRACTICE' ? started.takeAs : takeAs;
+      const serverTakeAs =
+        started.takeAs === "EXAM" || started.takeAs === "PRACTICE" ? started.takeAs : takeAs;
       // Opened by attempt id: the choice is kept for that attempt (a resumed one keeps its own).
       if (!takeAsOf(started.attemptId)) rememberTakeAs(started.attemptId, serverTakeAs);
       navigate(studentResumeAttemptPath(started.attemptId));
     } catch (err) {
-      toast.error(getApiErrorMessage(err, 'Failed to start the quiz.'));
+      toast.error(getApiErrorMessage(err, "Failed to start the quiz."));
       setStartingJob(null);
     }
   };
 
   /** The filtered course when the material has it, else its first course. */
   const courseForQuiz = (row: MaterialItem) => {
-    const ids = (row.courses ?? []).map(c => c.courseId);
+    const ids = (row.courses ?? []).map((c) => c.courseId);
     return course !== ALL && ids.includes(Number(course)) ? Number(course) : (ids[0] ?? null);
   };
 
   /** Course name on a quiz chip — only needed when the material has several courses. */
   const jobCourse = (row: MaterialItem, job: MaterialJobBrief) =>
-    (row.courses ?? []).length > 1 && job.courseId != null ? (row.courses ?? []).find(c => c.courseId === job.courseId)?.title : undefined;
+    (row.courses ?? []).length > 1 && job.courseId != null
+      ? (row.courses ?? []).find((c) => c.courseId === job.courseId)?.title
+      : undefined;
 
   const closeModal = () => {
     setModal(null);
-    setReload(r => r + 1);
+    setReload((r) => r + 1);
   };
 
-  const viewingRow = viewing == null ? null : (rows.find(r => r.documentId === viewing) ?? null);
-  const visibleQuizJobs = viewingRow?.jobs.filter(job => job.status !== 'FAILED') ?? [];
+  const viewingRow = viewing == null ? null : (rows.find((r) => r.documentId === viewing) ?? null);
+  const visibleQuizJobs = viewingRow?.jobs.filter((job) => job.status !== "FAILED") ?? [];
 
   const confirmDelete = async () => {
     if (!deleting) return;
@@ -195,13 +217,13 @@ export function MyMaterialsPage() {
       else
         toast.error(
           status === 409
-            ? 'A quiz is being generated from this material. Delete it once the quiz is ready.'
-            : getApiErrorMessage(err, 'Failed to delete the material.'),
+            ? "A quiz is being generated from this material. Delete it once the quiz is ready."
+            : getApiErrorMessage(err, "Failed to delete the material."),
         );
     } finally {
       setDeleteBusy(false);
       setDeleting(null);
-      setReload(r => r + 1);
+      setReload((r) => r + 1);
     }
   };
 
@@ -209,7 +231,9 @@ export function MyMaterialsPage() {
     <Button
       icon={<Icon.Upload className="w-4 h-4" />}
       disabled={courses.length === 0}
-      onClick={() => setModal({ courseId: course === ALL ? null : Number(course), documentId: null })}
+      onClick={() =>
+        setModal({ courseId: course === ALL ? null : Number(course), documentId: null })
+      }
     >
       Upload material
     </Button>
@@ -221,11 +245,11 @@ export function MyMaterialsPage() {
         title="My Materials"
         subtitle={`Lecture notes and slides you uploaded, and the quizzes the AI generated from them.${
           loading || error
-            ? ''
+            ? ""
             : ` ${Math.min(rows.length, MATERIAL_MAX_FILES)}/${MATERIAL_MAX_FILES} files used${
                 storageQuota
                   ? ` · ${(storageQuota.usedKb / 1024).toFixed(1)}/${Math.round(storageQuota.limitKb / 1024)} MB storage used`
-                  : ''
+                  : ""
               }.`
         }`}
         action={!loading && !error ? uploadButton : undefined}
@@ -238,7 +262,7 @@ export function MyMaterialsPage() {
             placeholder="Search materials…"
             aria-label="Search materials"
             value={search}
-            onChange={e => {
+            onChange={(e) => {
               setSearch(e.target.value);
               setPage(1);
             }}
@@ -246,7 +270,7 @@ export function MyMaterialsPage() {
           <SearchableSelect
             aria-label="Filter by course"
             value={course}
-            onChange={v => {
+            onChange={(v) => {
               setCourse(v);
               setPage(1);
             }}
@@ -271,7 +295,7 @@ export function MyMaterialsPage() {
       {loading ? (
         <ListSkeleton />
       ) : error ? (
-        <LoadError message={error} onRetry={() => setReload(r => r + 1)} />
+        <LoadError message={error} onRetry={() => setReload((r) => r + 1)} />
       ) : courses.length === 0 ? (
         <div className="card">
           <EmptyState
@@ -306,7 +330,7 @@ export function MyMaterialsPage() {
       ) : (
         <div className="card overflow-hidden">
           <ul className="divide-y divide-line">
-            {pageItems.map(row => (
+            {pageItems.map((row) => (
               <li key={row.documentId} className="px-[clamp(0.875rem,1.5vw,1.25rem)] py-4">
                 <div className="flex flex-wrap items-center gap-x-4 gap-y-3">
                   <div className="w-9 h-9 rounded-[10px] bg-primary-light flex items-center justify-center flex-shrink-0">
@@ -322,7 +346,7 @@ export function MyMaterialsPage() {
                     </button>
                     {(row.courses ?? []).length > 0 && (
                       <div className="flex flex-wrap gap-1.5 my-1">
-                        {(row.courses ?? []).map(c => (
+                        {(row.courses ?? []).map((c) => (
                           <button
                             key={c.courseId}
                             type="button"
@@ -340,19 +364,26 @@ export function MyMaterialsPage() {
                       </span>
                       {row.pageCount != null && (
                         <span>
-                          {row.pageCount} page{row.pageCount === 1 ? '' : 's'}
+                          {row.pageCount} page{row.pageCount === 1 ? "" : "s"}
                         </span>
                       )}
                       <span>Uploaded {formatDate(row.uploadedAt)}</span>
                     </p>
                   </div>
-                  <Button size="sm" variant="outline" icon={<Icon.ClipboardList className="w-4 h-4" />} onClick={() => setViewing(row.documentId)}>
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    icon={<Icon.ClipboardList className="w-4 h-4" />}
+                    onClick={() => setViewing(row.documentId)}
+                  >
                     {quizCountLabel(row)}
                   </Button>
                   <Button
                     size="sm"
                     icon={<Icon.Zap className="w-4 h-4" />}
-                    onClick={() => setModal({ courseId: courseForQuiz(row), documentId: row.documentId })}
+                    onClick={() =>
+                      setModal({ courseId: courseForQuiz(row), documentId: row.documentId })
+                    }
                   >
                     Generate quiz
                   </Button>
@@ -361,8 +392,12 @@ export function MyMaterialsPage() {
                     variant="ghost"
                     icon={<Icon.Trash className="w-4 h-4" />}
                     aria-label={`Delete ${row.title}`}
-                    title={row.jobs.some(j => isJobRunning(j.status)) ? 'A quiz is being generated from this material' : 'Delete material'}
-                    disabled={row.jobs.some(j => isJobRunning(j.status))}
+                    title={
+                      row.jobs.some((j) => isJobRunning(j.status))
+                        ? "A quiz is being generated from this material"
+                        : "Delete material"
+                    }
+                    disabled={row.jobs.some((j) => isJobRunning(j.status))}
                     onClick={() => setDeleting(row)}
                   />
                 </div>
@@ -370,7 +405,13 @@ export function MyMaterialsPage() {
             ))}
           </ul>
           <div className="border-t border-line">
-            <Pagination page={page} total={filtered.length} perPage={PAGE_SIZE} onChange={setPage} unit="materials" />
+            <Pagination
+              page={page}
+              total={filtered.length}
+              perPage={PAGE_SIZE}
+              onChange={setPage}
+              unit="materials"
+            />
           </div>
         </div>
       )}
@@ -398,7 +439,10 @@ export function MyMaterialsPage() {
                 icon={<Icon.Zap className="w-4 h-4" />}
                 onClick={() => {
                   setViewing(null);
-                  setModal({ courseId: courseForQuiz(viewingRow), documentId: viewingRow.documentId });
+                  setModal({
+                    courseId: courseForQuiz(viewingRow),
+                    documentId: viewingRow.documentId,
+                  });
                 }}
               >
                 Generate quiz
@@ -418,7 +462,9 @@ export function MyMaterialsPage() {
             // Rows are a fixed QUIZ_ROW_REM tall (+ 1px divider), so the list shows QUIZ_ROWS_VISIBLE and scrolls past that.
             <ul
               className="divide-y divide-line overflow-y-auto overscroll-contain rounded-[12px] border border-line"
-              style={{ maxHeight: `calc(${QUIZ_ROWS_VISIBLE * QUIZ_ROW_REM}rem + ${QUIZ_ROWS_VISIBLE}px)` }}
+              style={{
+                maxHeight: `calc(${QUIZ_ROWS_VISIBLE * QUIZ_ROW_REM}rem + ${QUIZ_ROWS_VISIBLE}px)`,
+              }}
             >
               {visibleQuizJobs.map((job, i) => (
                 <li
@@ -427,7 +473,12 @@ export function MyMaterialsPage() {
                   style={{ height: `${QUIZ_ROW_REM}rem` }}
                 >
                   <div className="min-w-0 flex-1">
-                    <p className="truncate text-sm font-medium text-content" title={job.quizTitle || undefined}>{job.quizTitle?.trim() || `Quiz ${visibleQuizJobs.length - i}`}</p>
+                    <p
+                      className="truncate text-sm font-medium text-content"
+                      title={job.quizTitle || undefined}
+                    >
+                      {job.quizTitle?.trim() || `Quiz ${visibleQuizJobs.length - i}`}
+                    </p>
                     <p className="truncate text-xs text-content-subtle">
                       {job.questionCount} questions
                       {jobCourse(viewingRow, job) && <> · {jobCourse(viewingRow, job)}</>}
@@ -436,7 +487,7 @@ export function MyMaterialsPage() {
                   <Badge variant={JOB_BADGE[job.status].variant} size="sm">
                     {JOB_BADGE[job.status].label}
                   </Badge>
-                  {job.status === 'COMPLETED' && (
+                  {job.status === "COMPLETED" && (
                     <Button
                       size="sm"
                       loading={startingJob === job.jobId}
@@ -460,13 +511,18 @@ export function MyMaterialsPage() {
         loading={deleteBusy}
         tone="danger"
         title="Delete material?"
-        description={deleting && (
-          <>
-            <span className="font-semibold text-content">{deleting.title}</span> will be removed
-            {(deleting.courses ?? []).length > 1 ? ` from all ${(deleting.courses ?? []).length} courses it is in` : ''}, and the
-            quizzes generated from it leave your material quiz list. This cannot be undone.
-          </>
-        )}
+        description={
+          deleting && (
+            <>
+              <span className="font-semibold text-content">{deleting.title}</span> will be removed
+              {(deleting.courses ?? []).length > 1
+                ? ` from all ${(deleting.courses ?? []).length} courses it is in`
+                : ""}
+              , and the quizzes generated from it leave your material quiz list. This cannot be
+              undone.
+            </>
+          )
+        }
         confirmLabel="Delete"
       />
 
@@ -476,7 +532,7 @@ export function MyMaterialsPage() {
           open
           title="Start quiz as"
           onClose={() => setChoosingJob(null)}
-          onStart={takeAs => {
+          onStart={(takeAs) => {
             const jobId = choosingJob;
             setChoosingJob(null);
             void startQuiz(jobId, takeAs);

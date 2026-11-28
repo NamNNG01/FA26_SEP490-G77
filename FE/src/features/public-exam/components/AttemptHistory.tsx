@@ -1,7 +1,7 @@
-import React, { useState } from 'react';
-import { Badge } from '@/components/ui/Badge';
-import { Modal } from '@/components/ui/Modal';
-import { Icon } from '@/assets/icons';
+import React, { useState } from "react";
+import { Badge } from "@/components/ui/Badge";
+import { Modal } from "@/components/ui/Modal";
+import { Icon } from "@/assets/icons";
 import {
   attemptsFor,
   attemptStatusLabel,
@@ -9,8 +9,8 @@ import {
   formatAttemptDate,
   formatDuration,
   type ExamAttempt,
-} from '../mockExamAttempts';
-import type { PublicExam } from '../mockPublicExams';
+} from "../mockExamAttempts";
+import type { PublicExam } from "../mockPublicExams";
 
 /**
  * AttemptHistory
@@ -92,7 +92,8 @@ function AttemptSummaryModal({
               className="h-1.5 rounded-full transition-all duration-500"
               style={{
                 width: `${attempt.score !== undefined ? attempt.score : progress}%`,
-                background: attempt.score === undefined || attempt.score >= 70 ? '#16A34A' : '#D97706',
+                background:
+                  attempt.score === undefined || attempt.score >= 70 ? "#16A34A" : "#D97706",
               }}
             />
           </div>
@@ -102,7 +103,10 @@ function AttemptSummaryModal({
           <SummaryRow label="Correct answers" value={String(attempt.correct)} accent="#16A34A" />
           <SummaryRow label="Wrong answers" value={String(attempt.wrong)} accent="#DC2626" />
           <SummaryRow label="Unanswered" value={String(attempt.unanswered)} />
-          <SummaryRow label="Time spent" value={`${formatDuration(attempt.timeSpentMin)} of ${exam.duration} min`} />
+          <SummaryRow
+            label="Time spent"
+            value={`${formatDuration(attempt.timeSpentMin)} of ${exam.duration} min`}
+          />
           <SummaryRow label="Status" value={attemptStatusLabel(attempt.status)} />
         </dl>
       </div>
@@ -120,9 +124,7 @@ export function AttemptHistory({ exam }: { exam: PublicExam }) {
         <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-[12px] bg-accent text-content-subtle">
           <Icon.Clock className="h-6 w-6" />
         </div>
-        <p className="mt-3 text-lg font-semibold text-foreground">
-          No attempt history available.
-        </p>
+        <p className="mt-3 text-lg font-semibold text-foreground">No attempt history available.</p>
         <p className="mx-auto mt-1 max-w-xs text-sm text-muted-foreground">
           Start the exam to create your first attempt.
         </p>
@@ -136,12 +138,12 @@ export function AttemptHistory({ exam }: { exam: PublicExam }) {
         <h2 className="text-lg font-semibold text-foreground">Attempt History</h2>
         <span className="h-px flex-1 bg-line" />
         <span className="text-xs text-muted-foreground">
-          {attempts.length} attempt{attempts.length === 1 ? '' : 's'}
+          {attempts.length} attempt{attempts.length === 1 ? "" : "s"}
         </span>
       </div>
 
       <div className="divide-y divide-line rounded-[14px] border border-line bg-surface shadow-sm">
-        {attempts.map(attempt => (
+        {attempts.map((attempt) => (
           <button
             key={attempt.id}
             type="button"
@@ -159,7 +161,7 @@ export function AttemptHistory({ exam }: { exam: PublicExam }) {
 
             <span className="flex flex-shrink-0 items-center gap-4">
               <span className="text-sm font-semibold text-foreground">
-                {attempt.score !== undefined ? `${attempt.score}%` : '—'}
+                {attempt.score !== undefined ? `${attempt.score}%` : "—"}
               </span>
               <span className="text-xs text-muted-foreground">
                 {attempt.correct} / {exam.questions} Correct

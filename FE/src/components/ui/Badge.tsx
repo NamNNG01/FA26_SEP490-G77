@@ -1,13 +1,7 @@
 import React from "react";
 import { Icon } from "@/assets/icons";
 
-export type BadgeVariant =
-  | "default"
-  | "success"
-  | "warning"
-  | "danger"
-  | "info"
-  | "purple";
+export type BadgeVariant = "default" | "success" | "warning" | "danger" | "info" | "purple";
 
 export type ComponentSize = "sm" | "md" | "lg";
 

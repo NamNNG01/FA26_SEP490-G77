@@ -1,7 +1,13 @@
-import { api } from './api';
-import type { ApiResponse } from '@/types/api';
-import type { PageResponse } from './course.service';
-import type { AnswerResponse, AttemptQuestion, DeepExplanation, QuestionType, ResultQuestion as ReviewQuestion } from './studentAttempt.service';
+import { api } from "./api";
+import type { ApiResponse } from "@/types/api";
+import type { PageResponse } from "./course.service";
+import type {
+  AnswerResponse,
+  AttemptQuestion,
+  DeepExplanation,
+  QuestionType,
+  ResultQuestion as ReviewQuestion,
+} from "./studentAttempt.service";
 
 /**
  * Module Practice — a student practices the question bank of one module, one question at a time.
@@ -32,28 +38,41 @@ import type { AnswerResponse, AttemptQuestion, DeepExplanation, QuestionType, Re
  * or a rubric score under 0.50); BOOKMARKED = the bookmarked ones; TARGET = filtered by difficulty
  * and question type. The BE also takes WRONG (= REVIEW) and RANDOM (= ALL), which the FE does not offer.
  */
-export type PracticeMode = 'ALL' | 'REVIEW' | 'WRONG' | 'BOOKMARKED' | 'RANDOM' | 'TARGET';
-export type PracticeDifficulty = 'EASY' | 'MEDIUM' | 'HARD';
+export type PracticeMode = "ALL" | "REVIEW" | "WRONG" | "BOOKMARKED" | "RANDOM" | "TARGET";
+export type PracticeDifficulty = "EASY" | "MEDIUM" | "HARD";
 
 export const PRACTICE_MODE_LABEL: Record<PracticeMode, string> = {
-  ALL: 'Practice',
-  REVIEW: 'Review mistakes',
-  WRONG: 'Review mistakes',
-  BOOKMARKED: 'Bookmarked questions',
-  RANDOM: 'Practice',
-  TARGET: 'Targeted practice',
+  ALL: "Practice",
+  REVIEW: "Review mistakes",
+  WRONG: "Review mistakes",
+  BOOKMARKED: "Bookmarked questions",
+  RANDOM: "Practice",
+  TARGET: "Targeted practice",
 };
-export type PracticeSessionStatus = 'IN_PROGRESS' | 'COMPLETED';
-export type PracticeGradingStatus = 'UNANSWERED' | 'AUTO' | 'PENDING_AI' | 'QUEUED' | 'GRADING' | 'AI_GRADED' | 'FAILED';
-export type MasteryStatus = 'NEW' | 'LEARNING' | 'MASTERED';
-export type ExplanationSource = 'GENERATED' | 'CACHED' | 'MANAGER' | 'NOT_APPLICABLE' | 'FAILED' | 'QUOTA_EXCEEDED';
+export type PracticeSessionStatus = "IN_PROGRESS" | "COMPLETED";
+export type PracticeGradingStatus =
+  | "UNANSWERED"
+  | "AUTO"
+  | "PENDING_AI"
+  | "QUEUED"
+  | "GRADING"
+  | "AI_GRADED"
+  | "FAILED";
+export type MasteryStatus = "NEW" | "LEARNING" | "MASTERED";
+export type ExplanationSource =
+  | "GENERATED"
+  | "CACHED"
+  | "MANAGER"
+  | "NOT_APPLICABLE"
+  | "FAILED"
+  | "QUOTA_EXCEEDED";
 
 /** Session sizes offered; null = every eligible question of the module. */
 export const PRACTICE_SIZES = [10, 20, 30, null] as const;
 export const DEFAULT_PRACTICE_SIZE = 20;
 
 /** The AI rubric worker is still on this attempt: ask again later. */
-export const AWAITING_GRADE: ReadonlySet<string> = new Set(['PENDING_AI', 'QUEUED', 'GRADING']);
+export const AWAITING_GRADE: ReadonlySet<string> = new Set(["PENDING_AI", "QUEUED", "GRADING"]);
 
 export interface ActivePracticeSession {
   sessionId: number;
@@ -162,8 +181,21 @@ export interface PracticeQuestionView {
   options: { optionId: number; optionText: string }[] | null;
   matching: { lefts: string[]; rights: string[] } | null;
   answerSpace: { maxLength: number | null } | null;
-  media: { mediaId: number; optionId: number | null; mediaType: string; url: string; altText: string | null }[] | null;
-  group: { groupId: number; questionType: string; title: string | null; passageText: string | null } | null;
+  media:
+    | {
+        mediaId: number;
+        optionId: number | null;
+        mediaType: string;
+        url: string;
+        altText: string | null;
+      }[]
+    | null;
+  group: {
+    groupId: number;
+    questionType: string;
+    title: string | null;
+    passageText: string | null;
+  } | null;
   /** Key of an auto-graded question (only the field of its type is set); null for rubric types. */
   correctAnswer: PracticeCorrectAnswer | null;
   isBookmarked: boolean;
@@ -306,7 +338,9 @@ export interface PracticeExplanation {
 }
 
 /** Practiced share of the module's questions, 0–100. */
-export function practicePercent(o: Pick<ModulePracticeOverview, 'practicedQuestions' | 'totalQuestions'>): number {
+export function practicePercent(
+  o: Pick<ModulePracticeOverview, "practicedQuestions" | "totalQuestions">,
+): number {
   return o.totalQuestions > 0 ? Math.round((o.practicedQuestions / o.totalQuestions) * 100) : 0;
 }
 
@@ -322,7 +356,7 @@ export function toAttemptQuestion(q: PracticeQuestionView): AttemptQuestion {
     orderIndex: q.orderIndex,
     questionType: q.questionType,
     content: q.content,
-    options: q.options?.map(o => ({ ...o, isCorrectAnswer: null })) ?? null,
+    options: q.options?.map((o) => ({ ...o, isCorrectAnswer: null })) ?? null,
     matching: q.matching,
     maxPoints: null,
     answerSpace: q.answerSpace,
@@ -330,7 +364,10 @@ export function toAttemptQuestion(q: PracticeQuestionView): AttemptQuestion {
 }
 
 /** MP-04's key in the shape the answer inputs reveal it (`reveal`); null for rubric types. */
-export function toAnswerReveal(q: PracticeQuestionView): { correctOptionIds: number[]; correctAnswer: NonNullable<ReviewQuestion['correctAnswer']> } | null {
+export function toAnswerReveal(q: PracticeQuestionView): {
+  correctOptionIds: number[];
+  correctAnswer: NonNullable<ReviewQuestion["correctAnswer"]>;
+} | null {
   const key = q.correctAnswer;
   if (!key) return null;
   return {
@@ -338,13 +375,18 @@ export function toAnswerReveal(q: PracticeQuestionView): { correctOptionIds: num
     correctAnswer: {
       orderedOptionIds: key.correctOrder,
       pairs: key.pairs,
-      blanks: key.blanks ? Object.fromEntries(key.blanks.map(b => [String(b.index), b.accepted ?? []])) : null,
+      blanks: key.blanks
+        ? Object.fromEntries(key.blanks.map((b) => [String(b.index), b.accepted ?? []]))
+        : null,
     },
   };
 }
 
 /** MP-04 with one of its attempts, in the shape the exam result's answer review reads. */
-export function toReviewQuestion(q: PracticeQuestionView, attempt: PracticeAttempt | null): ReviewQuestion {
+export function toReviewQuestion(
+  q: PracticeQuestionView,
+  attempt: PracticeAttempt | null,
+): ReviewQuestion {
   const key = q.correctAnswer;
   const correctIds = key?.correctOptionIds ? new Set(key.correctOptionIds) : null;
   return {
@@ -352,7 +394,11 @@ export function toReviewQuestion(q: PracticeQuestionView, attempt: PracticeAttem
     orderIndex: q.orderIndex,
     questionType: q.questionType,
     content: q.content,
-    options: q.options?.map(o => ({ ...o, isCorrectAnswer: correctIds ? correctIds.has(o.optionId) : null })) ?? null,
+    options:
+      q.options?.map((o) => ({
+        ...o,
+        isCorrectAnswer: correctIds ? correctIds.has(o.optionId) : null,
+      })) ?? null,
     yourResponse: attempt?.response ?? null,
     isCorrect: attempt?.isCorrect ?? null,
     maxPoints: null,
@@ -367,7 +413,9 @@ export function toReviewQuestion(q: PracticeQuestionView, attempt: PracticeAttem
       ? {
           orderedOptionIds: key.correctOrder,
           pairs: key.pairs,
-          blanks: key.blanks ? Object.fromEntries(key.blanks.map(b => [String(b.index), b.accepted ?? []])) : null,
+          blanks: key.blanks
+            ? Object.fromEntries(key.blanks.map((b) => [String(b.index), b.accepted ?? []]))
+            : null,
         }
       : null,
   };
@@ -376,11 +424,12 @@ export function toReviewQuestion(q: PracticeQuestionView, attempt: PracticeAttem
 /** MP-04 batch ceiling of the BE. */
 export const MAX_BATCH_QUESTIONS = 20;
 
-const sameIds = (a: readonly number[], b: readonly number[]) => a.length === b.length && a.every((id, i) => id === b[i]);
+const sameIds = (a: readonly number[], b: readonly number[]) =>
+  a.length === b.length && a.every((id, i) => id === b[i]);
 
 /** Fill-blank spellings are compared trimmed, with single spaces; case only when the key asks for it. */
 const blankText = (text: string | null | undefined, caseSensitive: boolean) => {
-  const t = (text ?? '').trim().replace(/\s+/g, ' ');
+  const t = (text ?? "").trim().replace(/\s+/g, " ");
   return caseSensitive ? t : t.toLowerCase();
 };
 
@@ -389,29 +438,34 @@ const blankText = (text: string | null | undefined, caseSensitive: boolean) => {
  * student answers. null when there is no key (rubric types) — MP-05's verdict is then the only one,
  * and it always wins over this once it arrives.
  */
-export function gradeLocally(q: PracticeQuestionView, response: AnswerResponse | null): boolean | null {
+export function gradeLocally(
+  q: PracticeQuestionView,
+  response: AnswerResponse | null,
+): boolean | null {
   const key = q.correctAnswer;
   if (!key || !response) return null;
   switch (q.questionType) {
-    case 'SINGLE_CHOICE':
-    case 'TRUE_FALSE':
-    case 'MULTIPLE_CHOICE': {
+    case "SINGLE_CHOICE":
+    case "TRUE_FALSE":
+    case "MULTIPLE_CHOICE": {
       if (!key.correctOptionIds) return null;
       const sort = (ids: readonly number[]) => [...new Set(ids)].sort((a, b) => a - b);
       return sameIds(sort(response.selectedOptionIds ?? []), sort(key.correctOptionIds));
     }
-    case 'MATCHING': {
+    case "MATCHING": {
       if (!key.pairs) return null;
-      const given = new Map((response.matches ?? []).map(m => [m.left, m.right]));
-      return given.size === key.pairs.length && key.pairs.every(p => given.get(p.left) === p.right);
+      const given = new Map((response.matches ?? []).map((m) => [m.left, m.right]));
+      return (
+        given.size === key.pairs.length && key.pairs.every((p) => given.get(p.left) === p.right)
+      );
     }
-    case 'ORDERING':
+    case "ORDERING":
       return key.correctOrder ? sameIds(response.orderedOptionIds ?? [], key.correctOrder) : null;
-    case 'FILL_BLANK': {
+    case "FILL_BLANK": {
       if (!key.blanks?.length) return null;
-      return key.blanks.every(b => {
+      return key.blanks.every((b) => {
         const typed = blankText(response.blanks?.[String(b.index)], Boolean(b.caseSensitive));
-        return (b.accepted ?? []).some(a => blankText(a, Boolean(b.caseSensitive)) === typed);
+        return (b.accepted ?? []).some((a) => blankText(a, Boolean(b.caseSensitive)) === typed);
       });
     }
     default:
@@ -420,7 +474,9 @@ export function gradeLocally(q: PracticeQuestionView, response: AnswerResponse |
 }
 
 const scopePath = (scope: PracticeScope) =>
-  'moduleId' in scope ? `/student/modules/${scope.moduleId}/practice` : `/student/courses/${scope.courseId}/general/practice`;
+  "moduleId" in scope
+    ? `/student/modules/${scope.moduleId}/practice`
+    : `/student/courses/${scope.courseId}/general/practice`;
 const sessionPath = (sessionId: number | string) => `/student/practice/sessions/${sessionId}`;
 const questionPath = (sessionId: number | string, sessionQuestionId: number | string) =>
   `${sessionPath(sessionId)}/questions/${sessionQuestionId}`;
@@ -435,8 +491,10 @@ export const modulePracticeService = {
     const res = await api.post<ApiResponse<PracticeSession>>(`${scopePath(scope)}/sessions`, {
       mode: body.mode,
       ...(body.questionCount != null ? { questionCount: body.questionCount } : {}),
-      ...(body.mode === 'TARGET' && body.difficulty ? { difficulty: body.difficulty } : {}),
-      ...(body.mode === 'TARGET' && body.questionTypes?.length ? { questionTypes: body.questionTypes } : {}),
+      ...(body.mode === "TARGET" && body.difficulty ? { difficulty: body.difficulty } : {}),
+      ...(body.mode === "TARGET" && body.questionTypes?.length
+        ? { questionTypes: body.questionTypes }
+        : {}),
     });
     return res.data;
   },
@@ -446,15 +504,23 @@ export const modulePracticeService = {
     return res.data;
   },
 
-  async getQuestion(sessionId: number | string, sessionQuestionId: number | string): Promise<PracticeQuestionView> {
-    const res = await api.get<ApiResponse<PracticeQuestionView>>(questionPath(sessionId, sessionQuestionId));
+  async getQuestion(
+    sessionId: number | string,
+    sessionQuestionId: number | string,
+  ): Promise<PracticeQuestionView> {
+    const res = await api.get<ApiResponse<PracticeQuestionView>>(
+      questionPath(sessionId, sessionQuestionId),
+    );
     return res.data;
   },
 
   /** MP-04 batch: up to MAX_BATCH_QUESTIONS questions in one call, in the paper's order. */
-  async getQuestions(sessionId: number | string, sessionQuestionIds: number[]): Promise<PracticeQuestionView[]> {
+  async getQuestions(
+    sessionId: number | string,
+    sessionQuestionIds: number[],
+  ): Promise<PracticeQuestionView[]> {
     const res = await api.get<ApiResponse<PracticeQuestionView[]>>(
-      `${sessionPath(sessionId)}/questions?ids=${sessionQuestionIds.join(',')}`,
+      `${sessionPath(sessionId)}/questions?ids=${sessionQuestionIds.join(",")}`,
     );
     return res.data;
   },
@@ -464,12 +530,20 @@ export const modulePracticeService = {
     sessionQuestionId: number | string,
     body: { response: AnswerResponse; timeSpentSeconds?: number; requestKey?: string },
   ): Promise<AnswerSubmitted> {
-    const res = await api.post<ApiResponse<AnswerSubmitted>>(`${questionPath(sessionId, sessionQuestionId)}/answers`, body);
+    const res = await api.post<ApiResponse<AnswerSubmitted>>(
+      `${questionPath(sessionId, sessionQuestionId)}/answers`,
+      body,
+    );
     return res.data;
   },
 
-  async getHistory(sessionId: number | string, sessionQuestionId: number | string): Promise<AnswerHistory> {
-    const res = await api.get<ApiResponse<AnswerHistory>>(`${questionPath(sessionId, sessionQuestionId)}/answers`);
+  async getHistory(
+    sessionId: number | string,
+    sessionQuestionId: number | string,
+  ): Promise<AnswerHistory> {
+    const res = await api.get<ApiResponse<AnswerHistory>>(
+      `${questionPath(sessionId, sessionQuestionId)}/answers`,
+    );
     return res.data;
   },
 
@@ -488,11 +562,14 @@ export const modulePracticeService = {
     questionId: number | string,
     body: { sessionId: number; sessionQuestionId: number; practiceAnswerId?: number | null },
   ): Promise<PracticeExplanation> {
-    const res = await api.post<ApiResponse<PracticeExplanation>>(`/student/practice/questions/${questionId}/explanation`, {
-      sessionId: body.sessionId,
-      sessionQuestionId: body.sessionQuestionId,
-      ...(body.practiceAnswerId != null ? { practiceAnswerId: body.practiceAnswerId } : {}),
-    });
+    const res = await api.post<ApiResponse<PracticeExplanation>>(
+      `/student/practice/questions/${questionId}/explanation`,
+      {
+        sessionId: body.sessionId,
+        sessionQuestionId: body.sessionQuestionId,
+        ...(body.practiceAnswerId != null ? { practiceAnswerId: body.practiceAnswerId } : {}),
+      },
+    );
     return res.data;
   },
 
@@ -502,7 +579,7 @@ export const modulePracticeService = {
     body: { sessionId: number; sessionQuestionId: number; practiceAnswerId?: number | null },
   ): Promise<DeepExplanation> {
     const res = await api.request<ApiResponse<DeepExplanation>>({
-      method: 'post',
+      method: "post",
       url: `/student/practice/questions/${questionId}/deep-explanation`,
       data: {
         sessionId: body.sessionId,
@@ -514,7 +591,11 @@ export const modulePracticeService = {
     return res.data;
   },
 
-  async getReviewQuestions(scope: PracticeScope, page = 0, size = 20): Promise<PageResponse<ReviewItem>> {
+  async getReviewQuestions(
+    scope: PracticeScope,
+    page = 0,
+    size = 20,
+  ): Promise<PageResponse<ReviewItem>> {
     const res = await api.get<ApiResponse<PageResponse<ReviewItem>>>(
       `${scopePath(scope)}/review-questions?page=${page}&size=${size}`,
     );
@@ -522,7 +603,10 @@ export const modulePracticeService = {
   },
 
   async resetProgress(scope: PracticeScope): Promise<ResetResult> {
-    const res = await api.request<ApiResponse<ResetResult>>({ method: 'delete', url: `${scopePath(scope)}/progress` });
+    const res = await api.request<ApiResponse<ResetResult>>({
+      method: "delete",
+      url: `${scopePath(scope)}/progress`,
+    });
     return res.data;
   },
 };

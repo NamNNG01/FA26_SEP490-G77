@@ -57,23 +57,17 @@ function TicketSummary({
     <header className="space-y-2">
       <div className="flex flex-wrap items-center gap-2">
         <Status value={detail.status} />
-        <PriorityBadge
-          priority={detail.priority}
-          score={detail.priorityScore ?? 0}
-        />
+        <PriorityBadge priority={detail.priority} score={detail.priorityScore ?? 0} />
         <Badge variant={assignedToMe ? "info" : "default"}>{owner}</Badge>
         <span className="text-sm font-medium text-content">
           {issueLabel(detail.issueType || detail.reports?.[0]?.issueType)}
         </span>
       </div>
       <p className="text-sm text-content-secondary">
-        {course} · {detail.location?.moduleTitle || "Module unavailable"} ·
-        Question version {detail.question?.lockVersion ?? "—"}
+        {course} · {detail.location?.moduleTitle || "Module unavailable"} · Question version{" "}
+        {detail.question?.lockVersion ?? "—"}
         {detail.lastReportedAt && (
-          <>
-            {" "}
-            · Latest report {new Date(detail.lastReportedAt).toLocaleString()}
-          </>
+          <> · Latest report {new Date(detail.lastReportedAt).toLocaleString()}</>
         )}
       </p>
     </header>
@@ -112,9 +106,8 @@ export function IssueReviewModal({
       title: "Switch correction type?",
       body: (
         <p>
-          You have unsaved edits to this question. Switching to “
-          {resolutionOption(type).title}” discards them. Your resolution note is
-          kept.
+          You have unsaved edits to this question. Switching to “{resolutionOption(type).title}”
+          discards them. Your resolution note is kept.
         </p>
       ),
       confirmLabel: "Discard edits and switch",
@@ -125,10 +118,7 @@ export function IssueReviewModal({
   function requestSave() {
     if (!review.validateResolution()) return;
     const option = resolutionOption(review.resolutionType);
-    const notice = regradeNotice(
-      review.resolutionType,
-      detail?.insights?.regradeImpact,
-    );
+    const notice = regradeNotice(review.resolutionType, detail?.insights?.regradeImpact);
     if (!notice?.confirm) {
       void review.submitResolution();
       return;
@@ -145,8 +135,7 @@ export function IssueReviewModal({
         </>
       ),
       confirmLabel: option.saveLabel,
-      variant:
-        review.resolutionType === "QUESTION_VOIDED" ? "danger" : "primary",
+      variant: review.resolutionType === "QUESTION_VOIDED" ? "danger" : "primary",
       run: review.submitResolution,
     });
   }
@@ -173,8 +162,8 @@ export function IssueReviewModal({
       title: "Mark as a duplicate?",
       body: (
         <p>
-          This ticket is closed and linked to ticket #{review.duplicateId}. The
-          question is not changed.
+          This ticket is closed and linked to ticket #{review.duplicateId}. The question is not
+          changed.
         </p>
       ),
       confirmLabel: "Mark duplicate",
@@ -188,13 +177,10 @@ export function IssueReviewModal({
       body: (
         <>
           <p>
-            Job #{job.jobId} will recalculate{" "}
-            {job.totalAnswers ?? "the affected"} submitted answers. Student
-            scores may change.
+            Job #{job.jobId} will recalculate {job.totalAnswers ?? "the affected"} submitted
+            answers. Student scores may change.
           </p>
-          <p className="text-xs">
-            Reason: {(review.jobReasons[String(job.jobId)] ?? "").trim()}
-          </p>
+          <p className="text-xs">Reason: {(review.jobReasons[String(job.jobId)] ?? "").trim()}</p>
         </>
       ),
       confirmLabel: "Confirm regrade",
@@ -206,9 +192,10 @@ export function IssueReviewModal({
   let primary: ReactNode = null;
   let helper = "";
   if (detail?.status === "PENDING") {
-    helper = review.assignedToMe || !detail.assignedTo
-      ? "Start the review to unlock corrections."
-      : `Starting the review takes this ticket over from ${detail.assignedTo.fullName || "another manager"}.`;
+    helper =
+      review.assignedToMe || !detail.assignedTo
+        ? "Start the review to unlock corrections."
+        : `Starting the review takes this ticket over from ${detail.assignedTo.fullName || "another manager"}.`;
     primary = (
       <Button loading={busy} onClick={() => void review.startReview()}>
         Start review
@@ -216,27 +203,15 @@ export function IssueReviewModal({
     );
   } else if (detail?.status === "IN_PROGRESS") {
     if (tab === "resolve") {
-      const blocker = resolveBlocker(
-        review.resolutionType,
-        review.draft,
-        review.resolutionNote,
-      );
+      const blocker = resolveBlocker(review.resolutionType, review.draft, review.resolutionNote);
       helper = blocker ?? "";
       primary = (
-        <Button
-          loading={busy}
-          disabled={!!blocker || review.loading}
-          onClick={requestSave}
-        >
+        <Button loading={busy} disabled={!!blocker || review.loading} onClick={requestSave}>
           {resolutionOption(review.resolutionType).saveLabel}
         </Button>
       );
     } else {
-      primary = (
-        <Button onClick={() => review.setTab("resolve")}>
-          Continue to resolution
-        </Button>
-      );
+      primary = <Button onClick={() => review.setTab("resolve")}>Continue to resolution</Button>;
     }
   }
 
@@ -250,16 +225,10 @@ export function IssueReviewModal({
         open={!!review.row}
         onClose={review.close}
         title={
-          detail
-            ? `Ticket #${detail.issueId} · Question #${detail.questionId}`
-            : "Loading ticket…"
+          detail ? `Ticket #${detail.issueId} · Question #${detail.questionId}` : "Loading ticket…"
         }
         size="screen"
-        error={
-          review.error ? (
-            <Alert type="error" message={review.error} />
-          ) : undefined
-        }
+        error={review.error ? <Alert type="error" message={review.error} /> : undefined}
         footer={
           detail && (
             <>
@@ -280,13 +249,8 @@ export function IssueReviewModal({
         }
       >
         {!detail ? (
-          <div
-            role="status"
-            className="py-16 text-center text-sm text-content-secondary"
-          >
-            {review.loading
-              ? "Loading ticket details…"
-              : "Ticket details are unavailable."}
+          <div role="status" className="py-16 text-center text-sm text-content-secondary">
+            {review.loading ? "Loading ticket details…" : "Ticket details are unavailable."}
           </div>
         ) : (
           <div className="space-y-4">
@@ -295,9 +259,7 @@ export function IssueReviewModal({
               tabs={TAB_IDS.map((id) => TAB_LABELS[id])}
               active={TAB_LABELS[tab]}
               onChange={(label) =>
-                review.setTab(
-                  TAB_IDS.find((id) => TAB_LABELS[id] === label) ?? "review",
-                )
+                review.setTab(TAB_IDS.find((id) => TAB_LABELS[id] === label) ?? "review")
               }
             />
 
@@ -316,11 +278,7 @@ export function IssueReviewModal({
                     ? "A regrade job needs your attention."
                     : `${waitingJobs} regrade jobs need your attention.`}
                 </span>
-                <Button
-                  size="sm"
-                  variant="outline"
-                  onClick={() => review.setTab("insights")}
-                >
+                <Button size="sm" variant="outline" onClick={() => review.setTab("insights")}>
                   Open regrade jobs
                 </Button>
               </div>
@@ -337,10 +295,7 @@ export function IssueReviewModal({
                 />
               )}
               {tab === "insights" && (
-                <InsightsTab
-                  review={review}
-                  onRequestConfirmRegrade={requestRegrade}
-                />
+                <InsightsTab review={review} onRequestConfirmRegrade={requestRegrade} />
               )}
             </div>
           </div>

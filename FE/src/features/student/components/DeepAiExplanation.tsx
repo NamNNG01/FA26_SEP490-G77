@@ -1,12 +1,12 @@
-import { useEffect, useState } from 'react';
-import { Link } from 'react-router';
-import { Badge } from '@/components/ui/Badge';
-import { Button } from '@/components/ui/Button';
-import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
-import { Icon } from '@/assets/icons';
-import { ROUTES } from '@/app/routes';
-import { getAiError } from '@/services/studentAi.service';
-import { studentAttemptService, type DeepExplanation } from '@/services/studentAttempt.service';
+import { useEffect, useState } from "react";
+import { Link } from "react-router";
+import { Badge } from "@/components/ui/Badge";
+import { Button } from "@/components/ui/Button";
+import { ConfirmDialog } from "@/components/ui/ConfirmDialog";
+import { Icon } from "@/assets/icons";
+import { ROUTES } from "@/app/routes";
+import { getAiError } from "@/services/studentAi.service";
+import { studentAttemptService, type DeepExplanation } from "@/services/studentAttempt.service";
 
 /**
  * The body of one explanation box. The stored explanation (manager-written or AI-cached) is free and
@@ -51,7 +51,7 @@ export function DeepAiExplanation({
     setTokensLeft(null);
     studentAttemptService
       .getAiQuota()
-      .then(q => setTokensLeft(q.free.remaining + (q.plan?.remaining ?? 0)))
+      .then((q) => setTokensLeft(q.free.remaining + (q.plan?.remaining ?? 0)))
       .catch(() => setTokensLeft(null));
   };
 
@@ -63,10 +63,13 @@ export function DeepAiExplanation({
       setShowDeep(true);
       setConfirming(false);
     } catch (err) {
-      const e = getAiError(err, 'Could not get a deep explanation. Please try again.');
+      const e = getAiError(err, "Could not get a deep explanation. Please try again.");
       setError({
-        message: e.kind === 'QUOTA_EXCEEDED' ? 'You do not have enough AI tokens for a deep explanation.' : e.message,
-        quota: e.kind === 'QUOTA_EXCEEDED',
+        message:
+          e.kind === "QUOTA_EXCEEDED"
+            ? "You do not have enough AI tokens for a deep explanation."
+            : e.message,
+        quota: e.kind === "QUOTA_EXCEEDED",
       });
       setConfirming(false);
     } finally {
@@ -80,31 +83,52 @@ export function DeepAiExplanation({
     <div className="space-y-2">
       <div className="flex flex-wrap items-center justify-between gap-2">
         {showDeep && deep ? (
-          <Badge variant="info" size="sm"><Icon.Zap className="w-3 h-3" /> Deep AI Explanation</Badge>
-        ) : <span />}
-        {deep ? (
-          original && (
-            <button type="button" onClick={() => setShowDeep(v => !v)} className="text-xs font-medium text-brand-ink hover:underline">
-              {showDeep ? 'View original' : 'View deep explanation'}
-            </button>
-          )
-        ) : allowDeep && (
-          <Button size="sm" variant="outline" icon={<Icon.Zap className="w-3.5 h-3.5" />} loading={loading} disabled={loading} onClick={openConfirm}>
-            Deep AI Explanation
-          </Button>
+          <Badge variant="info" size="sm">
+            <Icon.Zap className="w-3 h-3" /> Deep AI Explanation
+          </Badge>
+        ) : (
+          <span />
         )}
+        {deep
+          ? original && (
+              <button
+                type="button"
+                onClick={() => setShowDeep((v) => !v)}
+                className="text-xs font-medium text-brand-ink hover:underline"
+              >
+                {showDeep ? "View original" : "View deep explanation"}
+              </button>
+            )
+          : allowDeep && (
+              <Button
+                size="sm"
+                variant="outline"
+                icon={<Icon.Zap className="w-3.5 h-3.5" />}
+                loading={loading}
+                disabled={loading}
+                onClick={openConfirm}
+              >
+                Deep AI Explanation
+              </Button>
+            )}
       </div>
 
       {text ? (
-        <p className="text-sm leading-relaxed text-content-secondary whitespace-pre-line break-words">{text}</p>
+        <p className="text-sm leading-relaxed text-content-secondary whitespace-pre-line break-words">
+          {text}
+        </p>
       ) : (
         <p className="text-sm text-content-soft">No explanation for this question yet.</p>
       )}
 
       {error && (
         <p className="text-xs text-danger">
-          {error.message}{' '}
-          {error.quota && <Link to={ROUTES.studentSubscription} className="font-medium underline">Get more tokens</Link>}
+          {error.message}{" "}
+          {error.quota && (
+            <Link to={ROUTES.studentSubscription} className="font-medium underline">
+              Get more tokens
+            </Link>
+          )}
         </p>
       )}
 
@@ -118,9 +142,24 @@ export function DeepAiExplanation({
         title="Get a Deep AI Explanation?"
         description={
           <>
-            The AI looks at your answer and explains this question in more depth. This uses AI tokens
-            {tokensLeft != null ? <> — you have <strong>{tokensLeft.toLocaleString()}</strong> left.</> : '.'}
-            {tokensLeft === 0 && <> <Link to={ROUTES.studentSubscription} className="font-medium underline">Get more tokens</Link></>}
+            The AI looks at your answer and explains this question in more depth. This uses AI
+            tokens
+            {tokensLeft != null ? (
+              <>
+                {" "}
+                — you have <strong>{tokensLeft.toLocaleString()}</strong> left.
+              </>
+            ) : (
+              "."
+            )}
+            {tokensLeft === 0 && (
+              <>
+                {" "}
+                <Link to={ROUTES.studentSubscription} className="font-medium underline">
+                  Get more tokens
+                </Link>
+              </>
+            )}
           </>
         }
         confirmLabel="Use AI tokens"

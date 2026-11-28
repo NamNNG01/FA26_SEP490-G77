@@ -1,5 +1,5 @@
-import { api } from './api';
-import type { ApiResponse } from '@/types/api';
+import { api } from "./api";
+import type { ApiResponse } from "@/types/api";
 
 /**
  * DashboardService
@@ -97,23 +97,17 @@ export interface AdminDashboardData {
 
 export const dashboardService = {
   async getStudentDashboard(): Promise<StudentDashboardData> {
-    const body = await api.get<ApiResponse<StudentDashboardData>>(
-      '/dashboard/student',
-    );
+    const body = await api.get<ApiResponse<StudentDashboardData>>("/dashboard/student");
     return body.data;
   },
 
   async getManagerDashboard(): Promise<ManagerDashboardData> {
-    const body = await api.get<ApiResponse<ManagerDashboardData>>(
-      '/dashboard/course-manager',
-    );
+    const body = await api.get<ApiResponse<ManagerDashboardData>>("/dashboard/course-manager");
     return body.data;
   },
 
   async getAdminDashboard(): Promise<AdminDashboardData> {
-    const body = await api.get<ApiResponse<AdminDashboardData>>(
-      '/dashboard/admin',
-    );
+    const body = await api.get<ApiResponse<AdminDashboardData>>("/dashboard/admin");
     return body.data;
   },
 };

@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useEffect, useRef, useState } from "react";
 
 /**
  * Reveal
@@ -9,14 +9,14 @@ import React, { useEffect, useRef, useState } from 'react';
  * when IntersectionObserver is unavailable.
  */
 
-type RevealDirection = 'up' | 'down' | 'left' | 'right';
+type RevealDirection = "up" | "down" | "left" | "right";
 
 /** Hidden state per direction — the element animates FROM this transform. */
 const hiddenByDirection: Record<RevealDirection, string> = {
-  up: 'opacity-0 translate-y-3',
-  down: 'opacity-0 -translate-y-3',
-  left: 'opacity-0 translate-x-3',
-  right: 'opacity-0 -translate-x-3',
+  up: "opacity-0 translate-y-3",
+  down: "opacity-0 -translate-y-3",
+  left: "opacity-0 translate-x-3",
+  right: "opacity-0 -translate-x-3",
 };
 
 interface RevealProps {
@@ -28,7 +28,7 @@ interface RevealProps {
   className?: string;
 }
 
-export function Reveal({ children, delay = 0, direction = 'up', className = '' }: RevealProps) {
+export function Reveal({ children, delay = 0, direction = "up", className = "" }: RevealProps) {
   const ref = useRef<HTMLDivElement>(null);
   const [visible, setVisible] = useState(false);
 
@@ -37,8 +37,8 @@ export function Reveal({ children, delay = 0, direction = 'up', className = '' }
     if (!el) return;
 
     // Old browsers, or the user asked for less motion: just show the content.
-    const reducedMotion = window.matchMedia?.('(prefers-reduced-motion: reduce)').matches;
-    if (typeof IntersectionObserver === 'undefined' || reducedMotion) {
+    const reducedMotion = window.matchMedia?.("(prefers-reduced-motion: reduce)").matches;
+    if (typeof IntersectionObserver === "undefined" || reducedMotion) {
       setVisible(true);
       return;
     }
@@ -52,7 +52,7 @@ export function Reveal({ children, delay = 0, direction = 'up', className = '' }
       },
       // Start a little before the element scrolls in, so a fast scroll never
       // lands on a screen of still-invisible content.
-      { threshold: 0, rootMargin: '0px 0px 120px 0px' },
+      { threshold: 0, rootMargin: "0px 0px 120px 0px" },
     );
     observer.observe(el);
     return () => observer.disconnect();
@@ -63,7 +63,7 @@ export function Reveal({ children, delay = 0, direction = 'up', className = '' }
       ref={ref}
       style={{ transitionDelay: `${delay}ms` }}
       className={`transition-all duration-500 ease-out will-change-transform ${
-        visible ? 'opacity-100 translate-x-0 translate-y-0' : hiddenByDirection[direction]
+        visible ? "opacity-100 translate-x-0 translate-y-0" : hiddenByDirection[direction]
       } ${className}`}
     >
       {children}

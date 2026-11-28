@@ -24,7 +24,12 @@ import {
 import type { QuestionDifficulty } from "@/services/question.service";
 import { DiagramAnswer } from "./DiagramAnswer";
 import { CodeAnswer } from "./CodeAnswer";
-import { InsertImageButton, QuestionImagePreview, splitQuestionImage, withQuestionImage } from "@/components/common/QuestionContent";
+import {
+  InsertImageButton,
+  QuestionImagePreview,
+  splitQuestionImage,
+  withQuestionImage,
+} from "@/components/common/QuestionContent";
 
 const MAX_OPTIONS = 10;
 
@@ -82,7 +87,7 @@ export function QuestionForm({
   /** Types the Type dropdown offers (a group holds one kind); all when omitted. */
   allowedTypes?: EditableQuestionType[];
   /** Limits the form to the named correction areas. Omit to show every section. */
-  sections?: Array<'content' | 'difficulty' | 'type' | 'answers' | 'rubric' | 'explanation'>;
+  sections?: Array<"content" | "difficulty" | "type" | "answers" | "rubric" | "explanation">;
   /** The question's type doesn't fit its group's kind — the Type dropdown turns red (the page explains it in a toast). */
   kindError?: string;
   /** The backend found this question's content already in the course — it can't be saved until changed. */
@@ -97,35 +102,36 @@ export function QuestionForm({
    */
   onRequestExplanation?: (requested: boolean) => void;
   /** Saved question whose explanation the AI is writing (PENDING) or could not write (FAILED). */
-  explanationStatus?: 'PENDING' | 'FAILED';
+  explanationStatus?: "PENDING" | "FAILED";
 }) {
   const textRef = useRef<HTMLTextAreaElement>(null);
   const errors = validateDraft(q);
-  const invalid =
-    Object.keys(errors).length > 0 ||
-    Boolean(kindError) ||
-    Boolean(duplicateError);
+  const invalid = Object.keys(errors).length > 0 || Boolean(kindError) || Boolean(duplicateError);
   const contentError = showErrors ? errors.content : undefined;
   const answersError = showErrors
-    ? sections?.includes('answers') && !sections.includes('rubric') && q.type === 'DIAGRAM_ESSAY' && errors.answers === ESSAY_RUBRIC_REQUIRED
+    ? sections?.includes("answers") &&
+      !sections.includes("rubric") &&
+      q.type === "DIAGRAM_ESSAY" &&
+      errors.answers === ESSAY_RUBRIC_REQUIRED
       ? undefined
       : errors.answers
     : undefined;
   const typeError = kindError ?? (showErrors ? errors.type : undefined);
   const diffError = showErrors ? errors.difficulty : undefined;
   const typeOptions = allowedTypes
-    ? QUESTION_TYPE_OPTIONS.filter(
-        (o) => o.value === q.type || allowedTypes.includes(o.value),
-      )
+    ? QUESTION_TYPE_OPTIONS.filter((o) => o.value === q.type || allowedTypes.includes(o.value))
     : QUESTION_TYPE_OPTIONS;
   const titleId = `${q.key}-title`;
-  const showSection = (section: 'content' | 'difficulty' | 'type' | 'answers' | 'rubric' | 'explanation') => !sections || sections.includes(section);
+  const showSection = (
+    section: "content" | "difficulty" | "type" | "answers" | "rubric" | "explanation",
+  ) => !sections || sections.includes(section);
 
   const set = (patch: Partial<QuestionDraft>) => onChange({ ...q, ...patch });
 
   // The textarea holds only the text; the image stays at the end of the stored content.
   const { text, images } = splitQuestionImage(q.content);
-  const setText = (next: string) => set({ content: withQuestionImage(next, images[0]?.url ?? null) });
+  const setText = (next: string) =>
+    set({ content: withQuestionImage(next, images[0]?.url ?? null) });
 
   // Question text and explanation grow with what is written instead of scrolling.
   const explanationRef = useRef<HTMLTextAreaElement>(null);
@@ -156,10 +162,7 @@ export function QuestionForm({
           <span className="min-w-6 h-6 px-1 rounded-[6px] bg-brand-600/10 text-brand-ink flex items-center justify-center text-xs font-bold">
             #{index + 1}
           </span>
-          <h3
-            id={titleId}
-            className="text-lg font-semibold text-content truncate"
-          >
+          <h3 id={titleId} className="text-lg font-semibold text-content truncate">
             {heading ?? `Question ${index + 1}`}
           </h3>
           {q.fromAi && (
@@ -230,186 +233,227 @@ export function QuestionForm({
       </div>
 
       {/* Read-only: the fields stay visible but can't be focused or changed */}
-      <div aria-readonly={readOnly || undefined} className={`space-y-3 ${readOnly ? 'opacity-75' : ''}`}>
-      {duplicateError && (
-        <div
-          role="alert"
-          className="flex gap-3 p-3 rounded-[10px] border bg-danger-light border-danger-line text-danger-strong"
-        >
-          <Icon.Copy className="w-5 h-5 text-danger flex-shrink-0" />
-          <p className="text-sm">{duplicateError}</p>
-        </div>
-      )}
-
-      {/* Import block the backend couldn't read — write the question here, or remove it */}
-      {q.importIssue && (
-        <div
-          role="alert"
-          className="flex gap-3 p-3 rounded-[10px] border bg-danger-light border-danger-line text-danger-strong"
-        >
-          <Icon.XCircle className="w-5 h-5 text-danger flex-shrink-0" />
-          <div className="flex-1 min-w-0">
-            <p className="text-sm font-semibold mb-0.5">
-              Couldn’t import question #{q.importIssue.block}
-              {q.importIssue.line > 0 ? ` (line ${q.importIssue.line})` : ""}
-            </p>
-            <ul className="text-sm opacity-90 space-y-0.5">
-              {q.importIssue.errors.map((e, i) => (
-                <li key={i}>
-                  {e.line > 0 ? `Line ${e.line}: ` : ""}
-                  {e.message}
-                </li>
-              ))}
-            </ul>
-            <p className="text-xs opacity-80 mt-1">
-              Fill in the question below, or remove it.
-            </p>
-          </div>
-          <button
-            type="button"
-            onClick={() => set({ importIssue: undefined })}
-            disabled={readOnly}
-            className="self-start p-1 rounded-[6px] hover:bg-danger-line/40"
-            aria-label="Dismiss import error"
+      <div
+        aria-readonly={readOnly || undefined}
+        className={`space-y-3 ${readOnly ? "opacity-75" : ""}`}
+      >
+        {duplicateError && (
+          <div
+            role="alert"
+            className="flex gap-3 p-3 rounded-[10px] border bg-danger-light border-danger-line text-danger-strong"
           >
-            <Icon.X className="w-4 h-4" />
-          </button>
-        </div>
-      )}
-
-      {/* Difficulty and type first: the type decides what the rest of the form asks for. */}
-      {showSection('difficulty') || showSection('type') ? <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-        {showSection('difficulty') && <>
-        <Select
-          label={readOnly ? "Difficulty" : "Difficulty *"}
-          value={q.difficulty}
-          disabled={readOnly}
-          onChange={(v) => set({ difficulty: v as QuestionDifficulty })}
-          invalid={Boolean(diffError)}
-          options={q.difficulty ? DIFFICULTY_OPTIONS : [{ value: '', label: 'Select difficulty…' }, ...DIFFICULTY_OPTIONS]}
-        />
-        </>}
-        {showSection('type') && <>
-        <Select
-          label="Type"
-          value={q.type}
-          disabled={readOnly}
-          onChange={(v) => onChange(changeType(q, v as EditableQuestionType))}
-          options={typeOptions}
-          invalid={Boolean(kindError)}
-        />
-        </>}
-      </div> : null}
-
-      {(showSection('difficulty') && diffError) || (showSection('type') && typeError) ? (
-        <div className="space-y-0.5 -mt-1.5">
-          {showSection('difficulty') && diffError && <p className="text-xs text-danger">{diffError}</p>}
-          {showSection('type') && typeError && <p className="text-xs text-danger">{typeError}</p>}
-        </div>
-      ) : null}
-
-      {/* Question text */}
-      {showSection('content') && <div>
-        <div className="flex items-center justify-between mb-1">
-          <label
-            htmlFor={`${q.key}-content`}
-            className="text-sm font-medium text-content-secondary"
-          >
-            {readOnly ? "Question Text" : "Question Text *"}
-          </label>
-          <div className="flex items-center gap-2">
-          {!readOnly && <InsertImageButton value={q.content} onChange={(content) => set({ content })} />}
-          {!readOnly && q.type === "FILL_BLANK" && (
-            <button
-              type="button"
-              onClick={insertBlank}
-              className="text-xs font-medium text-brand-ink hover:underline"
-            >
-              + Insert blank
-            </button>
-          )}
+            <Icon.Copy className="w-5 h-5 text-danger flex-shrink-0" />
+            <p className="text-sm">{duplicateError}</p>
           </div>
-        </div>
-        <textarea
-          id={`${q.key}-content`}
-          ref={textRef}
-          value={text}
-          readOnly={readOnly}
-          onChange={(e) => setText(e.target.value)}
-          aria-invalid={Boolean(contentError)}
-          className={`w-full min-h-[96px] px-3 py-2 rounded-[10px] border text-base text-content bg-surface resize-none overflow-hidden focus:outline-none focus:ring-2 transition-[border-color,box-shadow] ${
-            contentError
-              ? "border-danger-solid focus:ring-danger-solid/20 focus:border-danger-solid"
-              : "border-line focus:ring-brand-600/20 focus:border-brand-600"
-          }`}
-          placeholder={
-            q.type === "FILL_BLANK"
-              ? "e.g. The capital of France is {{1}}."
-              : "Enter the question…"
-          }
-        />
-        <QuestionImagePreview value={q.content} onChange={(content) => set({ content })} disabled={readOnly} />
-        {contentError && (
-          <p className="text-xs text-danger mt-1">{contentError}</p>
         )}
-      </div>}
 
-      {showSection('answers') && <AnswerSection q={q} set={set} error={answersError} mode={sections ? 'answer' : 'all'} readOnly={readOnly} />}
-      {sections?.includes('rubric') && RUBRIC_TYPES.includes(q.type) && <RubricAnswers q={q} set={set} error={answersError} readOnly={readOnly} />}
-
-      {showSection('explanation') && <div>
-        <div className="flex flex-wrap items-center justify-between gap-2 mb-1">
-          <label
-            htmlFor={`${q.key}-explanation`}
-            className="text-sm font-medium text-content-secondary"
+        {/* Import block the backend couldn't read — write the question here, or remove it */}
+        {q.importIssue && (
+          <div
+            role="alert"
+            className="flex gap-3 p-3 rounded-[10px] border bg-danger-light border-danger-line text-danger-strong"
           >
-            Explanation{" "}
-            <span className="font-normal text-content-subtle">
-              {onRequestExplanation ? "(required to publish — leave it to AI if you like)" : "(optional)"}
-            </span>
-          </label>
-          {explanationStatus === 'PENDING' && (
-            <Badge variant="info"><Icon.Clock className="w-3 h-3" /> AI is writing the explanation…</Badge>
-          )}
-          {explanationStatus === 'FAILED' && (
-            <Badge variant="danger"><Icon.AlertCircle className="w-3 h-3" /> AI could not write it</Badge>
-          )}
-          {!readOnly && onRequestExplanation && !q.explanationRequested && (
+            <Icon.XCircle className="w-5 h-5 text-danger flex-shrink-0" />
+            <div className="flex-1 min-w-0">
+              <p className="text-sm font-semibold mb-0.5">
+                Couldn’t import question #{q.importIssue.block}
+                {q.importIssue.line > 0 ? ` (line ${q.importIssue.line})` : ""}
+              </p>
+              <ul className="text-sm opacity-90 space-y-0.5">
+                {q.importIssue.errors.map((e, i) => (
+                  <li key={i}>
+                    {e.line > 0 ? `Line ${e.line}: ` : ""}
+                    {e.message}
+                  </li>
+                ))}
+              </ul>
+              <p className="text-xs opacity-80 mt-1">Fill in the question below, or remove it.</p>
+            </div>
             <button
               type="button"
-              onClick={() => onRequestExplanation(true)}
-              className="inline-flex items-center gap-1 text-xs font-medium text-brand-ink hover:underline"
+              onClick={() => set({ importIssue: undefined })}
+              disabled={readOnly}
+              className="self-start p-1 rounded-[6px] hover:bg-danger-line/40"
+              aria-label="Dismiss import error"
             >
-              <Icon.Zap className="w-3.5 h-3.5" />
-              {q.explanation.trim() ? "Regenerate with AI" : "Generate AI Explanation"}
+              <Icon.X className="w-4 h-4" />
             </button>
-          )}
-        </div>
-        {q.explanationRequested && (
-          <div className="flex items-start justify-between gap-2 mb-1.5 px-3 py-2 rounded-[10px] border border-line bg-primary-light text-xs text-brand-ink">
-            <span className="flex items-start gap-1.5">
-              <Icon.Zap className="w-3.5 h-3.5 mt-px flex-shrink-0" />
-              {q.explanation.trim()
-                ? "AI will rewrite this explanation in the background after you save."
-                : "AI will write this explanation in the background after you save — you can save now."}
-            </span>
-            {!readOnly && onRequestExplanation && (
-              <button type="button" onClick={() => onRequestExplanation(false)} className="font-medium hover:underline flex-shrink-0">
-                Cancel
-              </button>
+          </div>
+        )}
+
+        {/* Difficulty and type first: the type decides what the rest of the form asks for. */}
+        {showSection("difficulty") || showSection("type") ? (
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            {showSection("difficulty") && (
+              <>
+                <Select
+                  label={readOnly ? "Difficulty" : "Difficulty *"}
+                  value={q.difficulty}
+                  disabled={readOnly}
+                  onChange={(v) => set({ difficulty: v as QuestionDifficulty })}
+                  invalid={Boolean(diffError)}
+                  options={
+                    q.difficulty
+                      ? DIFFICULTY_OPTIONS
+                      : [{ value: "", label: "Select difficulty…" }, ...DIFFICULTY_OPTIONS]
+                  }
+                />
+              </>
+            )}
+            {showSection("type") && (
+              <>
+                <Select
+                  label="Type"
+                  value={q.type}
+                  disabled={readOnly}
+                  onChange={(v) => onChange(changeType(q, v as EditableQuestionType))}
+                  options={typeOptions}
+                  invalid={Boolean(kindError)}
+                />
+              </>
             )}
           </div>
+        ) : null}
+
+        {(showSection("difficulty") && diffError) || (showSection("type") && typeError) ? (
+          <div className="space-y-0.5 -mt-1.5">
+            {showSection("difficulty") && diffError && (
+              <p className="text-xs text-danger">{diffError}</p>
+            )}
+            {showSection("type") && typeError && <p className="text-xs text-danger">{typeError}</p>}
+          </div>
+        ) : null}
+
+        {/* Question text */}
+        {showSection("content") && (
+          <div>
+            <div className="flex items-center justify-between mb-1">
+              <label
+                htmlFor={`${q.key}-content`}
+                className="text-sm font-medium text-content-secondary"
+              >
+                {readOnly ? "Question Text" : "Question Text *"}
+              </label>
+              <div className="flex items-center gap-2">
+                {!readOnly && (
+                  <InsertImageButton value={q.content} onChange={(content) => set({ content })} />
+                )}
+                {!readOnly && q.type === "FILL_BLANK" && (
+                  <button
+                    type="button"
+                    onClick={insertBlank}
+                    className="text-xs font-medium text-brand-ink hover:underline"
+                  >
+                    + Insert blank
+                  </button>
+                )}
+              </div>
+            </div>
+            <textarea
+              id={`${q.key}-content`}
+              ref={textRef}
+              value={text}
+              readOnly={readOnly}
+              onChange={(e) => setText(e.target.value)}
+              aria-invalid={Boolean(contentError)}
+              className={`w-full min-h-[96px] px-3 py-2 rounded-[10px] border text-base text-content bg-surface resize-none overflow-hidden focus:outline-none focus:ring-2 transition-[border-color,box-shadow] ${
+                contentError
+                  ? "border-danger-solid focus:ring-danger-solid/20 focus:border-danger-solid"
+                  : "border-line focus:ring-brand-600/20 focus:border-brand-600"
+              }`}
+              placeholder={
+                q.type === "FILL_BLANK"
+                  ? "e.g. The capital of France is {{1}}."
+                  : "Enter the question…"
+              }
+            />
+            <QuestionImagePreview
+              value={q.content}
+              onChange={(content) => set({ content })}
+              disabled={readOnly}
+            />
+            {contentError && <p className="text-xs text-danger mt-1">{contentError}</p>}
+          </div>
         )}
-        <textarea
-          id={`${q.key}-explanation`}
-          ref={explanationRef}
-          value={q.explanation}
-          readOnly={readOnly}
-          onChange={(e) => set({ explanation: e.target.value })}
-          className="w-full min-h-[64px] px-3 py-2 rounded-[10px] border border-line text-sm text-content bg-surface resize-none overflow-hidden focus:outline-none focus:ring-2 focus:ring-brand-600/20 focus:border-brand-600 transition-[border-color,box-shadow]"
-          placeholder="Why the answer is correct — shown to students during review."
-        />
-      </div>}
+
+        {showSection("answers") && (
+          <AnswerSection
+            q={q}
+            set={set}
+            error={answersError}
+            mode={sections ? "answer" : "all"}
+            readOnly={readOnly}
+          />
+        )}
+        {sections?.includes("rubric") && RUBRIC_TYPES.includes(q.type) && (
+          <RubricAnswers q={q} set={set} error={answersError} readOnly={readOnly} />
+        )}
+
+        {showSection("explanation") && (
+          <div>
+            <div className="flex flex-wrap items-center justify-between gap-2 mb-1">
+              <label
+                htmlFor={`${q.key}-explanation`}
+                className="text-sm font-medium text-content-secondary"
+              >
+                Explanation{" "}
+                <span className="font-normal text-content-subtle">
+                  {onRequestExplanation
+                    ? "(required to publish — leave it to AI if you like)"
+                    : "(optional)"}
+                </span>
+              </label>
+              {explanationStatus === "PENDING" && (
+                <Badge variant="info">
+                  <Icon.Clock className="w-3 h-3" /> AI is writing the explanation…
+                </Badge>
+              )}
+              {explanationStatus === "FAILED" && (
+                <Badge variant="danger">
+                  <Icon.AlertCircle className="w-3 h-3" /> AI could not write it
+                </Badge>
+              )}
+              {!readOnly && onRequestExplanation && !q.explanationRequested && (
+                <button
+                  type="button"
+                  onClick={() => onRequestExplanation(true)}
+                  className="inline-flex items-center gap-1 text-xs font-medium text-brand-ink hover:underline"
+                >
+                  <Icon.Zap className="w-3.5 h-3.5" />
+                  {q.explanation.trim() ? "Regenerate with AI" : "Generate AI Explanation"}
+                </button>
+              )}
+            </div>
+            {q.explanationRequested && (
+              <div className="flex items-start justify-between gap-2 mb-1.5 px-3 py-2 rounded-[10px] border border-line bg-primary-light text-xs text-brand-ink">
+                <span className="flex items-start gap-1.5">
+                  <Icon.Zap className="w-3.5 h-3.5 mt-px flex-shrink-0" />
+                  {q.explanation.trim()
+                    ? "AI will rewrite this explanation in the background after you save."
+                    : "AI will write this explanation in the background after you save — you can save now."}
+                </span>
+                {!readOnly && onRequestExplanation && (
+                  <button
+                    type="button"
+                    onClick={() => onRequestExplanation(false)}
+                    className="font-medium hover:underline flex-shrink-0"
+                  >
+                    Cancel
+                  </button>
+                )}
+              </div>
+            )}
+            <textarea
+              id={`${q.key}-explanation`}
+              ref={explanationRef}
+              value={q.explanation}
+              readOnly={readOnly}
+              onChange={(e) => set({ explanation: e.target.value })}
+              className="w-full min-h-[64px] px-3 py-2 rounded-[10px] border border-line text-sm text-content bg-surface resize-none overflow-hidden focus:outline-none focus:ring-2 focus:ring-brand-600/20 focus:border-brand-600 transition-[border-color,box-shadow]"
+              placeholder="Why the answer is correct — shown to students during review."
+            />
+          </div>
+        )}
       </div>
     </section>
   );
@@ -419,13 +463,13 @@ export function AnswerSection({
   q,
   set,
   error,
-  mode = 'all',
+  mode = "all",
   readOnly = false,
 }: {
   q: QuestionDraft;
   set: (patch: Partial<QuestionDraft>) => void;
   error?: string;
-  mode?: 'all' | 'answer';
+  mode?: "all" | "answer";
   readOnly?: boolean;
 }) {
   switch (q.type) {
@@ -441,10 +485,13 @@ export function AnswerSection({
       return <OrderingAnswers q={q} set={set} error={error} readOnly={readOnly} />;
     case "DIAGRAM":
     case "DIAGRAM_ESSAY": {
-      if (mode === 'answer') return <DiagramAnswer q={q} set={set} error={error} readOnly={readOnly} />;
+      if (mode === "answer")
+        return <DiagramAnswer q={q} set={set} error={error} readOnly={readOnly} />;
       // One answers error for both parts — show it under the part it is about.
       const rubricError =
-        error && (error === rubricTotal(q.rubric).error || error === ESSAY_RUBRIC_REQUIRED) ? error : undefined;
+        error && (error === rubricTotal(q.rubric).error || error === ESSAY_RUBRIC_REQUIRED)
+          ? error
+          : undefined;
       return (
         <div className="space-y-4">
           <DiagramAnswer
@@ -458,7 +505,14 @@ export function AnswerSection({
       );
     }
     case "ESSAY":
-      return mode === 'answer' ? <p className="text-sm text-content-secondary">This question is graded by a rubric. Choose “Rubric Corrected” to edit its scoring criteria.</p> : <RubricAnswers q={q} set={set} error={error} readOnly={readOnly} />;
+      return mode === "answer" ? (
+        <p className="text-sm text-content-secondary">
+          This question is graded by a rubric. Choose “Rubric Corrected” to edit its scoring
+          criteria.
+        </p>
+      ) : (
+        <RubricAnswers q={q} set={set} error={error} readOnly={readOnly} />
+      );
     case "CODE":
       return <CodeAnswer q={q} set={set} error={error} readOnly={readOnly} />;
   }
@@ -485,25 +539,25 @@ function RubricAnswers({
       rubric: q.rubric.map((c, ci) => (ci === i ? { ...c, ...patch } : c)),
     });
   const add = () => set({ rubric: [...q.rubric, emptyCriterion()] });
-  const remove = (i: number) =>
-    set({ rubric: q.rubric.filter((_, ci) => ci !== i) });
+  const remove = (i: number) => set({ rubric: q.rubric.filter((_, ci) => ci !== i) });
 
   return (
     <div>
       <SectionHeader
         label="Grading Rubric"
-          action={
-            !readOnly &&
-          <Button
-            type="button"
-            variant="outline"
-            size="sm"
-            icon={<Icon.Plus className="w-3.5 h-3.5" />}
-            onClick={add}
-            disabled={q.rubric.length >= MAX_CRITERIA}
-          >
-            Add Criterion
-          </Button>
+        action={
+          !readOnly && (
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              icon={<Icon.Plus className="w-3.5 h-3.5" />}
+              onClick={add}
+              disabled={q.rubric.length >= MAX_CRITERIA}
+            >
+              Add Criterion
+            </Button>
+          )
         }
       />
       {q.rubric.length === 0 ? (
@@ -512,8 +566,8 @@ function RubricAnswers({
           {q.type === "ESSAY"
             ? "An essay must have a grading rubric. Add at least one criterion to define how it is scored."
             : q.type === "DIAGRAM_ESSAY"
-            ? "A diagram + essay must have a grading rubric. Add criteria for both the diagram and the written explanation."
-            : "No rubric — the diagram is worth 1 point and graded without criteria. Add criteria to define how it is scored."}
+              ? "A diagram + essay must have a grading rubric. Add criteria for both the diagram and the written explanation."
+              : "No rubric — the diagram is worth 1 point and graded without criteria. Add criteria to define how it is scored."}
         </p>
       ) : (
         <div className="space-y-2">
@@ -524,15 +578,17 @@ function RubricAnswers({
               <div key={c.key} className="rounded-[10px] border border-line-soft overflow-hidden">
                 <div className="flex items-center justify-between gap-2 bg-surface-muted px-3 py-1.5 border-b border-line-soft">
                   <span className="text-xs font-bold text-content-soft">Criterion {i + 1}</span>
-                  {!readOnly && <button
-                    type="button"
-                    onClick={() => remove(i)}
-                    aria-label={`Delete criterion ${i + 1}`}
-                    title="Delete criterion"
-                    className="p-1 text-content-subtle hover:text-danger"
-                  >
-                    <Icon.Trash className="w-4 h-4" />
-                  </button>}
+                  {!readOnly && (
+                    <button
+                      type="button"
+                      onClick={() => remove(i)}
+                      aria-label={`Delete criterion ${i + 1}`}
+                      title="Delete criterion"
+                      className="p-1 text-content-subtle hover:text-danger"
+                    >
+                      <Icon.Trash className="w-4 h-4" />
+                    </button>
+                  )}
                 </div>
                 <div className={`grid ${CRITERION_GRID} gap-x-2 gap-y-2.5 p-2.5`}>
                   <label className="block min-w-0">
@@ -582,18 +638,10 @@ function RubricAnswers({
   );
 }
 
-function SectionHeader({
-  label,
-  action,
-}: {
-  label: string;
-  action?: React.ReactNode;
-}) {
+function SectionHeader({ label, action }: { label: string; action?: React.ReactNode }) {
   return (
     <div className="flex items-center justify-between gap-2 mb-1.5">
-      <span className="text-sm font-medium text-content-secondary">
-        {label}
-      </span>
+      <span className="text-sm font-medium text-content-secondary">{label}</span>
       {action}
     </div>
   );
@@ -618,11 +666,7 @@ function ChoiceAnswers({
   const toggleCorrect = (i: number) =>
     set({
       options: q.options.map((o, oi) =>
-        multi
-          ? oi === i
-            ? { ...o, isCorrect: !o.isCorrect }
-            : o
-          : { ...o, isCorrect: oi === i },
+        multi ? (oi === i ? { ...o, isCorrect: !o.isCorrect } : o) : { ...o, isCorrect: oi === i },
       ),
     });
   const remove = (i: number) => {
@@ -634,10 +678,7 @@ function ChoiceAnswers({
   };
   const add = () =>
     set({
-      options: [
-        ...q.options,
-        { key: newKey("opt"), text: "", isCorrect: false },
-      ],
+      options: [...q.options, { key: newKey("opt"), text: "", isCorrect: false }],
     });
 
   const correct = q.options
@@ -647,13 +688,10 @@ function ChoiceAnswers({
   return (
     <div>
       <SectionHeader
-        label={
-          multi
-            ? "Answer Options (select all correct answers)"
-            : "Answer Options"
-        }
+        label={multi ? "Answer Options (select all correct answers)" : "Answer Options"}
         action={
-          !fixed && !readOnly && (
+          !fixed &&
+          !readOnly && (
             <Button
               type="button"
               variant="outline"
@@ -673,7 +711,10 @@ function ChoiceAnswers({
         aria-label="Correct answer"
       >
         {q.options.map((o, i) => (
-          <div key={o.key} className={`flex items-center gap-2 rounded-lg border px-2 py-1.5 transition-colors ${o.isCorrect ? "border-success-line bg-success-light" : "border-transparent"}`}>
+          <div
+            key={o.key}
+            className={`flex items-center gap-2 rounded-lg border px-2 py-1.5 transition-colors ${o.isCorrect ? "border-success-line bg-success-light" : "border-transparent"}`}
+          >
             <span className="w-7 h-7 bg-surface-muted rounded-[6px] flex items-center justify-center text-xs font-bold text-content-soft flex-shrink-0">
               {optionLabel(i)}
             </span>
@@ -695,7 +736,9 @@ function ChoiceAnswers({
               title="Mark as correct"
               className="accent-success w-4 h-4 flex-shrink-0 cursor-pointer"
             />
-            {o.isCorrect && <span className="whitespace-nowrap text-xs font-semibold text-success">Correct</span>}
+            {o.isCorrect && (
+              <span className="whitespace-nowrap text-xs font-semibold text-success">Correct</span>
+            )}
             {!fixed && !readOnly && (
               <button
                 type="button"
@@ -713,7 +756,7 @@ function ChoiceAnswers({
       </div>
       {error && <p className="text-xs text-danger mt-1.5">{error}</p>}
       <p className="text-xs font-medium text-success mt-2">
-        {correct.length > 1 ? 'Correct answers:' : 'Correct answer:'}{" "}
+        {correct.length > 1 ? "Correct answers:" : "Correct answer:"}{" "}
         {correct.length ? (
           correct.join(", ")
         ) : (
@@ -737,27 +780,26 @@ function MatchingAnswers({
 }) {
   const setPair = (i: number, patch: { left?: string; right?: string }) =>
     set({ pairs: q.pairs.map((p, pi) => (pi === i ? { ...p, ...patch } : p)) });
-  const add = () =>
-    set({ pairs: [...q.pairs, { key: newKey("pair"), left: "", right: "" }] });
-  const remove = (i: number) =>
-    set({ pairs: q.pairs.filter((_, pi) => pi !== i) });
+  const add = () => set({ pairs: [...q.pairs, { key: newKey("pair"), left: "", right: "" }] });
+  const remove = (i: number) => set({ pairs: q.pairs.filter((_, pi) => pi !== i) });
 
   return (
     <div>
       <SectionHeader
         label="Matching Pairs"
         action={
-          !readOnly &&
-          <Button
-            type="button"
-            variant="outline"
-            size="sm"
-            icon={<Icon.Plus className="w-3.5 h-3.5" />}
-            onClick={add}
-            disabled={q.pairs.length >= MAX_OPTIONS}
-          >
-            Add Pair
-          </Button>
+          !readOnly && (
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              icon={<Icon.Plus className="w-3.5 h-3.5" />}
+              onClick={add}
+              disabled={q.pairs.length >= MAX_OPTIONS}
+            >
+              Add Pair
+            </Button>
+          )
         }
       />
       <div className="space-y-1.5">
@@ -786,24 +828,27 @@ function MatchingAnswers({
               placeholder="Matches with"
               className={inputCls(Boolean(error) && !p.right.trim())}
             />
-            {!readOnly && <button
-              type="button"
-              onClick={() => remove(i)}
-              disabled={q.pairs.length <= 2}
-              aria-label={`Delete pair ${i + 1}`}
-              title="Delete pair"
-              className="p-1 flex-shrink-0 text-content-subtle hover:text-danger disabled:opacity-30 disabled:cursor-not-allowed"
-            >
-              <Icon.Trash className="w-4 h-4" />
-            </button>}
+            {!readOnly && (
+              <button
+                type="button"
+                onClick={() => remove(i)}
+                disabled={q.pairs.length <= 2}
+                aria-label={`Delete pair ${i + 1}`}
+                title="Delete pair"
+                className="p-1 flex-shrink-0 text-content-subtle hover:text-danger disabled:opacity-30 disabled:cursor-not-allowed"
+              >
+                <Icon.Trash className="w-4 h-4" />
+              </button>
+            )}
           </div>
         ))}
       </div>
       {error && <p className="text-xs text-danger mt-1.5">{error}</p>}
-      {!readOnly && <p className="text-xs text-content-subtle mt-2">
-        Students see the right-hand items shuffled and match each one to its
-        item.
-      </p>}
+      {!readOnly && (
+        <p className="text-xs text-content-subtle mt-2">
+          Students see the right-hand items shuffled and match each one to its item.
+        </p>
+      )}
     </div>
   );
 }
@@ -820,10 +865,7 @@ function BlankAnswers({
   readOnly?: boolean;
 }) {
   const indexes = blankIndexes(q.content);
-  const setBlank = (
-    n: number,
-    patch: Partial<{ accepted: string; caseSensitive: boolean }>,
-  ) =>
+  const setBlank = (n: number, patch: Partial<{ accepted: string; caseSensitive: boolean }>) =>
     set({
       blanks: {
         ...q.blanks,
@@ -840,8 +882,8 @@ function BlankAnswers({
       {indexes.length === 0 ? (
         <p className="text-sm text-content-soft">
           Type <code className="px-1 rounded bg-surface-muted">{"{{1}}"}</code>,{" "}
-          <code className="px-1 rounded bg-surface-muted">{"{{2}}"}</code>… in
-          the question text (or use “Insert blank”) to add blanks.
+          <code className="px-1 rounded bg-surface-muted">{"{{2}}"}</code>… in the question text (or
+          use “Insert blank”) to add blanks.
         </p>
       ) : (
         <div className="space-y-1.5">
@@ -854,18 +896,14 @@ function BlankAnswers({
                 onChange={(e) => setBlank(n, { accepted: e.target.value })}
                 aria-label={`Accepted answers for blank ${n}`}
                 placeholder="Accepted answers, separated by ;"
-                className={inputCls(
-                  Boolean(error) && !(q.blanks[n]?.accepted ?? "").trim(),
-                )}
+                className={inputCls(Boolean(error) && !(q.blanks[n]?.accepted ?? "").trim())}
               />
               <label className="flex items-center gap-1.5 text-xs text-content-soft whitespace-nowrap cursor-pointer">
                 <input
                   type="checkbox"
                   checked={q.blanks[n]?.caseSensitive ?? false}
                   disabled={readOnly}
-                  onChange={(e) =>
-                    setBlank(n, { caseSensitive: e.target.checked })
-                  }
+                  onChange={(e) => setBlank(n, { caseSensitive: e.target.checked })}
                   className="w-3.5 h-3.5 accent-brand-600"
                 />
                 Case sensitive
@@ -897,10 +935,8 @@ function OrderingAnswers({
     set({
       ordering: q.ordering.map((o, oi) => (oi === i ? { ...o, text } : o)),
     });
-  const add = () =>
-    set({ ordering: [...q.ordering, { key: newKey("ord"), text: "" }] });
-  const remove = (i: number) =>
-    set({ ordering: q.ordering.filter((_, oi) => oi !== i) });
+  const add = () => set({ ordering: [...q.ordering, { key: newKey("ord"), text: "" }] });
+  const remove = (i: number) => set({ ordering: q.ordering.filter((_, oi) => oi !== i) });
   const moveTo = (from: number, to: number) => {
     if (from === to || to < 0 || to >= q.ordering.length) return;
     const next = [...q.ordering];
@@ -916,19 +952,20 @@ function OrderingAnswers({
   return (
     <div>
       <SectionHeader
-        label={readOnly ? 'Correct Order' : 'Correct Order (drag to rearrange)'}
-          action={
-            !readOnly &&
-          <Button
-            type="button"
-            variant="outline"
-            size="sm"
-            icon={<Icon.Plus className="w-3.5 h-3.5" />}
-            onClick={add}
-            disabled={q.ordering.length >= MAX_OPTIONS}
-          >
-            Add Item
-          </Button>
+        label={readOnly ? "Correct Order" : "Correct Order (drag to rearrange)"}
+        action={
+          !readOnly && (
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              icon={<Icon.Plus className="w-3.5 h-3.5" />}
+              onClick={add}
+              disabled={q.ordering.length >= MAX_OPTIONS}
+            >
+              Add Item
+            </Button>
+          )
         }
       />
       <ol className="space-y-1.5">
@@ -953,10 +990,10 @@ function OrderingAnswers({
               endDrag();
             }}
             onDragEnd={readOnly ? undefined : endDrag}
-            className={`flex items-center gap-2 rounded-[10px] transition-all ${readOnly ? '' : 'cursor-grab'} ${dragIndex === i ? "opacity-40" : ""} ${overIndex === i && dragIndex !== i ? "ring-2 ring-brand-600/30" : ""}`}
+            className={`flex items-center gap-2 rounded-[10px] transition-all ${readOnly ? "" : "cursor-grab"} ${dragIndex === i ? "opacity-40" : ""} ${overIndex === i && dragIndex !== i ? "ring-2 ring-brand-600/30" : ""}`}
           >
             <span
-              className={`${readOnly ? '' : 'cursor-grab active:cursor-grabbing'} text-content-subtle flex-shrink-0`}
+              className={`${readOnly ? "" : "cursor-grab active:cursor-grabbing"} text-content-subtle flex-shrink-0`}
               aria-hidden="true"
               title="Drag to reorder"
             >
@@ -973,36 +1010,42 @@ function OrderingAnswers({
               placeholder={`Item ${i + 1}`}
               className={inputCls(Boolean(error) && !o.text.trim())}
             />
-            {!readOnly && <button
-              type="button"
-              onClick={() => moveTo(i, i - 1)}
-              disabled={i === 0}
-              className={iconBtn}
-              aria-label={`Move item ${i + 1} up`}
-              title="Move up"
-            >
-              <Icon.ArrowUp className="w-4 h-4" />
-            </button>}
-            {!readOnly && <button
-              type="button"
-              onClick={() => moveTo(i, i + 1)}
-              disabled={i === q.ordering.length - 1}
-              className={iconBtn}
-              aria-label={`Move item ${i + 1} down`}
-              title="Move down"
-            >
-              <Icon.ArrowDown className="w-4 h-4" />
-            </button>}
-            {!readOnly && <button
-              type="button"
-              onClick={() => remove(i)}
-              disabled={q.ordering.length <= 2}
-              aria-label={`Delete item ${i + 1}`}
-              title="Delete item"
-              className="p-1 flex-shrink-0 text-content-subtle hover:text-danger disabled:opacity-30 disabled:cursor-not-allowed"
-            >
-              <Icon.Trash className="w-4 h-4" />
-            </button>}
+            {!readOnly && (
+              <button
+                type="button"
+                onClick={() => moveTo(i, i - 1)}
+                disabled={i === 0}
+                className={iconBtn}
+                aria-label={`Move item ${i + 1} up`}
+                title="Move up"
+              >
+                <Icon.ArrowUp className="w-4 h-4" />
+              </button>
+            )}
+            {!readOnly && (
+              <button
+                type="button"
+                onClick={() => moveTo(i, i + 1)}
+                disabled={i === q.ordering.length - 1}
+                className={iconBtn}
+                aria-label={`Move item ${i + 1} down`}
+                title="Move down"
+              >
+                <Icon.ArrowDown className="w-4 h-4" />
+              </button>
+            )}
+            {!readOnly && (
+              <button
+                type="button"
+                onClick={() => remove(i)}
+                disabled={q.ordering.length <= 2}
+                aria-label={`Delete item ${i + 1}`}
+                title="Delete item"
+                className="p-1 flex-shrink-0 text-content-subtle hover:text-danger disabled:opacity-30 disabled:cursor-not-allowed"
+              >
+                <Icon.Trash className="w-4 h-4" />
+              </button>
+            )}
           </li>
         ))}
       </ol>

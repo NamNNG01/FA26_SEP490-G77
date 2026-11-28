@@ -1,8 +1,8 @@
-import { api } from './api';
-import type { ApiResponse } from '@/types/api';
-import type { PageResponse } from './course.service';
-import { examService } from './exam.service';
-import { apiFieldErrors } from '@/utils/apiError';
+import { api } from "./api";
+import type { ApiResponse } from "@/types/api";
+import type { PageResponse } from "./course.service";
+import { examService } from "./exam.service";
+import { apiFieldErrors } from "@/utils/apiError";
 
 /**
  * ManagerContestService — contests of the courses the caller manages (Deadline 2, APIs 1-12).
@@ -26,23 +26,42 @@ import { apiFieldErrors } from '@/utils/apiError';
  */
 
 /** Derived status (section 1.5): PUBLISHED splits by time into UPCOMING / ONGOING / PENDING_REWARD. */
-export type ContestStatus = 'DRAFT' | 'UPCOMING' | 'ONGOING' | 'PENDING_REWARD' | 'REWARDED' | 'CANCELLED';
-export type StoredContestStatus = 'DRAFT' | 'PUBLISHED' | 'REWARDED' | 'CANCELLED';
+export type ContestStatus =
+  | "DRAFT"
+  | "UPCOMING"
+  | "ONGOING"
+  | "PENDING_REWARD"
+  | "REWARDED"
+  | "CANCELLED";
+export type StoredContestStatus = "DRAFT" | "PUBLISHED" | "REWARDED" | "CANCELLED";
 /** null before the contest ends. */
-export type RankingStatus = 'CALCULATING' | 'READY' | null;
+export type RankingStatus = "CALCULATING" | "READY" | null;
 /** Discount type values stored by the backend. */
-export type PrizeDiscountType = 'PERCENT' | 'FIXED_AMOUNT';
-export type DiscountValidity = 'ACTIVE' | 'UPCOMING' | 'EXPIRED' | 'EXHAUSTED' | 'INACTIVE';
+export type PrizeDiscountType = "PERCENT" | "FIXED_AMOUNT";
+export type DiscountValidity = "ACTIVE" | "UPCOMING" | "EXPIRED" | "EXHAUSTED" | "INACTIVE";
 
-export const CONTEST_STATUSES: ContestStatus[] = ['DRAFT', 'UPCOMING', 'ONGOING', 'PENDING_REWARD', 'REWARDED', 'CANCELLED'];
+export const CONTEST_STATUSES: ContestStatus[] = [
+  "DRAFT",
+  "UPCOMING",
+  "ONGOING",
+  "PENDING_REWARD",
+  "REWARDED",
+  "CANCELLED",
+];
 export const CONTEST_TITLE_MAX = 255;
 export const CONTEST_DESCRIPTION_MAX = 5000;
 export const CANCEL_REASON_MAX = 1000;
 export const MAX_PRIZE_RANKS = 50;
 export const MAX_BATCH_PAY = 20;
 
-export interface CourseRef { courseId: number; title: string }
-export interface ExamRef { examId: number; title: string }
+export interface CourseRef {
+  courseId: number;
+  title: string;
+}
+export interface ExamRef {
+  examId: number;
+  title: string;
+}
 
 /** API 1 item */
 export interface ContestListItem {
@@ -150,7 +169,12 @@ export interface LeaderboardRow {
   timeSpentSeconds: number | null;
   submittedAt: string | null;
   /** Prize planned for this rank; null when the rank has none. */
-  reward: { discountId: number; code: string; discountType: PrizeDiscountType; value: number } | null;
+  reward: {
+    discountId: number;
+    code: string;
+    discountType: PrizeDiscountType;
+    value: number;
+  } | null;
   rewardGranted: boolean;
   rewardGrantedAt: string | null;
 }
@@ -161,7 +185,12 @@ export interface PayResult {
   status: ContestStatus;
   rewardedAt: string;
   rewardsGranted: number;
-  winners: { rank: number; userId: number; fullName: string; discount: { discountId: number; code: string } }[];
+  winners: {
+    rank: number;
+    userId: number;
+    fullName: string;
+    discount: { discountId: number; code: string };
+  }[];
 }
 
 /** API 10 row: success rows carry status/rewardsGranted/rewardedAt, failed rows errorCode/message/issues. */
@@ -216,8 +245,8 @@ export async function quizExamIds(courseId: number): Promise<Set<number> | null>
   try {
     const ids = new Set<number>();
     for (let page = 0; ; page++) {
-      const res = await examService.getExams({ courseId, examKind: 'QUIZ', page, size: 100 });
-      res.content.filter(e => e.examKind === 'QUIZ').forEach(e => ids.add(e.examId));
+      const res = await examService.getExams({ courseId, examKind: "QUIZ", page, size: 100 });
+      res.content.filter((e) => e.examKind === "QUIZ").forEach((e) => ids.add(e.examId));
       if (res.last || res.content.length === 0 || page + 1 >= res.totalPages) return ids;
     }
   } catch {
@@ -227,10 +256,17 @@ export async function quizExamIds(courseId: number): Promise<Set<number> | null>
 
 // ------------------------------------------------------------- errors
 
-type ErrorData = { code?: string; issues?: PrizeIssue[]; errors?: { field: string; message: string }[] };
-type HttpError = { response?: { status?: number; data?: { message?: string; data?: ErrorData | null } } };
+type ErrorData = {
+  code?: string;
+  issues?: PrizeIssue[];
+  errors?: { field: string; message: string }[];
+};
+type HttpError = {
+  response?: { status?: number; data?: { message?: string; data?: ErrorData | null } };
+};
 
-const errorData = (err: unknown): ErrorData | null => (err as HttpError | null)?.response?.data?.data ?? null;
+const errorData = (err: unknown): ErrorData | null =>
+  (err as HttpError | null)?.response?.data?.data ?? null;
 
 /** `data.code` of a BE error (CONTEST_LOCKED, REWARD_PAYMENT_BLOCKED, RANKING_NOT_READY, …). */
 export function contestErrorCode(err: unknown): string | null {
@@ -252,7 +288,7 @@ export function contestFieldErrors(err: unknown): Record<string, string> {
 function query(params: Record<string, string | number | undefined>) {
   const search = new URLSearchParams();
   Object.entries(params).forEach(([key, value]) => {
-    if (value !== undefined && value !== '') search.set(key, String(value));
+    if (value !== undefined && value !== "") search.set(key, String(value));
   });
   return search.toString();
 }
@@ -262,7 +298,7 @@ export const managerContestService = {
   async list(params: ContestListParams): Promise<PageResponse<ContestListItem>> {
     const { status, ...rest } = params;
     const res = await api.get<ApiResponse<PageResponse<ContestListItem>>>(
-      `/manager/contests?${query({ ...rest, keyword: rest.keyword?.trim(), status: status?.length ? status.join(',') : undefined })}`,
+      `/manager/contests?${query({ ...rest, keyword: rest.keyword?.trim(), status: status?.length ? status.join(",") : undefined })}`,
     );
     return res.data;
   },
@@ -275,13 +311,17 @@ export const managerContestService = {
 
   /** API 3 */
   async create(body: ContestWrite): Promise<ContestDetail> {
-    const res = await api.post<ApiResponse<ContestDetail>>('/manager/contests', body);
+    const res = await api.post<ApiResponse<ContestDetail>>("/manager/contests", body);
     return res.data;
   },
 
   /** API 4 */
   async update(id: number | string, body: ContestWrite): Promise<ContestDetail> {
-    const res = await api.request<ApiResponse<ContestDetail>>({ method: 'put', url: `/manager/contests/${id}`, data: body });
+    const res = await api.request<ApiResponse<ContestDetail>>({
+      method: "put",
+      url: `/manager/contests/${id}`,
+      data: body,
+    });
     return res.data;
   },
 
@@ -293,18 +333,26 @@ export const managerContestService = {
 
   /** API 6 */
   async cancel(id: number | string, reason: string): Promise<ContestDetail> {
-    const res = await api.post<ApiResponse<ContestDetail>>(`/manager/contests/${id}/cancel`, { reason: reason.trim() || null });
+    const res = await api.post<ApiResponse<ContestDetail>>(`/manager/contests/${id}/cancel`, {
+      reason: reason.trim() || null,
+    });
     return res.data;
   },
 
   /** API 7 */
   async remove(id: number | string): Promise<void> {
-    await api.request<ApiResponse<null>>({ method: 'delete', url: `/manager/contests/${id}` });
+    await api.request<ApiResponse<null>>({ method: "delete", url: `/manager/contests/${id}` });
   },
 
   /** API 8 */
-  async leaderboard(id: number | string, page: number, size: number): Promise<PageResponse<LeaderboardRow>> {
-    const res = await api.get<ApiResponse<PageResponse<LeaderboardRow>>>(`/manager/contests/${id}/leaderboard?${query({ page, size })}`);
+  async leaderboard(
+    id: number | string,
+    page: number,
+    size: number,
+  ): Promise<PageResponse<LeaderboardRow>> {
+    const res = await api.get<ApiResponse<PageResponse<LeaderboardRow>>>(
+      `/manager/contests/${id}/leaderboard?${query({ page, size })}`,
+    );
     return res.data;
   },
 
@@ -316,12 +364,19 @@ export const managerContestService = {
 
   /** API 10 */
   async batchPayRewards(contestIds: number[]): Promise<BatchPayResult> {
-    const res = await api.post<ApiResponse<BatchPayResult>>('/manager/contests/batch-pay-rewards', { contestIds });
+    const res = await api.post<ApiResponse<BatchPayResult>>("/manager/contests/batch-pay-rewards", {
+      contestIds,
+    });
     return res.data;
   },
 
   /** API 11 */
-  async examOptions(params: { courseId: number; keyword?: string; page: number; size: number }): Promise<PageResponse<ContestExamOption>> {
+  async examOptions(params: {
+    courseId: number;
+    keyword?: string;
+    page: number;
+    size: number;
+  }): Promise<PageResponse<ContestExamOption>> {
     const res = await api.get<ApiResponse<PageResponse<ContestExamOption>>>(
       `/manager/contest-options/exams?${query({ ...params, keyword: params.keyword?.trim() })}`,
     );
@@ -329,7 +384,11 @@ export const managerContestService = {
   },
 
   /** API 12 */
-  async discountOptions(params: { keyword?: string; page: number; size: number }): Promise<PageResponse<ContestDiscountOption>> {
+  async discountOptions(params: {
+    keyword?: string;
+    page: number;
+    size: number;
+  }): Promise<PageResponse<ContestDiscountOption>> {
     const res = await api.get<ApiResponse<PageResponse<ContestDiscountOption>>>(
       `/manager/contest-options/discounts?${query({ ...params, keyword: params.keyword?.trim() })}`,
     );

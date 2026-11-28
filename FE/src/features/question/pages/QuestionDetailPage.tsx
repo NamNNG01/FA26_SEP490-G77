@@ -1,22 +1,37 @@
-import React, { useEffect, useRef, useState } from 'react';
-import { InsertImageButton, QuestionImagePreview, splitQuestionImage, withQuestionImage } from '@/components/common/QuestionContent';
-import { useNavigate, useParams } from 'react-router';
-import { Breadcrumb } from '@/components/ui/Breadcrumb';
-import { Alert } from '@/components/ui/Alert';
-import { Badge, type BadgeVariant } from '@/components/ui/Badge';
-import { Button } from '@/components/ui/Button';
-import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
-import { Select } from '@/components/ui/Select';
-import { Spinner } from '@/components/ui/Spinner';
-import { useToast } from '@/components/ui/ToastHost';
-import { Icon } from '@/assets/icons';
-import { ROUTES } from '@/app/routes';
-import { QUESTION_STATUS_LABELS, questionService, type QuestionDifficulty, type QuestionStatus } from '@/services/question.service';
-import { questionGroupService, type QuestionGroup } from '@/services/questionGroup.service';
-import { AnswerSection } from '../components/QuestionForm';
-import { QuestionLocationCard } from '../components/QuestionLocationCard';
-import { SIDEBAR_CLS } from '../components/QuestionSidePanel';
-import { GroupInfoCard, QuestionGroupPicker, groupFits, type PendingGroupDraft } from '../components/QuestionGroupPicker';
+import React, { useEffect, useRef, useState } from "react";
+import {
+  InsertImageButton,
+  QuestionImagePreview,
+  splitQuestionImage,
+  withQuestionImage,
+} from "@/components/common/QuestionContent";
+import { useNavigate, useParams } from "react-router";
+import { Breadcrumb } from "@/components/ui/Breadcrumb";
+import { Alert } from "@/components/ui/Alert";
+import { Badge, type BadgeVariant } from "@/components/ui/Badge";
+import { Button } from "@/components/ui/Button";
+import { ConfirmDialog } from "@/components/ui/ConfirmDialog";
+import { Select } from "@/components/ui/Select";
+import { Spinner } from "@/components/ui/Spinner";
+import { useToast } from "@/components/ui/ToastHost";
+import { Icon } from "@/assets/icons";
+import { ROUTES } from "@/app/routes";
+import {
+  QUESTION_STATUS_LABELS,
+  questionService,
+  type QuestionDifficulty,
+  type QuestionStatus,
+} from "@/services/question.service";
+import { questionGroupService, type QuestionGroup } from "@/services/questionGroup.service";
+import { AnswerSection } from "../components/QuestionForm";
+import { QuestionLocationCard } from "../components/QuestionLocationCard";
+import { SIDEBAR_CLS } from "../components/QuestionSidePanel";
+import {
+  GroupInfoCard,
+  QuestionGroupPicker,
+  groupFits,
+  type PendingGroupDraft,
+} from "../components/QuestionGroupPicker";
 import {
   DIFFICULTY_OPTIONS,
   QUESTION_TYPE_OPTIONS,
@@ -30,21 +45,33 @@ import {
   validateDraft,
   type EditableQuestionType,
   type QuestionDraft,
-} from '../model';
-import { describeSaveError, loadErrorMessage, type SaveError } from '../saveError';
-import { SaveErrorAlert } from '../components/SaveErrorAlert';
+} from "../model";
+import { describeSaveError, loadErrorMessage, type SaveError } from "../saveError";
+import { SaveErrorAlert } from "../components/SaveErrorAlert";
 
-type Confirm = 'discard' | 'delete' | 'publish' | null;
+type Confirm = "discard" | "delete" | "publish" | null;
 
-const STATUS_VARIANT: Record<QuestionStatus, BadgeVariant> = { INACTIVE: 'default', ACTIVE: 'success', ARCHIVED: 'danger' };
-const TYPE_VARIANT: Partial<Record<EditableQuestionType, BadgeVariant>> = { ESSAY: 'purple', TRUE_FALSE: 'success', ORDERING: 'warning' };
-const typeLabel = (t: EditableQuestionType) => QUESTION_TYPE_OPTIONS.find(o => o.value === t)?.label ?? t;
+const STATUS_VARIANT: Record<QuestionStatus, BadgeVariant> = {
+  INACTIVE: "default",
+  ACTIVE: "success",
+  ARCHIVED: "danger",
+};
+const TYPE_VARIANT: Partial<Record<EditableQuestionType, BadgeVariant>> = {
+  ESSAY: "purple",
+  TRUE_FALSE: "success",
+  ORDERING: "warning",
+};
+const typeLabel = (t: EditableQuestionType) =>
+  QUESTION_TYPE_OPTIONS.find((o) => o.value === t)?.label ?? t;
 
-const errorMessage = (err: unknown, fallback: string) => (err instanceof Error && err.message ? err.message : fallback);
+const errorMessage = (err: unknown, fallback: string) =>
+  err instanceof Error && err.message ? err.message : fallback;
 
 const textareaCls = (invalid: boolean) =>
   `w-full px-3 py-2 rounded-[10px] border text-base text-content bg-surface resize-y focus:outline-none focus:ring-2 transition-all ${
-    invalid ? 'border-danger-solid focus:ring-danger-solid/20 focus:border-danger-solid' : 'border-line focus:ring-brand-600/20 focus:border-brand-600'
+    invalid
+      ? "border-danger-solid focus:ring-danger-solid/20 focus:border-danger-solid"
+      : "border-line focus:ring-brand-600/20 focus:border-brand-600"
   }`;
 
 /** Question Detail — view and edit one question, its answer key, group and classification. */
@@ -54,10 +81,10 @@ export function QuestionDetailPage() {
   const toast = useToast();
 
   const [q, setQ] = useState<QuestionDraft | null>(null);
-  const [courseId, setCourseId] = useState('');
-  const [moduleId, setModuleId] = useState('');
+  const [courseId, setCourseId] = useState("");
+  const [moduleId, setModuleId] = useState("");
   /** Values as last loaded/saved — the header badge and "Unsaved" hints compare against these. */
-  const [savedStatus, setSavedStatus] = useState<QuestionStatus>('ACTIVE');
+  const [savedStatus, setSavedStatus] = useState<QuestionStatus>("ACTIVE");
   const [savedGroupId, setSavedGroupId] = useState<number | null>(null);
 
   const [groups, setGroups] = useState<QuestionGroup[]>([]);
@@ -83,24 +110,26 @@ export function QuestionDetailPage() {
     setLoadError(null);
     questionService
       .getQuestionById(questionId)
-      .then(detail => {
+      .then((detail) => {
         if (cancelled) return;
         setQ(fromDetail(detail));
-        setCourseId(detail.courseId != null ? String(detail.courseId) : '');
-        setModuleId(detail.moduleId != null ? String(detail.moduleId) : '');
+        setCourseId(detail.courseId != null ? String(detail.courseId) : "");
+        setModuleId(detail.moduleId != null ? String(detail.moduleId) : "");
         setSavedStatus(detail.status);
         setSavedGroupId(detail.groupId ?? null);
         setDirty(false);
         setSubmitted(false);
         setSaveError(null);
       })
-      .catch(err => {
+      .catch((err) => {
         if (!cancelled) setLoadError(loadErrorMessage(err));
       })
       .finally(() => {
         if (!cancelled) setLoading(false);
       });
-    return () => { cancelled = true; };
+    return () => {
+      cancelled = true;
+    };
   }, [questionId, reloadKey]);
 
   // Groups belong to a course; the question's course never changes here.
@@ -110,27 +139,40 @@ export function QuestionDetailPage() {
     setGroupsLoading(true);
     questionGroupService
       .getQuestionGroups({ courseId: Number(courseId), size: 100 })
-      .then(res => { if (!cancelled) setGroups(res.content); })
-      .catch(() => { if (!cancelled) setGroups([]); })
-      .finally(() => { if (!cancelled) setGroupsLoading(false); });
-    return () => { cancelled = true; };
+      .then((res) => {
+        if (!cancelled) setGroups(res.content);
+      })
+      .catch(() => {
+        if (!cancelled) setGroups([]);
+      })
+      .finally(() => {
+        if (!cancelled) setGroupsLoading(false);
+      });
+    return () => {
+      cancelled = true;
+    };
   }, [courseId]);
 
   useEffect(() => {
     if (!dirty) return;
     const handler = (e: BeforeUnloadEvent) => e.preventDefault();
-    window.addEventListener('beforeunload', handler);
-    return () => window.removeEventListener('beforeunload', handler);
+    window.addEventListener("beforeunload", handler);
+    return () => window.removeEventListener("beforeunload", handler);
   }, [dirty]);
 
   const goToBank = () => navigate(ROUTES.managerQuestions);
-  const cancel = () => (dirty ? setConfirm('discard') : goToBank());
+  const cancel = () => (dirty ? setConfirm("discard") : goToBank());
 
   const update = (patch: Partial<QuestionDraft>) => {
-    setQ(prev => (prev ? { ...prev, ...patch } : prev));
+    setQ((prev) => (prev ? { ...prev, ...patch } : prev));
     setDirty(true);
   };
-  const markDirty = <T,>(setter: (v: T) => void) => (v: T) => { setter(v); setDirty(true); };
+  const markDirty =
+    <T,>(setter: (v: T) => void) =>
+    (v: T) => {
+      setter(v);
+      setDirty(true);
+    };
 
   /** Linked in the draft only — Save Changes stores it. */
   const selectGroup = (group: QuestionGroup | null) => {
@@ -144,7 +186,7 @@ export function QuestionDetailPage() {
     setPendingGroup({
       title,
       passageText,
-      questionType: kindOf(q.type) ?? 'QUIZ',
+      questionType: kindOf(q.type) ?? "QUIZ",
     });
     setDirty(true);
   };
@@ -152,11 +194,14 @@ export function QuestionDetailPage() {
   /** Saved right away (not with Save Changes) — the passage is shared by every question in the group. */
   const updateGroup = async (group: QuestionGroup, title: string, passageText: string) => {
     try {
-      const updated = await questionGroupService.updateQuestionGroup(group.groupId, { title, passageText });
-      setGroups(prev => prev.map(g => (g.groupId === updated.groupId ? updated : g)));
+      const updated = await questionGroupService.updateQuestionGroup(group.groupId, {
+        title,
+        passageText,
+      });
+      setGroups((prev) => prev.map((g) => (g.groupId === updated.groupId ? updated : g)));
       toast.success(`Group “${updated.title || `Group #${updated.groupId}`}” updated.`);
     } catch (err) {
-      toast.error(errorMessage(err, 'Could not update the question group.'));
+      toast.error(errorMessage(err, "Could not update the question group."));
       throw err;
     }
   };
@@ -165,9 +210,9 @@ export function QuestionDetailPage() {
     if (!q?.questionId) return;
     setSubmitted(true);
     setSaveError(null);
-    const group = groups.find(g => g.groupId === q.groupId);
+    const group = groups.find((g) => g.groupId === q.groupId);
     if (!isDraftValid(q) || (group && !groupFits(group, kindOf(q.type), moduleId))) {
-      scrollRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      scrollRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
       return;
     }
     setSaving(true);
@@ -186,25 +231,29 @@ export function QuestionDetailPage() {
         targetQ = { ...q, groupId: created.groupId };
       }
       // Status is not part of this save — it changes on its own (changeStatus).
-      const updated = await questionService.updateQuestion(targetQ.questionId!, toUpdateRequest(targetQ, moduleId ? Number(moduleId) : null));
+      const updated = await questionService.updateQuestion(
+        targetQ.questionId!,
+        toUpdateRequest(targetQ, moduleId ? Number(moduleId) : null),
+      );
       setQ(fromDetail(updated));
       setPendingGroup(null);
       if (createdGroupId != null) {
-        questionGroupService.getQuestionGroups({ courseId: Number(courseId), size: 100 })
-          .then(res => setGroups(res.content))
+        questionGroupService
+          .getQuestionGroups({ courseId: Number(courseId), size: 100 })
+          .then((res) => setGroups(res.content))
           .catch(() => {});
       }
       setSavedStatus(updated.status);
       setSavedGroupId(updated.groupId ?? null);
       setDirty(false);
       setSubmitted(false);
-      toast.success('Question updated.');
+      toast.success("Question updated.");
     } catch (err) {
       if (createdGroupId != null) {
         questionGroupService.deleteQuestionGroup(createdGroupId).catch(() => {});
       }
-      setSaveError(describeSaveError(err, 'Could not save. Please try again.'));
-      scrollRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      setSaveError(describeSaveError(err, "Could not save. Please try again."));
+      scrollRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
     } finally {
       setSaving(false);
     }
@@ -218,13 +267,19 @@ export function QuestionDetailPage() {
     if (!q?.questionId) return;
     setBusy(true);
     try {
-      const updated = await questionService.updateQuestionStatus(q.questionId, 'ACTIVE', q.lockVersion);
+      const updated = await questionService.updateQuestionStatus(
+        q.questionId,
+        "ACTIVE",
+        q.lockVersion,
+      );
       setSavedStatus(updated.status);
       // The status move bumps the lock version; the next Save must send the new one.
-      setQ(prev => (prev ? { ...prev, lockVersion: updated.lockVersion ?? prev.lockVersion } : prev));
-      toast.success('Question published.');
+      setQ((prev) =>
+        prev ? { ...prev, lockVersion: updated.lockVersion ?? prev.lockVersion } : prev,
+      );
+      toast.success("Question published.");
     } catch (err) {
-      toast.error(errorMessage(err, 'Could not publish the question.'));
+      toast.error(errorMessage(err, "Could not publish the question."));
     } finally {
       setBusy(false);
       setConfirm(null);
@@ -236,19 +291,19 @@ export function QuestionDetailPage() {
     setBusy(true);
     try {
       await questionService.deleteQuestion(q.questionId);
-      toast.success('Question deleted.');
+      toast.success("Question deleted.");
       setDirty(false);
       goToBank();
     } catch (err) {
-      toast.error(errorMessage(err, 'Could not delete the question.'));
+      toast.error(errorMessage(err, "Could not delete the question."));
     } finally {
       setBusy(false);
       setConfirm(null);
     }
   };
 
-  const pageCls = 'p-8 space-y-5';
-  const crumbs = [{ label: 'Question', onClick: cancel }, { label: 'Question Detail' }];
+  const pageCls = "p-8 space-y-5";
+  const crumbs = [{ label: "Question", onClick: cancel }, { label: "Question Detail" }];
 
   if (loading || loadError || !q) {
     return (
@@ -258,26 +313,36 @@ export function QuestionDetailPage() {
           <div className="space-y-3">
             <Alert type="error" title="Could not open the question" message={loadError} />
             <div className="flex gap-2">
-              <Button variant="secondary" onClick={() => setReloadKey(k => k + 1)}>Try again</Button>
-              <Button variant="ghost" onClick={goToBank}>Back to questions</Button>
+              <Button variant="secondary" onClick={() => setReloadKey((k) => k + 1)}>
+                Try again
+              </Button>
+              <Button variant="ghost" onClick={goToBank}>
+                Back to questions
+              </Button>
             </div>
           </div>
         ) : (
-          <div className="card p-10 flex items-center justify-center gap-3 text-content-soft"><Spinner size="sm" /> Loading question…</div>
+          <div className="card p-10 flex items-center justify-center gap-3 text-content-soft">
+            <Spinner size="sm" /> Loading question…
+          </div>
         )}
       </div>
     );
   }
 
   const errors = submitted ? validateDraft(q) : {};
-  const linkedGroup = groups.find(g => g.groupId === q.groupId) ?? null;
+  const linkedGroup = groups.find((g) => g.groupId === q.groupId) ?? null;
   const groupPending = Boolean(pendingGroup) || q.groupId !== savedGroupId;
   // In a group, the type stays within the group's kind (unlink the group to pick another kind).
-  const groupKind = pendingGroup ? pendingGroup.questionType : asGroupKind(linkedGroup?.questionType);
-  const typeOptions = QUESTION_TYPE_OPTIONS.filter(o => o.value === q.type || typesOfKind(groupKind).includes(o.value));
+  const groupKind = pendingGroup
+    ? pendingGroup.questionType
+    : asGroupKind(linkedGroup?.questionType);
+  const typeOptions = QUESTION_TYPE_OPTIONS.filter(
+    (o) => o.value === q.type || typesOfKind(groupKind).includes(o.value),
+  );
   const locked = saving || busy;
   /** The backend won't save an archived question, so it's shown read-only (it can still be deleted). */
-  const archived = savedStatus === 'ARCHIVED';
+  const archived = savedStatus === "ARCHIVED";
   // The textarea holds only the text; the image stays at the end of the stored content.
   const contentParts = splitQuestionImage(q.content);
 
@@ -291,83 +356,137 @@ export function QuestionDetailPage() {
         {dirty && <Badge variant="warning">Unsaved changes</Badge>}
       </div>
 
-      {saveError && <SaveErrorAlert error={saveError} onReload={() => setReloadKey(k => k + 1)} />}
+      {saveError && (
+        <SaveErrorAlert error={saveError} onReload={() => setReloadKey((k) => k + 1)} />
+      )}
       {archived && (
-        <Alert type="info" title="This question is archived" message="Archived questions are read-only and their status can’t be changed. You can still delete it." />
+        <Alert
+          type="info"
+          title="This question is archived"
+          message="Archived questions are read-only and their status can’t be changed. You can still delete it."
+        />
       )}
 
       <div className="grid grid-cols-1 lg:grid-cols-[minmax(0,1fr)_320px] gap-6 items-start">
         {/* Main editor — scrolls with the page; the sidebar stays pinned */}
         <div className="min-w-0 pb-4">
-          <section aria-labelledby="question-detail-title" className="card px-4 sm:px-5 py-4 space-y-4">
+          <section
+            aria-labelledby="question-detail-title"
+            className="card px-4 sm:px-5 py-4 space-y-4"
+          >
             {/* Header: id, question text label, badges */}
             <div>
               <div className="flex flex-wrap items-start justify-between gap-2 mb-2">
                 <div className="flex items-center gap-2 min-w-0 flex-1">
-                  <span className="h-7 px-2 rounded-[6px] bg-brand-600/10 text-brand-ink flex items-center justify-center text-xs font-bold flex-shrink-0">#{q.questionId}</span>
+                  <span className="h-7 px-2 rounded-[6px] bg-brand-600/10 text-brand-ink flex items-center justify-center text-xs font-bold flex-shrink-0">
+                    #{q.questionId}
+                  </span>
                   <h3 id="question-detail-title" className="text-lg font-semibold text-content">
                     <label htmlFor="question-content">Question Text *</label>
                   </h3>
                 </div>
                 <div className="flex items-center gap-1.5 flex-shrink-0">
-                  <InsertImageButton value={q.content} onChange={content => update({ content })} disabled={locked || archived} />
-                  <Badge variant={STATUS_VARIANT[savedStatus] ?? 'default'}>{QUESTION_STATUS_LABELS[savedStatus] ?? savedStatus}</Badge>
-                  <Badge variant={TYPE_VARIANT[q.type] ?? 'info'}>{typeLabel(q.type)}</Badge>
+                  <InsertImageButton
+                    value={q.content}
+                    onChange={(content) => update({ content })}
+                    disabled={locked || archived}
+                  />
+                  <Badge variant={STATUS_VARIANT[savedStatus] ?? "default"}>
+                    {QUESTION_STATUS_LABELS[savedStatus] ?? savedStatus}
+                  </Badge>
+                  <Badge variant={TYPE_VARIANT[q.type] ?? "info"}>{typeLabel(q.type)}</Badge>
                 </div>
               </div>
               <textarea
                 id="question-content"
                 ref={contentRef}
                 value={contentParts.text}
-                onChange={e => update({ content: withQuestionImage(e.target.value, contentParts.images[0]?.url ?? null) })}
+                onChange={(e) =>
+                  update({
+                    content: withQuestionImage(e.target.value, contentParts.images[0]?.url ?? null),
+                  })
+                }
                 aria-invalid={Boolean(errors.content)}
                 disabled={locked || archived}
                 className={`${textareaCls(Boolean(errors.content))} h-[120px]`}
-                placeholder={q.type === 'FILL_BLANK' ? 'e.g. The capital of France is {{1}}.' : 'Enter the question…'}
+                placeholder={
+                  q.type === "FILL_BLANK"
+                    ? "e.g. The capital of France is {{1}}."
+                    : "Enter the question…"
+                }
               />
-              <QuestionImagePreview value={q.content} onChange={content => update({ content })} disabled={locked || archived} />
+              <QuestionImagePreview
+                value={q.content}
+                onChange={(content) => update({ content })}
+                disabled={locked || archived}
+              />
               {errors.content && <p className="text-xs text-danger mt-1">{errors.content}</p>}
             </div>
 
             <div inert={archived} className="space-y-4">
-            <QuestionGroupPicker
-              groups={groups}
-              loading={groupsLoading}
-              currentGroupId={q.groupId}
-              pendingGroup={pendingGroup}
-              kind={kindOf(q.type)}
-              moduleId={moduleId}
-              onSelect={selectGroup}
-              onCreate={stageNewGroup}
-              onUpdate={updateGroup}
-              disabled={locked}
-            />
-
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-              <Select label="Difficulty" value={q.difficulty} onChange={v => update({ difficulty: v as QuestionDifficulty })} options={DIFFICULTY_OPTIONS} disabled={locked} />
-              <Select label="Type" value={q.type} onChange={v => { setQ(changeType(q, v as EditableQuestionType)); setDirty(true); }} options={typeOptions} disabled={locked} />
-            </div>
-
-            <div className="border-t border-line pt-4">
-              <AnswerSection q={q} set={update} error={errors.answers} />
-            </div>
-
-            <div className="border-t border-line pt-4">
-              <label htmlFor="question-explanation" className="block text-sm font-medium text-content-secondary mb-1">Explanation</label>
-              <textarea
-                id="question-explanation"
-                value={q.explanation}
-                onChange={e => update({ explanation: e.target.value })}
+              <QuestionGroupPicker
+                groups={groups}
+                loading={groupsLoading}
+                currentGroupId={q.groupId}
+                pendingGroup={pendingGroup}
+                kind={kindOf(q.type)}
+                moduleId={moduleId}
+                onSelect={selectGroup}
+                onCreate={stageNewGroup}
+                onUpdate={updateGroup}
                 disabled={locked}
-                className={`${textareaCls(false)} h-[110px]`}
-                placeholder="Why the correct answer is correct — students see this when reviewing their attempt."
               />
-            </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <Select
+                  label="Difficulty"
+                  value={q.difficulty}
+                  onChange={(v) => update({ difficulty: v as QuestionDifficulty })}
+                  options={DIFFICULTY_OPTIONS}
+                  disabled={locked}
+                />
+                <Select
+                  label="Type"
+                  value={q.type}
+                  onChange={(v) => {
+                    setQ(changeType(q, v as EditableQuestionType));
+                    setDirty(true);
+                  }}
+                  options={typeOptions}
+                  disabled={locked}
+                />
               </div>
+
+              <div className="border-t border-line pt-4">
+                <AnswerSection q={q} set={update} error={errors.answers} />
+              </div>
+
+              <div className="border-t border-line pt-4">
+                <label
+                  htmlFor="question-explanation"
+                  className="block text-sm font-medium text-content-secondary mb-1"
+                >
+                  Explanation
+                </label>
+                <textarea
+                  id="question-explanation"
+                  value={q.explanation}
+                  onChange={(e) => update({ explanation: e.target.value })}
+                  disabled={locked}
+                  className={`${textareaCls(false)} h-[110px]`}
+                  placeholder="Why the correct answer is correct — students see this when reviewing their attempt."
+                />
+              </div>
+            </div>
 
             {/* Lifecycle actions */}
             <div className="flex flex-wrap gap-2 border-t border-line pt-4">
-              <Button variant="danger" icon={<Icon.Trash className="w-4 h-4" />} onClick={() => setConfirm('delete')} disabled={locked}>
+              <Button
+                variant="danger"
+                icon={<Icon.Trash className="w-4 h-4" />}
+                onClick={() => setConfirm("delete")}
+                disabled={locked}
+              >
                 Delete Question
               </Button>
             </div>
@@ -383,23 +502,43 @@ export function QuestionDetailPage() {
             <QuestionLocationCard
               courseId={courseId}
               moduleId={moduleId}
-              onChange={(c, m) => { setCourseId(c); setModuleId(m); setDirty(true); }}
+              onChange={(c, m) => {
+                setCourseId(c);
+                setModuleId(m);
+                setDirty(true);
+              }}
               courseLocked
               showErrors={submitted}
               hideHeading
             />
             <div className="space-y-2 pt-1">
-              {savedStatus === 'INACTIVE' && (
-                <Button variant="secondary" className="w-full" icon={<Icon.Upload className="w-4 h-4" />} onClick={() => setConfirm('publish')} disabled={locked}>
+              {savedStatus === "INACTIVE" && (
+                <Button
+                  variant="secondary"
+                  className="w-full"
+                  icon={<Icon.Upload className="w-4 h-4" />}
+                  onClick={() => setConfirm("publish")}
+                  disabled={locked}
+                >
                   Publish
                 </Button>
               )}
-              <Button className="w-full" icon={<Icon.CheckCircle className="w-4 h-4" />} onClick={save} loading={saving} disabled={locked || archived || Boolean(validateDraft(q).type)}>
+              <Button
+                className="w-full"
+                icon={<Icon.CheckCircle className="w-4 h-4" />}
+                onClick={save}
+                loading={saving}
+                disabled={locked || archived || Boolean(validateDraft(q).type)}
+              >
                 Save Changes
               </Button>
-              <Button variant="ghost" className="w-full" onClick={cancel} disabled={saving}>Cancel</Button>
+              <Button variant="ghost" className="w-full" onClick={cancel} disabled={saving}>
+                Cancel
+              </Button>
             </div>
-            <p className="text-xs text-content-subtle">The course can't be changed after a question is created.</p>
+            <p className="text-xs text-content-subtle">
+              The course can't be changed after a question is created.
+            </p>
           </div>
 
           <GroupInfoCard
@@ -417,9 +556,12 @@ export function QuestionDetailPage() {
       </div>
 
       <ConfirmDialog
-        open={confirm === 'discard'}
+        open={confirm === "discard"}
         onClose={() => setConfirm(null)}
-        onConfirm={() => { setDirty(false); goToBank(); }}
+        onConfirm={() => {
+          setDirty(false);
+          goToBank();
+        }}
         tone="danger"
         title="Discard changes?"
         description="Your unsaved changes to this question will be lost."
@@ -428,7 +570,7 @@ export function QuestionDetailPage() {
       />
 
       <ConfirmDialog
-        open={confirm === 'publish'}
+        open={confirm === "publish"}
         onClose={() => setConfirm(null)}
         onConfirm={publish}
         loading={busy}
@@ -436,11 +578,15 @@ export function QuestionDetailPage() {
         description="This action can't be undone."
         confirmLabel="Publish"
       >
-        {dirty && <p className="text-center text-content-soft">Unsaved edits aren't included — use Save Changes to keep them.</p>}
+        {dirty && (
+          <p className="text-center text-content-soft">
+            Unsaved edits aren't included — use Save Changes to keep them.
+          </p>
+        )}
       </ConfirmDialog>
 
       <ConfirmDialog
-        open={confirm === 'delete'}
+        open={confirm === "delete"}
         onClose={() => setConfirm(null)}
         onConfirm={remove}
         loading={busy}

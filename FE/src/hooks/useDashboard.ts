@@ -1,12 +1,12 @@
-import { useCallback, useEffect, useState } from 'react';
-import { useAuth } from '@/auth/authContext';
-import { DASHBOARD_REFRESH_MS, useQuietRefresh } from './useAutoRefresh';
+import { useCallback, useEffect, useState } from "react";
+import { useAuth } from "@/auth/authContext";
+import { DASHBOARD_REFRESH_MS, useQuietRefresh } from "./useAutoRefresh";
 import {
   dashboardService,
   type StudentDashboardData,
   type ManagerDashboardData,
   type AdminDashboardData,
-} from '@/services/dashboard.service';
+} from "@/services/dashboard.service";
 
 /**
  * useDashboard
@@ -25,9 +25,9 @@ import {
  */
 
 export type DashboardData =
-  | ({ kind: 'student' } & StudentDashboardData)
-  | ({ kind: 'manager' } & ManagerDashboardData)
-  | ({ kind: 'admin' } & AdminDashboardData);
+  | ({ kind: "student" } & StudentDashboardData)
+  | ({ kind: "manager" } & ManagerDashboardData)
+  | ({ kind: "admin" } & AdminDashboardData);
 
 interface UseDashboardResult {
   data: DashboardData | null;
@@ -39,15 +39,15 @@ interface UseDashboardResult {
 /** Map a backend role code to its fetcher + payload discriminator. */
 const FETCHER_BY_ROLE: Record<string, () => Promise<DashboardData>> = {
   STUDENT: async () => ({
-    kind: 'student' as const,
+    kind: "student" as const,
     ...(await dashboardService.getStudentDashboard()),
   }),
   COURSE_MANAGER: async () => ({
-    kind: 'manager' as const,
+    kind: "manager" as const,
     ...(await dashboardService.getManagerDashboard()),
   }),
   ADMIN: async () => ({
-    kind: 'admin' as const,
+    kind: "admin" as const,
     ...(await dashboardService.getAdminDashboard()),
   }),
 };
@@ -72,7 +72,7 @@ export function useDashboard(): UseDashboardResult {
       // Unknown/missing role → nothing to fetch; surface an error state.
       setData(null);
       setLoading(false);
-      setError('Unable to determine your role. Please sign in again.');
+      setError("Unable to determine your role. Please sign in again.");
       return;
     }
 
@@ -94,7 +94,7 @@ export function useDashboard(): UseDashboardResult {
         // A failed background read keeps the last numbers on screen.
         if (!cancelled && !quiet) {
           setData(null);
-          setError('Unable to load dashboard.');
+          setError("Unable to load dashboard.");
           setLoading(false);
         }
       });

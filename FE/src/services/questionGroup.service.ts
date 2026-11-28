@@ -1,6 +1,6 @@
-import { api } from './api';
-import type { ApiResponse } from '@/types/api';
-import type { QuestionCreateRequest, QuestionDetail } from './question.service';
+import { api } from "./api";
+import type { ApiResponse } from "@/types/api";
+import type { QuestionCreateRequest, QuestionDetail } from "./question.service";
 
 /**
  * QuestionGroupService — shared passages that several questions read from.
@@ -70,45 +70,74 @@ interface PageResponse<T> {
 }
 
 export const questionGroupService = {
-  async getQuestionGroups(params: { courseId?: number; moduleId?: number; questionType?: string; search?: string; page?: number; size?: number } = {}): Promise<PageResponse<QuestionGroup>> {
+  async getQuestionGroups(
+    params: {
+      courseId?: number;
+      moduleId?: number;
+      questionType?: string;
+      search?: string;
+      page?: number;
+      size?: number;
+    } = {},
+  ): Promise<PageResponse<QuestionGroup>> {
     const query = new URLSearchParams();
     Object.entries(params).forEach(([key, value]) => {
-      if (value !== undefined && value !== null && value !== '') query.set(key, String(value));
+      if (value !== undefined && value !== null && value !== "") query.set(key, String(value));
     });
     const qs = query.toString();
-    const res = await api.get<ApiResponse<PageResponse<QuestionGroup>>>(`/manager/question-groups${qs ? `?${qs}` : ''}`);
+    const res = await api.get<ApiResponse<PageResponse<QuestionGroup>>>(
+      `/manager/question-groups${qs ? `?${qs}` : ""}`,
+    );
     if (!res.data || !Array.isArray(res.data.content)) {
-      throw new Error('The question group response is invalid.');
+      throw new Error("The question group response is invalid.");
     }
     return res.data;
   },
 
   async createQuestionGroup(payload: QuestionGroupCreateRequest): Promise<QuestionGroup> {
-    const res = await api.post<ApiResponse<QuestionGroup>>('/manager/question-groups', payload);
-    if (!res.data) throw new Error('The question group response is invalid.');
+    const res = await api.post<ApiResponse<QuestionGroup>>("/manager/question-groups", payload);
+    if (!res.data) throw new Error("The question group response is invalid.");
     return res.data;
   },
 
   /** Atomically creates a question group together with 1..50 questions (rolling back the group if any question fails). */
-  async createGroupWithQuestions(payload: QuestionGroupBatchCreateRequest): Promise<QuestionGroupBatchCreateResponse> {
-    const res = await api.post<ApiResponse<QuestionGroupBatchCreateResponse>>('/manager/questions/groups-with-questions', payload);
+  async createGroupWithQuestions(
+    payload: QuestionGroupBatchCreateRequest,
+  ): Promise<QuestionGroupBatchCreateResponse> {
+    const res = await api.post<ApiResponse<QuestionGroupBatchCreateResponse>>(
+      "/manager/questions/groups-with-questions",
+      payload,
+    );
     return res.data;
   },
 
   /** Publishes every draft question inside the group. */
   async publishGroup(groupId: number): Promise<QuestionGroup> {
-    const res = await api.post<ApiResponse<QuestionGroup>>(`/manager/questions/groups/${groupId}/publish`, {});
+    const res = await api.post<ApiResponse<QuestionGroup>>(
+      `/manager/questions/groups/${groupId}/publish`,
+      {},
+    );
     return res.data;
   },
 
   /** G-03: omitted fields are kept; the change applies to every question in the group. */
-  async updateQuestionGroup(groupId: number, payload: QuestionGroupUpdateRequest): Promise<QuestionGroup> {
-    const res = await api.request<ApiResponse<QuestionGroup>>({ method: 'put', url: `/manager/question-groups/${groupId}`, data: payload });
+  async updateQuestionGroup(
+    groupId: number,
+    payload: QuestionGroupUpdateRequest,
+  ): Promise<QuestionGroup> {
+    const res = await api.request<ApiResponse<QuestionGroup>>({
+      method: "put",
+      url: `/manager/question-groups/${groupId}`,
+      data: payload,
+    });
     return res.data;
   },
 
   /** G-04: deletes a group and turns its questions standalone (blocked if used by a published exam). */
   async deleteQuestionGroup(groupId: number): Promise<void> {
-    await api.request<ApiResponse<null>>({ method: 'delete', url: `/manager/question-groups/${groupId}` });
+    await api.request<ApiResponse<null>>({
+      method: "delete",
+      url: `/manager/question-groups/${groupId}`,
+    });
   },
 };

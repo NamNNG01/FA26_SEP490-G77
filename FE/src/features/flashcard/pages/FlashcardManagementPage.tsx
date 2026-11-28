@@ -1,34 +1,43 @@
-import { useEffect, useState } from 'react';
-import { useQuietRefresh } from '@/hooks/useAutoRefresh';
-import { useNavigate } from 'react-router';
-import { Button } from '@/components/ui/Button';
-import { Select } from '@/components/ui/Select';
-import { SearchableSelect } from '@/components/ui/SearchableSelect';
-import { Table, type TableColumn } from '@/components/ui/Table';
-import { Badge } from '@/components/ui/Badge';
-import { Dropdown } from '@/components/ui/Dropdown';
-import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
-import { Alert } from '@/components/ui/Alert';
-import { DEFAULT_PAGE_SIZE } from '@/components/ui/Pagination';
-import { useToast } from '@/components/ui/ToastHost';
-import { SearchInput } from '@/components/common/SearchInput';
-import { Icon } from '@/assets/icons';
-import { useDebounce } from '@/hooks';
-import { flashcardDeckPath } from '@/app/routes';
-import type { PageResponse } from '@/services/course.service';
-import { deckService, type Deck, type DeckListParams } from '@/services/deck.service';
-import { NO_COURSE, VisibilityBadge, errorMessage, useCourseModules, useManagedCourses } from '../components/DeckEditor';
-import { CreateDeckModal } from '../components/CreateDeckModal';
-import { CopyToCourseModal } from '../components/CopyToCourseModal';
-import { downloadDecksXlsx, fileSlug, type XlsxDeck } from '@/utils/flashcardXlsx';
-import { getApiErrorMessage } from '@/utils/apiError';
+import { useEffect, useState } from "react";
+import { useQuietRefresh } from "@/hooks/useAutoRefresh";
+import { useNavigate } from "react-router";
+import { Button } from "@/components/ui/Button";
+import { Select } from "@/components/ui/Select";
+import { SearchableSelect } from "@/components/ui/SearchableSelect";
+import { Table, type TableColumn } from "@/components/ui/Table";
+import { Badge } from "@/components/ui/Badge";
+import { Dropdown } from "@/components/ui/Dropdown";
+import { ConfirmDialog } from "@/components/ui/ConfirmDialog";
+import { Alert } from "@/components/ui/Alert";
+import { DEFAULT_PAGE_SIZE } from "@/components/ui/Pagination";
+import { useToast } from "@/components/ui/ToastHost";
+import { SearchInput } from "@/components/common/SearchInput";
+import { Icon } from "@/assets/icons";
+import { useDebounce } from "@/hooks";
+import { flashcardDeckPath } from "@/app/routes";
+import type { PageResponse } from "@/services/course.service";
+import { deckService, type Deck, type DeckListParams } from "@/services/deck.service";
+import {
+  NO_COURSE,
+  VisibilityBadge,
+  errorMessage,
+  useCourseModules,
+  useManagedCourses,
+} from "../components/DeckEditor";
+import { CreateDeckModal } from "../components/CreateDeckModal";
+import { CopyToCourseModal } from "../components/CopyToCourseModal";
+import { downloadDecksXlsx, fileSlug, type XlsxDeck } from "@/utils/flashcardXlsx";
+import { getApiErrorMessage } from "@/utils/apiError";
 
-const ALL = 'all';
+const ALL = "all";
 
 const asDeck = (r: Record<string, unknown>) => r as unknown as Deck;
 
 /** Reads every deck with its cards (F-03), a few at a time. */
-async function loadDecksWithCards(decks: Deck[], onProgress: (done: number) => void): Promise<XlsxDeck[]> {
+async function loadDecksWithCards(
+  decks: Deck[],
+  onProgress: (done: number) => void,
+): Promise<XlsxDeck[]> {
   const out: XlsxDeck[] = new Array(decks.length);
   let next = 0;
   let done = 0;
@@ -40,7 +49,7 @@ async function loadDecksWithCards(decks: Deck[], onProgress: (done: number) => v
         title: d.title,
         courseName: d.courseName,
         ownerName: d.ownerName,
-        visibility: d.isPublic ? 'Public' : 'Private',
+        visibility: d.isPublic ? "Public" : "Private",
         description: d.description,
         cards: d.cards ?? [],
       };
@@ -61,7 +70,7 @@ export function FlashcardManagementPage() {
   const navigate = useNavigate();
   const { courses } = useManagedCourses();
 
-  const [query, setQuery] = useState('');
+  const [query, setQuery] = useState("");
   const [course, setCourse] = useState(ALL);
   /** A module of the filtered course; ALL until a course is picked. */
   const [module, setModule] = useState(ALL);
@@ -74,10 +83,10 @@ export function FlashcardManagementPage() {
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [reloadKey, setReloadKey] = useState(0);
-  const takeQuiet = useQuietRefresh(() => setReloadKey(k => k + 1));
+  const takeQuiet = useQuietRefresh(() => setReloadKey((k) => k + 1));
 
-  const [activeTab, setActiveTab] = useState<'course' | 'community'>('course');
-  const [communitySearch, setCommunitySearch] = useState('');
+  const [activeTab, setActiveTab] = useState<"course" | "community">("course");
+  const [communitySearch, setCommunitySearch] = useState("");
   const debouncedCommunitySearch = useDebounce(communitySearch.trim(), 400);
   const [communityPage, setCommunityPage] = useState(1);
   const [communityResult, setCommunityResult] = useState<PageResponse<Deck> | null>(null);
@@ -90,11 +99,11 @@ export function FlashcardManagementPage() {
   /** Export in progress: decks read so far / to read. */
   const [exporting, setExporting] = useState<{ done: number; total: number } | null>(null);
 
-  const filters: Omit<DeckListParams, 'page' | 'size'> = {
+  const filters: Omit<DeckListParams, "page" | "size"> = {
     search: debouncedQuery || undefined,
     courseId: course === ALL ? undefined : Number(course),
     moduleId: course === ALL || module === ALL ? undefined : Number(module),
-    isPublic: visibility === ALL ? undefined : visibility === 'public',
+    isPublic: visibility === ALL ? undefined : visibility === "public",
   };
 
   useEffect(() => {
@@ -105,35 +114,52 @@ export function FlashcardManagementPage() {
       setLoading(true);
       setLoadError(null);
     }
-    deckService.getDecks({ ...filters, page: page - 1, size: DEFAULT_PAGE_SIZE })
-      .then(res => {
+    deckService
+      .getDecks({ ...filters, page: page - 1, size: DEFAULT_PAGE_SIZE })
+      .then((res) => {
         if (cancelled) return;
         // Deleting the last deck on a page leaves it empty — step back one.
-        if (res.content.length === 0 && page > 1 && res.totalElements > 0) setPage(p => p - 1);
+        if (res.content.length === 0 && page > 1 && res.totalElements > 0) setPage((p) => p - 1);
         else setResult(res);
       })
-      .catch(err => { if (!cancelled && !quiet) setLoadError(errorMessage(err, 'Could not load flashcard decks.')); })
-      .finally(() => { if (!cancelled) setLoading(false); });
-    return () => { cancelled = true; };
+      .catch((err) => {
+        if (!cancelled && !quiet)
+          setLoadError(errorMessage(err, "Could not load flashcard decks."));
+      })
+      .finally(() => {
+        if (!cancelled) setLoading(false);
+      });
+    return () => {
+      cancelled = true;
+    };
     // eslint-disable-next-line react-hooks/exhaustive-deps -- `filters` is derived from these values
   }, [debouncedQuery, course, module, visibility, page, reloadKey]);
 
   useEffect(() => {
-    if (activeTab !== 'community') return;
+    if (activeTab !== "community") return;
     let cancelled = false;
     setCommunityLoading(true);
-    deckService.getCommunityDecks({
-      search: debouncedCommunitySearch || undefined,
-      page: communityPage - 1,
-      size: DEFAULT_PAGE_SIZE,
-    })
-      .then(res => { if (!cancelled) setCommunityResult(res); })
-      .catch(err => { if (!cancelled) toast.error(errorMessage(err, 'Could not load community decks.')); })
-      .finally(() => { if (!cancelled) setCommunityLoading(false); });
-    return () => { cancelled = true; };
+    deckService
+      .getCommunityDecks({
+        search: debouncedCommunitySearch || undefined,
+        page: communityPage - 1,
+        size: DEFAULT_PAGE_SIZE,
+      })
+      .then((res) => {
+        if (!cancelled) setCommunityResult(res);
+      })
+      .catch((err) => {
+        if (!cancelled) toast.error(errorMessage(err, "Could not load community decks."));
+      })
+      .finally(() => {
+        if (!cancelled) setCommunityLoading(false);
+      });
+    return () => {
+      cancelled = true;
+    };
   }, [activeTab, debouncedCommunitySearch, communityPage, toast]);
 
-  const reload = () => setReloadKey(k => k + 1);
+  const reload = () => setReloadKey((k) => k + 1);
 
   // Any filter change starts back at page 1.
   const filterSetter = (setter: (v: string) => void) => (v: string) => {
@@ -144,10 +170,10 @@ export function FlashcardManagementPage() {
   const setPublic = async (d: Deck, isPublic: boolean) => {
     try {
       await deckService.updateDeck(d.deckId, { isPublic });
-      toast.success(`"${d.title}" is now ${isPublic ? 'public' : 'private'}.`);
+      toast.success(`"${d.title}" is now ${isPublic ? "public" : "private"}.`);
       reload();
     } catch (err) {
-      toast.error(errorMessage(err, 'Could not change the deck visibility.'));
+      toast.error(errorMessage(err, "Could not change the deck visibility."));
     }
   };
 
@@ -160,7 +186,7 @@ export function FlashcardManagementPage() {
       setToDelete(null);
       reload();
     } catch (err) {
-      toast.error(errorMessage(err, 'Could not delete the deck.'));
+      toast.error(errorMessage(err, "Could not delete the deck."));
     } finally {
       setDeleting(false);
     }
@@ -173,16 +199,21 @@ export function FlashcardManagementPage() {
     try {
       const list = only ? [only] : await deckService.getAllDecks(filters);
       if (list.length === 0) {
-        toast.warning('There are no decks to export.');
+        toast.warning("There are no decks to export.");
         return;
       }
       setExporting({ done: 0, total: list.length });
-      const decksWithCards = await loadDecksWithCards(list, done => setExporting({ done, total: list.length }));
+      const decksWithCards = await loadDecksWithCards(list, (done) =>
+        setExporting({ done, total: list.length }),
+      );
       const date = new Date().toISOString().slice(0, 10);
-      await downloadDecksXlsx(decksWithCards, only ? `${fileSlug(only.title)}-${date}` : `flashcard-decks-${date}`);
-      toast.success(`Exported ${list.length} flashcard deck${list.length > 1 ? 's' : ''}.`);
+      await downloadDecksXlsx(
+        decksWithCards,
+        only ? `${fileSlug(only.title)}-${date}` : `flashcard-decks-${date}`,
+      );
+      toast.success(`Exported ${list.length} flashcard deck${list.length > 1 ? "s" : ""}.`);
     } catch (err) {
-      toast.error(errorMessage(err, 'Could not export flashcard decks.'));
+      toast.error(errorMessage(err, "Could not export flashcard decks."));
     } finally {
       setExporting(null);
     }
@@ -195,7 +226,7 @@ export function FlashcardManagementPage() {
     try {
       await deckService.exportPdf(d.deckId, `${fileSlug(d.title)}.pdf`);
     } catch (err) {
-      toast.error(getApiErrorMessage(err, 'Could not export the deck as PDF.'));
+      toast.error(getApiErrorMessage(err, "Could not export the deck as PDF."));
     } finally {
       setExporting(null);
     }
@@ -203,73 +234,139 @@ export function FlashcardManagementPage() {
 
   const columns: TableColumn[] = [
     {
-      key: 'title',
-      label: 'Deck',
-      width: '30%',
-      render: r => {
+      key: "title",
+      label: "Deck",
+      width: "30%",
+      render: (r) => {
         const d = asDeck(r);
         return (
           <div className="min-w-0">
-            <p className="text-sm font-medium text-content line-clamp-2 whitespace-normal" title={d.title}>{d.title}</p>
-            {d.description?.trim() && <p className="text-2xs text-content-subtle mt-0.5 truncate" title={d.description}>{d.description}</p>}
+            <p
+              className="text-sm font-medium text-content line-clamp-2 whitespace-normal"
+              title={d.title}
+            >
+              {d.title}
+            </p>
+            {d.description?.trim() && (
+              <p className="text-2xs text-content-subtle mt-0.5 truncate" title={d.description}>
+                {d.description}
+              </p>
+            )}
           </div>
         );
       },
     },
     {
-      key: 'courseName',
-      label: 'Course',
-      render: r => {
+      key: "courseName",
+      label: "Course",
+      render: (r) => {
         const name = asDeck(r).courseName;
         // The whole name, wrapping onto more lines when long.
-        return name
-          ? <Badge variant="info" className="max-w-[240px] whitespace-normal break-words !rounded-lg text-left leading-snug">{name}</Badge>
-          : <span className="text-content-subtle">—</span>;
+        return name ? (
+          <Badge
+            variant="info"
+            className="max-w-[240px] whitespace-normal break-words !rounded-lg text-left leading-snug"
+          >
+            {name}
+          </Badge>
+        ) : (
+          <span className="text-content-subtle">—</span>
+        );
       },
     },
     {
-      key: 'moduleTitle',
-      label: 'Module',
-      render: r => {
+      key: "moduleTitle",
+      label: "Module",
+      render: (r) => {
         const title = asDeck(r).moduleTitle;
-        return title
-          ? <span className="block text-sm text-content-soft line-clamp-2 whitespace-normal" title={title}>{title}</span>
-          : <span className="text-content-subtle">—</span>;
+        return title ? (
+          <span
+            className="block text-sm text-content-soft line-clamp-2 whitespace-normal"
+            title={title}
+          >
+            {title}
+          </span>
+        ) : (
+          <span className="text-content-subtle">—</span>
+        );
       },
     },
     {
-      key: 'cardCount',
-      label: 'Cards',
-      render: r => {
+      key: "cardCount",
+      label: "Cards",
+      render: (r) => {
         const n = asDeck(r).cardCount;
-        return <Badge variant={n > 0 ? 'default' : 'warning'} className="whitespace-nowrap">{n} card{n === 1 ? '' : 's'}</Badge>;
+        return (
+          <Badge variant={n > 0 ? "default" : "warning"} className="whitespace-nowrap">
+            {n} card{n === 1 ? "" : "s"}
+          </Badge>
+        );
       },
     },
-    { key: 'ownerName', label: 'Owner', render: r => <span className="block truncate text-sm text-content-soft">{asDeck(r).ownerName}</span> },
-    { key: 'isPublic', label: 'Visibility', render: r => <VisibilityBadge isPublic={asDeck(r).isPublic} /> },
     {
-      key: 'actions',
-      label: '',
-      width: '48px',
-      render: r => {
+      key: "ownerName",
+      label: "Owner",
+      render: (r) => (
+        <span className="block truncate text-sm text-content-soft">{asDeck(r).ownerName}</span>
+      ),
+    },
+    {
+      key: "isPublic",
+      label: "Visibility",
+      render: (r) => <VisibilityBadge isPublic={asDeck(r).isPublic} />,
+    },
+    {
+      key: "actions",
+      label: "",
+      width: "48px",
+      render: (r) => {
         const d = asDeck(r);
         return (
           // The menu is portalled, but React events still bubble to the row's onClick.
-          <div onClick={e => e.stopPropagation()}>
+          <div onClick={(e) => e.stopPropagation()}>
             <Dropdown
               trigger={
-                <button type="button" aria-label={`Actions for ${d.title}`} className="p-1.5 hover:bg-accent rounded-[6px]">
+                <button
+                  type="button"
+                  aria-label={`Actions for ${d.title}`}
+                  className="p-1.5 hover:bg-accent rounded-[6px]"
+                >
                   <Icon.MoreHorizontal className="w-4 h-4 text-content-soft" />
                 </button>
               }
               items={[
-                { label: 'Detail', icon: <Icon.Eye />, onClick: () => navigate(flashcardDeckPath(String(d.deckId))) },
-                { label: 'Export (.xlsx)', icon: <Icon.Download />, onClick: () => handleExport(d) },
-                { label: 'Export (.pdf)', icon: <Icon.FileText />, onClick: () => handleExportPdf(d) },
+                {
+                  label: "Detail",
+                  icon: <Icon.Eye />,
+                  onClick: () => navigate(flashcardDeckPath(String(d.deckId))),
+                },
+                {
+                  label: "Export (.xlsx)",
+                  icon: <Icon.Download />,
+                  onClick: () => handleExport(d),
+                },
+                {
+                  label: "Export (.pdf)",
+                  icon: <Icon.FileText />,
+                  onClick: () => handleExportPdf(d),
+                },
                 d.isPublic
-                  ? { label: 'Make private', icon: <Icon.Lock />, onClick: () => setPublic(d, false) }
-                  : { label: 'Make public', icon: <Icon.Users />, onClick: () => setPublic(d, true) },
-                { label: 'Delete', icon: <Icon.Trash />, danger: true, onClick: () => setToDelete(d) },
+                  ? {
+                      label: "Make private",
+                      icon: <Icon.Lock />,
+                      onClick: () => setPublic(d, false),
+                    }
+                  : {
+                      label: "Make public",
+                      icon: <Icon.Users />,
+                      onClick: () => setPublic(d, true),
+                    },
+                {
+                  label: "Delete",
+                  icon: <Icon.Trash />,
+                  danger: true,
+                  onClick: () => setToDelete(d),
+                },
               ]}
             />
           </div>
@@ -280,35 +377,52 @@ export function FlashcardManagementPage() {
 
   const communityColumns: TableColumn[] = [
     {
-      key: 'title',
-      label: 'Community Deck',
+      key: "title",
+      label: "Community Deck",
       render: (r: Record<string, unknown>) => {
         const d = asDeck(r);
         return (
           <div className="min-w-0">
             <div className="font-medium text-content truncate">{d.title}</div>
-            {d.description && <div className="text-xs text-content-subtle truncate">{d.description}</div>}
+            {d.description && (
+              <div className="text-xs text-content-subtle truncate">{d.description}</div>
+            )}
           </div>
         );
       },
     },
-    { key: 'ownerName', label: 'Author', render: (r: Record<string, unknown>) => <span className="text-sm text-content-soft">{asDeck(r).ownerName}</span> },
     {
-      key: 'cardCount',
-      label: 'Cards',
+      key: "ownerName",
+      label: "Author",
+      render: (r: Record<string, unknown>) => (
+        <span className="text-sm text-content-soft">{asDeck(r).ownerName}</span>
+      ),
+    },
+    {
+      key: "cardCount",
+      label: "Cards",
       render: (r: Record<string, unknown>) => {
         const n = asDeck(r).cardCount;
-        return <Badge variant={n > 0 ? 'default' : 'warning'}>{n} card{n === 1 ? '' : 's'}</Badge>;
+        return (
+          <Badge variant={n > 0 ? "default" : "warning"}>
+            {n} card{n === 1 ? "" : "s"}
+          </Badge>
+        );
       },
     },
     {
-      key: 'actions',
-      label: '',
-      width: '150px',
+      key: "actions",
+      label: "",
+      width: "150px",
       render: (r: Record<string, unknown>) => {
         const d = asDeck(r);
         return (
-          <Button size="sm" variant="outline" icon={<Icon.Copy className="w-4 h-4" />} onClick={() => setCopyTarget(d)}>
+          <Button
+            size="sm"
+            variant="outline"
+            icon={<Icon.Copy className="w-4 h-4" />}
+            onClick={() => setCopyTarget(d)}
+          >
             Copy to Course
           </Button>
         );
@@ -317,9 +431,9 @@ export function FlashcardManagementPage() {
   ];
 
   const decks = result?.content ?? [];
-  const filtersActive = query !== '' || course !== ALL || module !== ALL || visibility !== ALL;
+  const filtersActive = query !== "" || course !== ALL || module !== ALL || visibility !== ALL;
   const clearFilters = () => {
-    setQuery('');
+    setQuery("");
     setCourse(ALL);
     setModule(ALL);
     setVisibility(ALL);
@@ -331,7 +445,9 @@ export function FlashcardManagementPage() {
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
           <h2 className="text-xl font-bold text-content">Flashcard Management</h2>
-          <p className="text-sm text-content-soft mt-0.5">Manage flashcard decks across your courses.</p>
+          <p className="text-sm text-content-soft mt-0.5">
+            Manage flashcard decks across your courses.
+          </p>
         </div>
         <div className="flex items-center gap-2">
           <Button
@@ -341,37 +457,46 @@ export function FlashcardManagementPage() {
             disabled={exporting != null}
             title="Download the decks matching the filters, with all their cards, as an Excel file"
           >
-            {exporting ? (exporting.total > 1 ? `Exporting ${exporting.done}/${exporting.total}…` : 'Exporting…') : 'Export (.xlsx)'}
+            {exporting
+              ? exporting.total > 1
+                ? `Exporting ${exporting.done}/${exporting.total}…`
+                : "Exporting…"
+              : "Export (.xlsx)"}
           </Button>
-          <Button icon={<Icon.Plus className="w-4 h-4" />} onClick={() => setCreateOpen(true)}>New deck</Button>
+          <Button icon={<Icon.Plus className="w-4 h-4" />} onClick={() => setCreateOpen(true)}>
+            New deck
+          </Button>
         </div>
       </div>
 
       <div className="flex items-center gap-4 border-b border-line">
         <button
           type="button"
-          onClick={() => setActiveTab('course')}
-          className={`pb-2.5 text-sm font-semibold border-b-2 transition-colors ${activeTab === 'course' ? 'border-brand-ink text-brand-ink' : 'border-transparent text-content-subtle hover:text-content'}`}
+          onClick={() => setActiveTab("course")}
+          className={`pb-2.5 text-sm font-semibold border-b-2 transition-colors ${activeTab === "course" ? "border-brand-ink text-brand-ink" : "border-transparent text-content-subtle hover:text-content"}`}
         >
           Course Decks
         </button>
         <button
           type="button"
-          onClick={() => setActiveTab('community')}
-          className={`pb-2.5 text-sm font-semibold border-b-2 transition-colors ${activeTab === 'community' ? 'border-brand-ink text-brand-ink' : 'border-transparent text-content-subtle hover:text-content'}`}
+          onClick={() => setActiveTab("community")}
+          className={`pb-2.5 text-sm font-semibold border-b-2 transition-colors ${activeTab === "community" ? "border-brand-ink text-brand-ink" : "border-transparent text-content-subtle hover:text-content"}`}
         >
           Community Decks
         </button>
       </div>
 
-      {activeTab === 'community' ? (
+      {activeTab === "community" ? (
         <div className="space-y-4">
           <div className="card px-4 py-3 flex items-center gap-3">
             <SearchInput
               className="w-full sm:max-w-sm"
               placeholder="Search community decks…"
               value={communitySearch}
-              onChange={e => { setCommunitySearch(e.target.value); setCommunityPage(1); }}
+              onChange={(e) => {
+                setCommunitySearch(e.target.value);
+                setCommunityPage(1);
+              }}
             />
           </div>
           <div className="card overflow-hidden">
@@ -380,15 +505,21 @@ export function FlashcardManagementPage() {
               data={(communityResult?.content ?? []) as unknown as Record<string, unknown>[]}
               unit="community decks"
               perPage={DEFAULT_PAGE_SIZE}
-              serverPagination={{ page: communityPage, total: communityResult?.totalElements ?? 0, onChange: setCommunityPage }}
-              emptyState={communityLoading ? 'Loading community decks…' : 'No public community decks found.'}
+              serverPagination={{
+                page: communityPage,
+                total: communityResult?.totalElements ?? 0,
+                onChange: setCommunityPage,
+              }}
+              emptyState={
+                communityLoading ? "Loading community decks…" : "No public community decks found."
+              }
             />
           </div>
           <CopyToCourseModal
             deck={copyTarget}
             onClose={() => setCopyTarget(null)}
-            onCopied={created => {
-              setActiveTab('course');
+            onCopied={(created) => {
+              setActiveTab("course");
               reload();
               navigate(flashcardDeckPath(String(created.deckId)));
             }}
@@ -397,82 +528,137 @@ export function FlashcardManagementPage() {
       ) : (
         <>
           <div className="card px-4 py-3 flex flex-wrap lg:flex-nowrap items-center gap-3">
-        <SearchInput
-          className="w-full sm:w-60 lg:w-auto lg:min-w-0 lg:flex-[1.5]"
-          placeholder="Search flashcard decks…"
-          value={query}
-          onChange={e => { setQuery(e.target.value); setPage(1); }}
-          aria-label="Search flashcard decks"
-        />
-        {/* A module filter only makes sense within one course: changing the course clears it. */}
-        <SearchableSelect aria-label="Filter by course" value={course} onChange={filterSetter(v => { setCourse(v); setModule(ALL); })}
-          options={[{ label: 'All Courses', value: ALL }, ...courses.map(c => ({ label: c.title, value: String(c.courseId) }))]}
-          placeholder="All Courses" searchPlaceholder="Search courses…" emptyText="No courses found"
-          className="w-full sm:w-48 lg:w-auto lg:min-w-0 lg:flex-[1.25]" />
-        <SearchableSelect aria-label="Filter by module" value={module} onChange={filterSetter(setModule)} disabled={course === ALL}
-          options={[{ label: course === ALL ? 'All Modules (pick a course)' : 'All Modules', value: ALL }, ...modules.map(m => ({ label: m.title, value: String(m.moduleId) }))]}
-          placeholder={course === ALL ? 'Pick a course first' : 'All Modules'} searchPlaceholder="Search modules…" emptyText="No modules found"
-          className="w-full sm:w-48 lg:w-auto lg:min-w-0 lg:flex-[1.25]" />
-        <Select aria-label="Filter by visibility" value={visibility} onChange={filterSetter(setVisibility)}
-          options={[{ label: 'All Visibility', value: ALL }, { label: 'Public', value: 'public' }, { label: 'Private', value: 'private' }]}
-          className="w-full sm:w-40 lg:w-auto lg:min-w-0 lg:flex-1" />
-        {filtersActive && (
-          <button type="button" onClick={clearFilters} className="shrink-0 whitespace-nowrap text-sm font-medium text-brand-ink hover:underline">
-            Clear filters
-          </button>
-        )}
-      </div>
+            <SearchInput
+              className="w-full sm:w-60 lg:w-auto lg:min-w-0 lg:flex-[1.5]"
+              placeholder="Search flashcard decks…"
+              value={query}
+              onChange={(e) => {
+                setQuery(e.target.value);
+                setPage(1);
+              }}
+              aria-label="Search flashcard decks"
+            />
+            {/* A module filter only makes sense within one course: changing the course clears it. */}
+            <SearchableSelect
+              aria-label="Filter by course"
+              value={course}
+              onChange={filterSetter((v) => {
+                setCourse(v);
+                setModule(ALL);
+              })}
+              options={[
+                { label: "All Courses", value: ALL },
+                ...courses.map((c) => ({ label: c.title, value: String(c.courseId) })),
+              ]}
+              placeholder="All Courses"
+              searchPlaceholder="Search courses…"
+              emptyText="No courses found"
+              className="w-full sm:w-48 lg:w-auto lg:min-w-0 lg:flex-[1.25]"
+            />
+            <SearchableSelect
+              aria-label="Filter by module"
+              value={module}
+              onChange={filterSetter(setModule)}
+              disabled={course === ALL}
+              options={[
+                {
+                  label: course === ALL ? "All Modules (pick a course)" : "All Modules",
+                  value: ALL,
+                },
+                ...modules.map((m) => ({ label: m.title, value: String(m.moduleId) })),
+              ]}
+              placeholder={course === ALL ? "Pick a course first" : "All Modules"}
+              searchPlaceholder="Search modules…"
+              emptyText="No modules found"
+              className="w-full sm:w-48 lg:w-auto lg:min-w-0 lg:flex-[1.25]"
+            />
+            <Select
+              aria-label="Filter by visibility"
+              value={visibility}
+              onChange={filterSetter(setVisibility)}
+              options={[
+                { label: "All Visibility", value: ALL },
+                { label: "Public", value: "public" },
+                { label: "Private", value: "private" },
+              ]}
+              className="w-full sm:w-40 lg:w-auto lg:min-w-0 lg:flex-1"
+            />
+            {filtersActive && (
+              <button
+                type="button"
+                onClick={clearFilters}
+                className="shrink-0 whitespace-nowrap text-sm font-medium text-brand-ink hover:underline"
+              >
+                Clear filters
+              </button>
+            )}
+          </div>
 
-      {loadError && (
-        <div className="space-y-2">
-          <Alert type="error" title="Could not load flashcard decks" message={loadError} />
-          <Button variant="secondary" size="sm" onClick={reload}>Try again</Button>
-        </div>
-      )}
+          {loadError && (
+            <div className="space-y-2">
+              <Alert type="error" title="Could not load flashcard decks" message={loadError} />
+              <Button variant="secondary" size="sm" onClick={reload}>
+                Try again
+              </Button>
+            </div>
+          )}
 
-      <div className={`card overflow-hidden transition-opacity ${loading && result ? 'opacity-60' : ''}`} aria-busy={loading}>
-        <Table
-          columns={columns}
-          data={decks as unknown as Record<string, unknown>[]}
-          unit="flashcard decks"
-          perPage={DEFAULT_PAGE_SIZE}
-          serverPagination={{ page, total: result?.totalElements ?? 0, onChange: setPage }}
-          onRowClick={r => navigate(flashcardDeckPath(String(asDeck(r).deckId)))}
-          emptyState={
-            loading ? 'Loading flashcard decks…'
-              : loadError ? null
-              : filtersActive ? 'No flashcard decks match your filters.'
-              : 'No flashcard decks yet. Click “New deck” to create one.'
-          }
-        />
-      </div>
+          <div
+            className={`card overflow-hidden transition-opacity ${loading && result ? "opacity-60" : ""}`}
+            aria-busy={loading}
+          >
+            <Table
+              columns={columns}
+              data={decks as unknown as Record<string, unknown>[]}
+              unit="flashcard decks"
+              perPage={DEFAULT_PAGE_SIZE}
+              serverPagination={{ page, total: result?.totalElements ?? 0, onChange: setPage }}
+              onRowClick={(r) => navigate(flashcardDeckPath(String(asDeck(r).deckId)))}
+              emptyState={
+                loading
+                  ? "Loading flashcard decks…"
+                  : loadError
+                    ? null
+                    : filtersActive
+                      ? "No flashcard decks match your filters."
+                      : "No flashcard decks yet. Click “New deck” to create one."
+              }
+            />
+          </div>
 
-      {createOpen && (
-        <CreateDeckModal
-          defaultCourseId={course === ALL ? undefined : course}
-          onClose={() => setCreateOpen(false)}
-          onCreated={({ deck, cardsCreated, cardError }) => {
-            setCreateOpen(false);
-            toast.success(`Deck "${deck.title}" created with ${cardsCreated} card${cardsCreated === 1 ? '' : 's'}.`);
-            if (cardError) toast.warning(`${cardError} Add the remaining cards on the deck page.`);
-            navigate(flashcardDeckPath(String(deck.deckId)));
-          }}
-        />
-      )}
+          {createOpen && (
+            <CreateDeckModal
+              defaultCourseId={course === ALL ? undefined : course}
+              onClose={() => setCreateOpen(false)}
+              onCreated={({ deck, cardsCreated, cardError }) => {
+                setCreateOpen(false);
+                toast.success(
+                  `Deck "${deck.title}" created with ${cardsCreated} card${cardsCreated === 1 ? "" : "s"}.`,
+                );
+                if (cardError)
+                  toast.warning(`${cardError} Add the remaining cards on the deck page.`);
+                navigate(flashcardDeckPath(String(deck.deckId)));
+              }}
+            />
+          )}
 
-      <ConfirmDialog
-        open={!!toDelete}
-        onClose={() => setToDelete(null)}
-        onConfirm={confirmDelete}
-        loading={deleting}
-        tone="danger"
-        title="Delete deck?"
-        description={<>
-          <span className="font-semibold text-content">"{toDelete?.title}"</span> and its {toDelete?.cardCount ?? 0} card{toDelete?.cardCount === 1 ? '' : 's'} will
-          be permanently deleted, together with every learner's progress on them. This cannot be undone.
-        </>}
-        confirmLabel="Delete"
-      />
+          <ConfirmDialog
+            open={!!toDelete}
+            onClose={() => setToDelete(null)}
+            onConfirm={confirmDelete}
+            loading={deleting}
+            tone="danger"
+            title="Delete deck?"
+            description={
+              <>
+                <span className="font-semibold text-content">"{toDelete?.title}"</span> and its{" "}
+                {toDelete?.cardCount ?? 0} card{toDelete?.cardCount === 1 ? "" : "s"} will be
+                permanently deleted, together with every learner's progress on them. This cannot be
+                undone.
+              </>
+            }
+            confirmLabel="Delete"
+          />
         </>
       )}
     </div>

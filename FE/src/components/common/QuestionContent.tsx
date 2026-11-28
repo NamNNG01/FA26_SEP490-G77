@@ -1,10 +1,10 @@
-import React, { useEffect, useState } from 'react';
-import { createPortal } from 'react-dom';
-import { ImagePickButton } from '@/components/common/ImagePickButton';
-import { Icon } from '@/assets/icons';
-import { useToast } from '@/components/ui/ToastHost';
-import { uploadService } from '@/services/upload.service';
-import { getApiErrorMessage } from '@/utils/apiError';
+import React, { useEffect, useState } from "react";
+import { createPortal } from "react-dom";
+import { ImagePickButton } from "@/components/common/ImagePickButton";
+import { Icon } from "@/assets/icons";
+import { useToast } from "@/components/ui/ToastHost";
+import { uploadService } from "@/services/upload.service";
+import { getApiErrorMessage } from "@/utils/apiError";
 
 /**
  * Images inside question text are stored as markdown `![alt](url)`. Only Cloudinary URLs (what D3 upload
@@ -12,7 +12,7 @@ import { getApiErrorMessage } from '@/utils/apiError';
  */
 const IMAGE = /!\[([^\]\n]*)\]\((https:\/\/res\.cloudinary\.com\/[^\s)]+)\)/g;
 /** An image together with the line break that puts it on its own line. */
-const IMAGE_LINE = new RegExp(`\\n?${IMAGE.source}`, 'g');
+const IMAGE_LINE = new RegExp(`\\n?${IMAGE.source}`, "g");
 
 export function hasQuestionImage(content: string): boolean {
   return new RegExp(IMAGE.source).test(content);
@@ -20,18 +20,21 @@ export function hasQuestionImage(content: string): boolean {
 
 /** One-line previews (tables, pickers): an image becomes "[Image]". */
 export function questionPlainText(content: string): string {
-  return content.replace(IMAGE, '[Image]');
+  return content.replace(IMAGE, "[Image]");
 }
 
 /**
  * Splits stored question content into the text the author types and its images. The editor keeps the
  * textarea image-free; {@link withQuestionImage} puts the image back on its own line at the end.
  */
-export function splitQuestionImage(content: string): { text: string; images: { url: string; alt: string }[] } {
+export function splitQuestionImage(content: string): {
+  text: string;
+  images: { url: string; alt: string }[];
+} {
   const images = [...content.matchAll(IMAGE)].map((m) => ({ url: m[2], alt: m[1] }));
   if (!images.length) return { text: content, images };
-  const text = content.replace(IMAGE_LINE, '');
-  return { text: content.startsWith('![') ? text.replace(/^\n/, '') : text, images };
+  const text = content.replace(IMAGE_LINE, "");
+  return { text: content.startsWith("![") ? text.replace(/^\n/, "") : text, images };
 }
 
 /** The stored content: the typed text, then the image (if any) on its own last line. */
@@ -44,7 +47,7 @@ function QuestionImage({ url, alt }: { url: string; alt: string }) {
   return (
     <img
       src={url}
-      alt={alt || 'Question image'}
+      alt={alt || "Question image"}
       loading="lazy"
       className="block my-2 max-w-full max-h-96 rounded-[10px] border border-line"
     />
@@ -81,7 +84,13 @@ export function QuestionImagePreview({
     <div className="mt-2">
       {images.map((img, i) => (
         <div key={i} className="relative w-fit max-w-full">
-          <button type="button" onClick={() => setOpenUrl(img.url)} className="block max-w-full cursor-zoom-in" aria-label="View image full screen" title="View full screen">
+          <button
+            type="button"
+            onClick={() => setOpenUrl(img.url)}
+            className="block max-w-full cursor-zoom-in"
+            aria-label="View image full screen"
+            title="View full screen"
+          >
             <QuestionImage url={img.url} alt={img.alt} />
           </button>
           {!disabled && (
@@ -107,25 +116,43 @@ function ImageLightbox({ url, onClose }: { url: string; onClose: () => void }) {
   useEffect(() => {
     // Capture phase, so Esc closes only the image and not a modal it sits in.
     const onKey = (e: KeyboardEvent) => {
-      if (e.key !== 'Escape') return;
+      if (e.key !== "Escape") return;
       e.stopPropagation();
       onClose();
     };
-    document.addEventListener('keydown', onKey, true);
+    document.addEventListener("keydown", onKey, true);
     const overflow = document.body.style.overflow;
-    document.body.style.overflow = 'hidden';
+    document.body.style.overflow = "hidden";
     return () => {
-      document.removeEventListener('keydown', onKey, true);
+      document.removeEventListener("keydown", onKey, true);
       document.body.style.overflow = overflow;
     };
   }, [onClose]);
 
   return createPortal(
-    <div role="dialog" aria-modal="true" aria-label="Question image" className="fixed inset-0 z-[100] flex items-center justify-center bg-black/85 p-4" onClick={onClose}>
-      <button type="button" onClick={onClose} autoFocus className="absolute top-4 right-4 p-2 rounded-full bg-black/50 text-white hover:bg-black/70" aria-label="Close" title="Close">
+    <div
+      role="dialog"
+      aria-modal="true"
+      aria-label="Question image"
+      className="fixed inset-0 z-[100] flex items-center justify-center bg-black/85 p-4"
+      onClick={onClose}
+    >
+      <button
+        type="button"
+        onClick={onClose}
+        autoFocus
+        className="absolute top-4 right-4 p-2 rounded-full bg-black/50 text-white hover:bg-black/70"
+        aria-label="Close"
+        title="Close"
+      >
         <Icon.X className="w-5 h-5" />
       </button>
-      <img src={url} alt="Question image" className="max-h-full max-w-full object-contain" onClick={(e) => e.stopPropagation()} />
+      <img
+        src={url}
+        alt="Question image"
+        className="max-h-full max-w-full object-contain"
+        onClick={(e) => e.stopPropagation()}
+      />
     </div>,
     document.body,
   );
@@ -150,15 +177,21 @@ export function InsertImageButton({
       const { url } = await uploadService.uploadMedia(file);
       onChange(withQuestionImage(splitQuestionImage(value).text, url));
     } catch (err) {
-      toast.error(getApiErrorMessage(err, 'Could not upload the image.'));
+      toast.error(getApiErrorMessage(err, "Could not upload the image."));
     } finally {
       setUploading(false);
     }
   };
 
   return (
-    <ImagePickButton variant="ghost" loading={uploading} disabled={disabled} onPick={insert} onError={(m) => toast.error(m)}>
-      {hasQuestionImage(value) ? 'Replace image' : 'Insert image'}
+    <ImagePickButton
+      variant="ghost"
+      loading={uploading}
+      disabled={disabled}
+      onPick={insert}
+      onError={(m) => toast.error(m)}
+    >
+      {hasQuestionImage(value) ? "Replace image" : "Insert image"}
     </ImagePickButton>
   );
 }

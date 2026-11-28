@@ -1,1 +1,1 @@
-export * from './routes.tsx';
+export * from "./routes.tsx";

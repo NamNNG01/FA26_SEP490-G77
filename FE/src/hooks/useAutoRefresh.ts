@@ -1,4 +1,4 @@
-import { useEffect, useRef } from 'react';
+import { useEffect, useRef } from "react";
 
 /**
  * One shared clock that asks every subscribed page to read its data again, so lists and dashboards
@@ -31,17 +31,22 @@ function isUserBusy(): boolean {
   if (document.querySelector('[role="dialog"], [aria-modal="true"]')) return true;
   const el = document.activeElement as HTMLElement | null;
   if (!el) return false;
-  return el.tagName === 'INPUT' || el.tagName === 'TEXTAREA' || el.tagName === 'SELECT' || el.isContentEditable;
+  return (
+    el.tagName === "INPUT" ||
+    el.tagName === "TEXTAREA" ||
+    el.tagName === "SELECT" ||
+    el.isContentEditable
+  );
 }
 
 function canRun(): boolean {
-  return document.visibilityState === 'visible' && !isUserBusy();
+  return document.visibilityState === "visible" && !isUserBusy();
 }
 
 function run() {
   stopResumeCheck();
   lastRun = Date.now();
-  listeners.forEach(listener => {
+  listeners.forEach((listener) => {
     try {
       listener();
     } catch {
@@ -59,19 +64,19 @@ function stopResumeCheck() {
 function holdUntilIdle() {
   if (resumeTimer) return;
   resumeTimer = setInterval(() => {
-    if (document.visibilityState !== 'visible') return;
+    if (document.visibilityState !== "visible") return;
     if (!isUserBusy()) run();
   }, RESUME_CHECK_MS);
 }
 
 function tick() {
   if (canRun()) run();
-  else if (document.visibilityState === 'visible') holdUntilIdle();
+  else if (document.visibilityState === "visible") holdUntilIdle();
   // Hidden: onVisibilityChange catches up.
 }
 
 function onVisibilityChange() {
-  if (document.visibilityState !== 'visible') {
+  if (document.visibilityState !== "visible") {
     stopResumeCheck();
     return;
   }
@@ -84,7 +89,7 @@ function start() {
     startDelay = null;
     timer = setInterval(tick, AUTO_REFRESH_MS);
   }, Math.random() * MAX_JITTER_MS);
-  document.addEventListener('visibilitychange', onVisibilityChange);
+  document.addEventListener("visibilitychange", onVisibilityChange);
 }
 
 function stop() {
@@ -93,7 +98,7 @@ function stop() {
   if (timer) clearInterval(timer);
   timer = null;
   stopResumeCheck();
-  document.removeEventListener('visibilitychange', onVisibilityChange);
+  document.removeEventListener("visibilitychange", onVisibilityChange);
 }
 
 /** Subscribes `listener` to the shared clock; returns the unsubscribe. */
@@ -111,7 +116,11 @@ export function subscribeAutoRefresh(listener: Listener): () => void {
  * every `intervalMs` (a multiple of AUTO_REFRESH_MS; default every tick).
  * `refresh` must re-read quietly (keep what is on screen until the new data arrives).
  */
-export function useAutoRefresh(refresh: () => void, enabled = true, intervalMs = AUTO_REFRESH_MS): void {
+export function useAutoRefresh(
+  refresh: () => void,
+  enabled = true,
+  intervalMs = AUTO_REFRESH_MS,
+): void {
   const refreshRef = useRef(refresh);
   refreshRef.current = refresh;
   const everyTicks = Math.max(1, Math.round(intervalMs / AUTO_REFRESH_MS));
@@ -130,12 +139,20 @@ export function useAutoRefresh(refresh: () => void, enabled = true, intervalMs =
  * clock and returns `takeQuiet()`, which the read calls once at its start — true when the read
  * came from the clock, so it must not show a loader or replace the page with an error.
  */
-export function useQuietRefresh(reload: () => void, enabled = true, intervalMs = AUTO_REFRESH_MS): () => boolean {
+export function useQuietRefresh(
+  reload: () => void,
+  enabled = true,
+  intervalMs = AUTO_REFRESH_MS,
+): () => boolean {
   const quietRef = useRef(false);
-  useAutoRefresh(() => {
-    quietRef.current = true;
-    reload();
-  }, enabled, intervalMs);
+  useAutoRefresh(
+    () => {
+      quietRef.current = true;
+      reload();
+    },
+    enabled,
+    intervalMs,
+  );
   const takeRef = useRef(() => {
     const quiet = quietRef.current;
     quietRef.current = false;

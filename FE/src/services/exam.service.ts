@@ -1,14 +1,14 @@
-import { api } from './api';
-import { apiClient } from './axios';
-import type { ApiResponse } from '@/types/api';
-import type { PageResponse } from './course.service';
-import type { QuestionCreateRequest } from './question.service';
+import { api } from "./api";
+import { apiClient } from "./axios";
+import type { ApiResponse } from "@/types/api";
+import type { PageResponse } from "./course.service";
+import type { QuestionCreateRequest } from "./question.service";
 
-export type ExamStatus = 'DRAFT' | 'PUBLISHED' | 'ARCHIVED';
-export type ExamKind = 'QUIZ' | 'ESSAY' | 'CODE' | 'DIAGRAM' | 'MIXED';
-export type GenerationType = 'STATIC' | 'RANDOM' | 'MIXED';
-export type QuestionOrder = 'MANUAL' | 'RANDOM';
-export type Difficulty = 'EASY' | 'MEDIUM' | 'HARD';
+export type ExamStatus = "DRAFT" | "PUBLISHED" | "ARCHIVED";
+export type ExamKind = "QUIZ" | "ESSAY" | "CODE" | "DIAGRAM" | "MIXED";
+export type GenerationType = "STATIC" | "RANDOM" | "MIXED";
+export type QuestionOrder = "MANUAL" | "RANDOM";
+export type Difficulty = "EASY" | "MEDIUM" | "HARD";
 
 export interface ExamListItem {
   examId: number;
@@ -33,12 +33,12 @@ export interface ExamListItem {
   createdAt: string;
 }
 
-export type ExamMode = 'EXAM' | 'CONTEST';
+export type ExamMode = "EXAM" | "CONTEST";
 
 /** Manager's Mode picker: a course exam (EXAM) or a contest-only exam (CONTEST). Practice is a student's own mode. */
 export const EXAM_MODE_OPTIONS: { label: string; value: ExamMode }[] = [
-  { label: 'Course', value: 'EXAM' },
-  { label: 'Contest', value: 'CONTEST' },
+  { label: "Course", value: "EXAM" },
+  { label: "Contest", value: "CONTEST" },
 ];
 
 export interface ExamConfig {
@@ -115,7 +115,11 @@ export interface CreateExamRequest {
   /** Import-preview drafts (Q-03 payload shape); the server creates or reuses them and attaches them with the exam. */
   importedQuestions?: { question: QuestionCreateRequest; weight: number; orderIndex?: number }[];
   configs?: ExamConfig[];
-  groupIds?: { groupId: number; questions: { questionId: number; weight: number }[]; orderIndex: number }[];
+  groupIds?: {
+    groupId: number;
+    questions: { questionId: number; weight: number }[];
+    orderIndex: number;
+  }[];
 }
 
 export interface UpdateExamRequest {
@@ -132,7 +136,7 @@ export interface UpdateExamRequest {
 }
 
 export interface ExamOrderEntry {
-  itemType: 'QUESTION' | 'GROUP';
+  itemType: "QUESTION" | "GROUP";
   linkId: number;
   questionIds?: number[];
 }
@@ -176,7 +180,7 @@ export interface BankQuestionItem {
   groupId?: number | null;
   questionType: string;
   difficulty: Difficulty;
-  status: 'ACTIVE' | 'INACTIVE' | 'DRAFT';
+  status: "ACTIVE" | "INACTIVE" | "DRAFT";
   optionCount?: number;
   options?: { optionId?: number; optionText: string; isCorrect: boolean; orderIndex: number }[];
   explanation?: string;
@@ -212,7 +216,14 @@ export interface AiQuestionDraft {
     timeLimitMs?: number | null;
     memoryLimitKb?: number | null;
   } | null;
-  testCases?: { inputData: string; expectedOutput: string; hidden?: boolean | null; orderIndex?: number | null }[] | null;
+  testCases?:
+    | {
+        inputData: string;
+        expectedOutput: string;
+        hidden?: boolean | null;
+        orderIndex?: number | null;
+      }[]
+    | null;
   /** Target module assigned to this generated question (when saved to Question Bank). */
   moduleId?: number;
   /** DIAGRAM only: PlantUML behind questionMetadata.drawioXml, for previews. Q-03 doesn't take it. */
@@ -261,38 +272,38 @@ export interface ImportExamResponse {
 export const examService = {
   async getExams(params?: ExamListParams): Promise<PageResponse<ExamListItem>> {
     const q = new URLSearchParams();
-    if (params?.search) q.set('search', params.search);
-    if (params?.courseId) q.set('courseId', String(params.courseId));
-    if (params?.moduleId) q.set('moduleId', String(params.moduleId));
-    if (params?.status && params.status !== 'all') q.set('status', params.status);
-    if (params?.examKind && params.examKind !== 'all') q.set('examKind', params.examKind);
-    if (params?.page !== undefined) q.set('page', String(params.page));
-    if (params?.size !== undefined) q.set('size', String(params.size));
+    if (params?.search) q.set("search", params.search);
+    if (params?.courseId) q.set("courseId", String(params.courseId));
+    if (params?.moduleId) q.set("moduleId", String(params.moduleId));
+    if (params?.status && params.status !== "all") q.set("status", params.status);
+    if (params?.examKind && params.examKind !== "all") q.set("examKind", params.examKind);
+    if (params?.page !== undefined) q.set("page", String(params.page));
+    if (params?.size !== undefined) q.set("size", String(params.size));
 
     const queryStr = q.toString();
     const res = await api.get<ApiResponse<PageResponse<ExamListItem>>>(
-      `/manager/exams${queryStr ? `?${queryStr}` : ''}`
+      `/manager/exams${queryStr ? `?${queryStr}` : ""}`,
     );
     if (!res.data || !Array.isArray(res.data.content)) {
-      throw new Error('The exam response is invalid.');
+      throw new Error("The exam response is invalid.");
     }
     return res.data;
   },
 
   async getExamById(id: number): Promise<ExamDetail> {
     const res = await api.get<ApiResponse<ExamDetail>>(`/manager/exams/${id}`);
-    if (!res.data?.examId) throw new Error('The exam response is invalid.');
+    if (!res.data?.examId) throw new Error("The exam response is invalid.");
     return res.data;
   },
 
   async createExam(payload: CreateExamRequest): Promise<ExamDetail> {
-    const res = await api.post<ApiResponse<ExamDetail>>('/manager/exams', payload);
+    const res = await api.post<ApiResponse<ExamDetail>>("/manager/exams", payload);
     return res.data;
   },
 
   async updateExam(id: number, payload: UpdateExamRequest): Promise<ExamDetail> {
     const res = await api.request<ApiResponse<ExamDetail>>({
-      method: 'put',
+      method: "put",
       url: `/manager/exams/${id}`,
       data: payload,
     });
@@ -301,16 +312,21 @@ export const examService = {
 
   async updateExamOrder(id: number, payload: UpdateExamOrderRequest): Promise<ExamDetail> {
     const res = await api.request<ApiResponse<ExamDetail>>({
-      method: 'put',
+      method: "put",
       url: `/manager/exams/${id}/order`,
       data: payload,
     });
     return res.data;
   },
 
-  async patchPublishExam(id: number, status: ExamStatus): Promise<{ examId: number; status: ExamStatus; warnings?: string[] }> {
-    const res = await api.request<ApiResponse<{ examId: number; status: ExamStatus; warnings?: string[] }>>({
-      method: 'patch',
+  async patchPublishExam(
+    id: number,
+    status: ExamStatus,
+  ): Promise<{ examId: number; status: ExamStatus; warnings?: string[] }> {
+    const res = await api.request<
+      ApiResponse<{ examId: number; status: ExamStatus; warnings?: string[] }>
+    >({
+      method: "patch",
       url: `/manager/exams/${id}/publish`,
       data: { status },
     });
@@ -318,17 +334,27 @@ export const examService = {
   },
 
   async deleteExam(id: number): Promise<void> {
-    await api.request<ApiResponse<null>>({ method: 'delete', url: `/manager/exams/${id}` });
+    await api.request<ApiResponse<null>>({ method: "delete", url: `/manager/exams/${id}` });
   },
 
-  async addQuestionToExam(id: number, payload: { questionId: number; weight?: number; orderIndex?: number }): Promise<ExamQuestion> {
-    const res = await api.post<ApiResponse<ExamQuestion>>(`/manager/exams/${id}/questions`, payload);
+  async addQuestionToExam(
+    id: number,
+    payload: { questionId: number; weight?: number; orderIndex?: number },
+  ): Promise<ExamQuestion> {
+    const res = await api.post<ApiResponse<ExamQuestion>>(
+      `/manager/exams/${id}/questions`,
+      payload,
+    );
     return res.data;
   },
 
-  async updateQuestionWeight(id: number, examQuestionId: number, weight: number): Promise<ExamQuestion> {
+  async updateQuestionWeight(
+    id: number,
+    examQuestionId: number,
+    weight: number,
+  ): Promise<ExamQuestion> {
     const res = await api.request<ApiResponse<ExamQuestion>>({
-      method: 'put',
+      method: "put",
       url: `/manager/exams/${id}/questions/${examQuestionId}`,
       data: { weight },
     });
@@ -336,48 +362,74 @@ export const examService = {
   },
 
   async removeQuestionFromExam(id: number, examQuestionId: number): Promise<void> {
-    await api.request<ApiResponse<null>>({ method: 'delete', url: `/manager/exams/${id}/questions/${examQuestionId}` });
+    await api.request<ApiResponse<null>>({
+      method: "delete",
+      url: `/manager/exams/${id}/questions/${examQuestionId}`,
+    });
   },
 
   /** Removes every question and group link of the exam in one call. */
   async removeAllQuestionsFromExam(id: number): Promise<void> {
-    await api.request<ApiResponse<null>>({ method: 'delete', url: `/manager/exams/${id}/questions` });
+    await api.request<ApiResponse<null>>({
+      method: "delete",
+      url: `/manager/exams/${id}/questions`,
+    });
   },
 
-  async addGroupToExam(id: number, payload: { groupId: number; questions: { questionId: number; weight: number }[]; orderIndex?: number }): Promise<ExamGroup> {
+  async addGroupToExam(
+    id: number,
+    payload: {
+      groupId: number;
+      questions: { questionId: number; weight: number }[];
+      orderIndex?: number;
+    },
+  ): Promise<ExamGroup> {
     const res = await api.post<ApiResponse<ExamGroup>>(`/manager/exams/${id}/groups`, payload);
     return res.data;
   },
 
   async removeGroupFromExam(id: number, examGroupId: number): Promise<void> {
-    await api.request<ApiResponse<null>>({ method: 'delete', url: `/manager/exams/${id}/groups/${examGroupId}` });
+    await api.request<ApiResponse<null>>({
+      method: "delete",
+      url: `/manager/exams/${id}/groups/${examGroupId}`,
+    });
   },
 
   async updateRubric(questionId: number, payload: RubricData): Promise<BankQuestionItem> {
     const res = await api.request<ApiResponse<BankQuestionItem>>({
-      method: 'put',
+      method: "put",
       url: `/manager/questions/${questionId}/rubric`,
       data: payload,
     });
     return res.data;
   },
 
-
   async importQuestions(id: number, formData: FormData): Promise<ImportExamResponse> {
-    const res = await apiClient.post<ApiResponse<ImportExamResponse>>(`/manager/exams/${id}/import`, formData, {
-      headers: { 'Content-Type': 'multipart/form-data' },
-    });
+    const res = await apiClient.post<ApiResponse<ImportExamResponse>>(
+      `/manager/exams/${id}/import`,
+      formData,
+      {
+        headers: { "Content-Type": "multipart/form-data" },
+      },
+    );
     if (res.data?.success === false) {
-      throw new Error(res.data.message || 'Failed to import questions.');
+      throw new Error(res.data.message || "Failed to import questions.");
     }
     return res.data.data;
   },
 
-  async generateAiExam(payload: AiGenerateRequest, signal?: AbortSignal): Promise<AiExamDraftResponse> {
-    const res = await apiClient.post<ApiResponse<AiExamDraftResponse>>('/manager/exams/ai/generate', payload, {
-      timeout: 100000,
-      signal,
-    });
+  async generateAiExam(
+    payload: AiGenerateRequest,
+    signal?: AbortSignal,
+  ): Promise<AiExamDraftResponse> {
+    const res = await apiClient.post<ApiResponse<AiExamDraftResponse>>(
+      "/manager/exams/ai/generate",
+      payload,
+      {
+        timeout: 100000,
+        signal,
+      },
+    );
     return res.data.data;
   },
 
@@ -386,29 +438,35 @@ export const examService = {
    * from an uploaded PDF / DOCX (≤ 10 MB, first 30,000 characters read with the Student Material parser).
    * The endpoint takes no title or duration — the caller keeps its own.
    */
-  async generateAiExamFromMaterial(file: File, payload: AiGenerateRequest, signal?: AbortSignal): Promise<AiExamDraftResponse> {
+  async generateAiExamFromMaterial(
+    file: File,
+    payload: AiGenerateRequest,
+    signal?: AbortSignal,
+  ): Promise<AiExamDraftResponse> {
     const form = new FormData();
-    form.append('file', file);
-    form.append('courseId', String(payload.courseId));
-    if (payload.moduleId != null) form.append('moduleId', String(payload.moduleId));
-    payload.moduleIds?.forEach(id => form.append('moduleIds', String(id)));
-    form.append('questionCount', String(payload.questionCount));
-    form.append('difficultyDistribution', JSON.stringify(payload.difficultyDistribution));
-    form.append('questionTypes', JSON.stringify(payload.questionTypes));
-    form.append('language', payload.language);
-    if (payload.context) form.append('context', payload.context);
-    const res = await apiClient.post<ApiResponse<AiExamDraftResponse>>('/manager/exams/ai/generate-from-material', form, {
-      headers: { 'Content-Type': 'multipart/form-data' },
-      // Upload + text extraction + the AI call.
-      timeout: 180000,
-      signal,
-    });
+    form.append("file", file);
+    form.append("courseId", String(payload.courseId));
+    if (payload.moduleId != null) form.append("moduleId", String(payload.moduleId));
+    payload.moduleIds?.forEach((id) => form.append("moduleIds", String(id)));
+    form.append("questionCount", String(payload.questionCount));
+    form.append("difficultyDistribution", JSON.stringify(payload.difficultyDistribution));
+    form.append("questionTypes", JSON.stringify(payload.questionTypes));
+    form.append("language", payload.language);
+    if (payload.context) form.append("context", payload.context);
+    const res = await apiClient.post<ApiResponse<AiExamDraftResponse>>(
+      "/manager/exams/ai/generate-from-material",
+      form,
+      {
+        headers: { "Content-Type": "multipart/form-data" },
+        // Upload + text extraction + the AI call.
+        timeout: 180000,
+        signal,
+      },
+    );
     return res.data.data;
   },
-
 };
 
 /** AI-02 material limits (ExamAiController / MaterialTextReader). */
 export const EXAM_MATERIAL_MAX_BYTES = 10 * 1024 * 1024;
-export const EXAM_MATERIAL_EXTENSIONS = ['.pdf', '.docx'] as const;
-
+export const EXAM_MATERIAL_EXTENSIONS = [".pdf", ".docx"] as const;

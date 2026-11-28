@@ -61,19 +61,9 @@ function formatTimestamp(isoString: string | null | undefined): string {
   }
 }
 
-function exportStudentsToCsv(
-  students: CourseStudentItem[],
-  courseTitle: string,
-) {
+function exportStudentsToCsv(students: CourseStudentItem[], courseTitle: string) {
   if (!students.length) return;
-  const headers = [
-    "User ID",
-    "Full Name",
-    "Email",
-    "Enrolled At",
-    "Status",
-    "Progress (%)",
-  ];
+  const headers = ["User ID", "Full Name", "Email", "Enrolled At", "Status", "Progress (%)"];
   const rows = students.map((s) => [
     s.userId,
     `"${s.fullName.replace(/"/g, '""')}"`,
@@ -82,9 +72,7 @@ function exportStudentsToCsv(
     s.status,
     s.progress,
   ]);
-  const csvContent = [headers.join(","), ...rows.map((r) => r.join(","))].join(
-    "\n",
-  );
+  const csvContent = [headers.join(","), ...rows.map((r) => r.join(","))].join("\n");
   const blob = new Blob([csvContent], { type: "text/csv;charset=utf-8;" });
   const url = URL.createObjectURL(blob);
   const link = document.createElement("a");
@@ -129,7 +117,8 @@ export function CourseDetailPage({
   const [price, setPrice] = useState("0");
   const [priceEdited, setPriceEdited] = useState(false);
   const [saving, setSaving] = useState(false);
-  const hasPriceChanges = course !== null && priceEdited && (price === "" || Number(price) !== course.price);
+  const hasPriceChanges =
+    course !== null && priceEdited && (price === "" || Number(price) !== course.price);
   const hasCourseChanges = Boolean(
     course &&
     (title.trim() !== course.title.trim() ||
@@ -148,8 +137,7 @@ export function CourseDetailPage({
       ).map(String)
     : [];
   const hasManagerChanges =
-    canManageCourse &&
-    savedManagerIds.join(",") !== selectedManagerIds.join(",");
+    canManageCourse && savedManagerIds.join(",") !== selectedManagerIds.join(",");
   const hasAnyChanges = hasCourseChanges || hasManagerChanges;
 
   const [categories, setCategories] = useState<CategoryResponse[]>([]);
@@ -168,14 +156,10 @@ export function CourseDetailPage({
         : null;
   const canPublish = publishBlockedReason === null;
   const [isAddModuleOpen, setIsAddModuleOpen] = useState(false);
-  const [editingModule, setEditingModule] =
-    useState<CourseModuleResponse | null>(null);
-  const [moduleToDelete, setModuleToDelete] =
-    useState<CourseModuleResponse | null>(null);
+  const [editingModule, setEditingModule] = useState<CourseModuleResponse | null>(null);
+  const [moduleToDelete, setModuleToDelete] = useState<CourseModuleResponse | null>(null);
   const [deletingModule, setDeletingModule] = useState(false);
-  const [reorderingModuleId, setReorderingModuleId] = useState<number | null>(
-    null,
-  );
+  const [reorderingModuleId, setReorderingModuleId] = useState<number | null>(null);
 
   const [isDeleteCourseOpen, setIsDeleteCourseOpen] = useState(false);
   const [deletingCourse, setDeletingCourse] = useState(false);
@@ -189,9 +173,7 @@ export function CourseDetailPage({
   const [loadingStudents, setLoadingStudents] = useState(false);
   const [studentsError, setStudentsError] = useState<string | null>(null);
 
-  const setToast = (
-    value: { type: "success" | "error"; message: string } | null,
-  ) => {
+  const setToast = (value: { type: "success" | "error"; message: string } | null) => {
     if (value) notification[value.type](value.message);
   };
 
@@ -203,13 +185,10 @@ export function CourseDetailPage({
       })
       .catch((err) => {
         setCategories([]);
-        notification.error(
-          getApiErrorMessage(err, "Failed to load categories."),
-          {
-            title: "Could not load categories",
-            duration: null,
-          },
-        );
+        notification.error(getApiErrorMessage(err, "Failed to load categories."), {
+          title: "Could not load categories",
+          duration: null,
+        });
       });
   }, [notification]);
 
@@ -240,19 +219,14 @@ export function CourseDetailPage({
         const payload = res.data;
         const users = Array.isArray(payload)
           ? payload
-          : payload &&
-              typeof payload === "object" &&
-              Array.isArray(payload.content)
+          : payload && typeof payload === "object" && Array.isArray(payload.content)
             ? payload.content
             : [];
         setManagerOptions(
           users
             .map((manager) => ({
               id: Number(manager.userId ?? manager.id),
-              name:
-                manager.fullName ||
-                manager.name ||
-                `Manager #${manager.userId ?? manager.id}`,
+              name: manager.fullName || manager.name || `Manager #${manager.userId ?? manager.id}`,
               email: manager.email,
             }))
             .filter((manager) => Number.isFinite(manager.id) && manager.id > 0),
@@ -260,13 +234,10 @@ export function CourseDetailPage({
       })
       .catch((err) => {
         setManagerOptions([]);
-        notification.error(
-          getApiErrorMessage(err, "Failed to load course managers."),
-          {
-            title: "Could not load course managers",
-            duration: null,
-          },
-        );
+        notification.error(getApiErrorMessage(err, "Failed to load course managers."), {
+          title: "Could not load course managers",
+          duration: null,
+        });
       })
       .finally(() => setLoadingManagers(false));
   }, [isAdmin, notification]);
@@ -283,9 +254,7 @@ export function CourseDetailPage({
       setIsPublished(data.isPublished);
       setPrice(moneyToDigits(data.price ?? 0));
       setPriceEdited(false);
-      setModules(
-        [...(data.modules ?? [])].sort((a, b) => a.orderIndex - b.orderIndex),
-      );
+      setModules([...(data.modules ?? [])].sort((a, b) => a.orderIndex - b.orderIndex));
       setSelectedManagerIds(
         (data.managers?.length
           ? data.managers.map((manager) => manager.userId)
@@ -293,8 +262,7 @@ export function CourseDetailPage({
         ).map(String),
       );
     } catch (err: unknown) {
-      const msg =
-        err instanceof Error ? err.message : "Failed to load course details.";
+      const msg = err instanceof Error ? err.message : "Failed to load course details.";
       setError(msg);
       notification.error(msg, {
         title: "Course details could not be loaded",
@@ -325,27 +293,15 @@ export function CourseDetailPage({
     } catch (err) {
       setStudents([]);
       setStudentTotal(0);
-      setStudentsError(
-        getApiErrorMessage(err, "Failed to load enrolled students."),
-      );
-      notification.error(
-        getApiErrorMessage(err, "Failed to load enrolled students."),
-        {
-          title: "Could not load enrolled students",
-          duration: null,
-        },
-      );
+      setStudentsError(getApiErrorMessage(err, "Failed to load enrolled students."));
+      notification.error(getApiErrorMessage(err, "Failed to load enrolled students."), {
+        title: "Could not load enrolled students",
+        duration: null,
+      });
     } finally {
       setLoadingStudents(false);
     }
-  }, [
-    courseId,
-    studentSearch,
-    studentStatus,
-    studentPage,
-    studentPageSize,
-    notification,
-  ]);
+  }, [courseId, studentSearch, studentStatus, studentPage, studentPageSize, notification]);
 
   useEffect(() => {
     if (tab === "Enrolled Students") {
@@ -365,9 +321,7 @@ export function CourseDetailPage({
       setToast({ type: "error", message: priceError });
       return;
     }
-    const managerIds = selectedManagerIds
-      .map(Number)
-      .filter((id) => Number.isFinite(id) && id > 0);
+    const managerIds = selectedManagerIds.map(Number).filter((id) => Number.isFinite(id) && id > 0);
     if (hasManagerChanges && managerIds.length === 0) {
       setToast({
         type: "error",
@@ -391,10 +345,7 @@ export function CourseDetailPage({
 
       let updated = course;
       if (Object.keys(updatePayload).length > 0) {
-        updated = await courseService.updateCourse(
-          course.courseId,
-          updatePayload,
-        );
+        updated = await courseService.updateCourse(course.courseId, updatePayload);
       }
 
       if (isPublished !== course.isPublished) {
@@ -409,16 +360,11 @@ export function CourseDetailPage({
       let savedManagerName = updated.managerName;
       if (hasManagerChanges) {
         savedManagers = managerIds.map((userId, index) => {
-          const option = managerOptions.find(
-            (manager) => manager.id === userId,
-          );
-          const previous = course.managers?.find(
-            (manager) => manager.userId === userId,
-          );
+          const option = managerOptions.find((manager) => manager.id === userId);
+          const previous = course.managers?.find((manager) => manager.userId === userId);
           return {
             userId,
-            fullName:
-              option?.name || previous?.fullName || `Manager #${userId}`,
+            fullName: option?.name || previous?.fullName || `Manager #${userId}`,
             email: option?.email || previous?.email,
             primary: index === 0,
           };
@@ -436,9 +382,7 @@ export function CourseDetailPage({
         modules,
       });
       setPriceEdited(false);
-      setSelectedManagerIds(
-        hasManagerChanges ? managerIds.map(String) : savedManagerIds,
-      );
+      setSelectedManagerIds(hasManagerChanges ? managerIds.map(String) : savedManagerIds);
       setToast({
         type: "success",
         message: "Course changes saved successfully.",
@@ -459,9 +403,7 @@ export function CourseDetailPage({
   };
 
   const handleModuleCreated = (newMod: CourseModuleResponse) => {
-    setModules((prev) =>
-      [...prev, newMod].sort((a, b) => a.orderIndex - b.orderIndex),
-    );
+    setModules((prev) => [...prev, newMod].sort((a, b) => a.orderIndex - b.orderIndex));
     setToast({
       type: "success",
       message: `Module "${newMod.title}" added successfully.`,
@@ -510,9 +452,7 @@ export function CourseDetailPage({
     const orderedModules = [...modules].sort(
       (a, b) => a.orderIndex - b.orderIndex || a.moduleId - b.moduleId,
     );
-    const currentIndex = orderedModules.findIndex(
-      (module) => module.moduleId === moduleId,
-    );
+    const currentIndex = orderedModules.findIndex((module) => module.moduleId === moduleId);
     const targetIndex = currentIndex + direction;
     if (currentIndex < 0 || targetIndex < 0 || targetIndex >= orderedModules.length) return;
 
@@ -534,7 +474,9 @@ export function CourseDetailPage({
       }
       const refreshedModules = await courseService.getCourseModules(courseId);
       setModules(
-        [...refreshedModules].sort((a, b) => a.orderIndex - b.orderIndex || a.moduleId - b.moduleId),
+        [...refreshedModules].sort(
+          (a, b) => a.orderIndex - b.orderIndex || a.moduleId - b.moduleId,
+        ),
       );
       setToast({
         type: "success",
@@ -544,17 +486,16 @@ export function CourseDetailPage({
       try {
         const refreshedModules = await courseService.getCourseModules(courseId);
         setModules(
-          [...refreshedModules].sort((a, b) => a.orderIndex - b.orderIndex || a.moduleId - b.moduleId),
+          [...refreshedModules].sort(
+            (a, b) => a.orderIndex - b.orderIndex || a.moduleId - b.moduleId,
+          ),
         );
       } catch {
         // Keep the current list if refreshing after a failed reorder also fails.
       }
       setToast({
         type: "error",
-        message: getApiErrorMessage(
-          err,
-          "Could not reorder modules. Please try again.",
-        ),
+        message: getApiErrorMessage(err, "Could not reorder modules. Please try again."),
       });
     } finally {
       setReorderingModuleId(null);
@@ -566,17 +507,14 @@ export function CourseDetailPage({
     setDeletingModule(true);
     try {
       await courseService.deleteModule(moduleToDelete.moduleId);
-      setModules((prev) =>
-        prev.filter((m) => m.moduleId !== moduleToDelete.moduleId),
-      );
+      setModules((prev) => prev.filter((m) => m.moduleId !== moduleToDelete.moduleId));
       setToast({
         type: "success",
         message: `Module "${moduleToDelete.title}" removed.`,
       });
       setModuleToDelete(null);
     } catch (err: unknown) {
-      const msg =
-        err instanceof Error ? err.message : "Failed to delete module.";
+      const msg = err instanceof Error ? err.message : "Failed to delete module.";
       setToast({ type: "error", message: msg });
     } finally {
       setDeletingModule(false);
@@ -596,8 +534,7 @@ export function CourseDetailPage({
         navigate("/manager/courses");
       }
     } catch (err: unknown) {
-      const msg =
-        err instanceof Error ? err.message : "Failed to delete course.";
+      const msg = err instanceof Error ? err.message : "Failed to delete course.";
       setToast({ type: "error", message: msg });
     } finally {
       setDeletingCourse(false);
@@ -617,10 +554,7 @@ export function CourseDetailPage({
     return (
       <div className="p-8 space-y-4">
         <Breadcrumb
-          items={[
-            { label: "Courses", onClick: handleCancel },
-            { label: "Course Detail" },
-          ]}
+          items={[{ label: "Courses", onClick: handleCancel }, { label: "Course Detail" }]}
         />
         <p className="text-sm text-content-subtle">
           Course details could not be loaded. See the notification for details.
@@ -645,15 +579,9 @@ export function CourseDetailPage({
         const s = r as unknown as CourseStudentItem;
         return (
           <div className="flex items-center gap-2.5">
-            <Avatar
-              name={s.fullName}
-              size="sm"
-              src={s.avatarUrl || undefined}
-            />
+            <Avatar name={s.fullName} size="sm" src={s.avatarUrl || undefined} />
             <div className="min-w-0">
-              <p className="text-sm font-medium text-content truncate">
-                {s.fullName}
-              </p>
+              <p className="text-sm font-medium text-content truncate">{s.fullName}</p>
               <p className="text-2xs text-content-subtle truncate">{s.email}</p>
             </div>
           </div>
@@ -664,18 +592,14 @@ export function CourseDetailPage({
       key: "enrolledAt",
       label: "Enrolled At",
       render: (r: Record<string, unknown>) => (
-        <span className="text-sm text-content-soft">
-          {formatTimestamp(r.enrolledAt as string)}
-        </span>
+        <span className="text-sm text-content-soft">{formatTimestamp(r.enrolledAt as string)}</span>
       ),
     },
     {
       key: "status",
       label: "Status",
       render: (r: Record<string, unknown>) => (
-        <Badge variant={r.status === "ACTIVE" ? "success" : "default"}>
-          {String(r.status)}
-        </Badge>
+        <Badge variant={r.status === "ACTIVE" ? "success" : "default"}>{String(r.status)}</Badge>
       ),
     },
     {
@@ -684,9 +608,7 @@ export function CourseDetailPage({
       render: (r: Record<string, unknown>) => (
         <div className="flex items-center gap-2 w-36">
           <Progress value={Number(r.progress)} size="sm" />
-          <span className="text-xs font-medium text-content-secondary">
-            {Number(r.progress)}%
-          </span>
+          <span className="text-xs font-medium text-content-secondary">{Number(r.progress)}%</span>
         </div>
       ),
     },
@@ -697,10 +619,7 @@ export function CourseDetailPage({
       <div className="flex flex-wrap items-center justify-between gap-4">
         <div>
           <Breadcrumb
-            items={[
-              { label: "Courses", onClick: handleCancel },
-              { label: course.title },
-            ]}
+            items={[{ label: "Courses", onClick: handleCancel }, { label: course.title }]}
           />
           <h2 className="text-xl font-bold text-content mt-1">Course Detail</h2>
         </div>
@@ -783,11 +702,18 @@ export function CourseDetailPage({
                   onPick={async (file) => {
                     setUploadingThumbnail(true);
                     try {
-                      const updated = await uploadService.uploadCourseThumbnail(course.courseId, file);
-                      setCourse((prev) => (prev ? { ...prev, thumbnailUrl: updated.thumbnailUrl } : prev));
+                      const updated = await uploadService.uploadCourseThumbnail(
+                        course.courseId,
+                        file,
+                      );
+                      setCourse((prev) =>
+                        prev ? { ...prev, thumbnailUrl: updated.thumbnailUrl } : prev,
+                      );
                       notification.success("Thumbnail updated.");
                     } catch (err) {
-                      notification.error(getApiErrorMessage(err, "Could not upload the thumbnail."));
+                      notification.error(
+                        getApiErrorMessage(err, "Could not upload the thumbnail."),
+                      );
                     } finally {
                       setUploadingThumbnail(false);
                     }
@@ -798,7 +724,9 @@ export function CourseDetailPage({
                       await courseService.updateCourse(course.courseId, { thumbnailUrl: "" });
                       setCourse((prev) => (prev ? { ...prev, thumbnailUrl: null } : prev));
                     } catch (err) {
-                      notification.error(getApiErrorMessage(err, "Could not remove the thumbnail."));
+                      notification.error(
+                        getApiErrorMessage(err, "Could not remove the thumbnail."),
+                      );
                     } finally {
                       setUploadingThumbnail(false);
                     }
@@ -812,7 +740,13 @@ export function CourseDetailPage({
                   onChange={(val) => setIsPublished(val === "published")}
                   options={[
                     { label: "Published", value: "published" },
-                    { label: course.status === "READY_TO_PUBLISH" ? COURSE_STATUS_LABELS.READY_TO_PUBLISH : "Draft", value: "draft" },
+                    {
+                      label:
+                        course.status === "READY_TO_PUBLISH"
+                          ? COURSE_STATUS_LABELS.READY_TO_PUBLISH
+                          : "Draft",
+                      value: "draft",
+                    },
                   ]}
                 />
                 {isPaidPublished && (
@@ -860,7 +794,9 @@ export function CourseDetailPage({
                       ? "Price cannot be changed after students have purchased the course."
                       : !hasPriceChanges && !Number.isInteger(course.price)
                         ? `Stored price: ${formatStoredCoursePrice(course.price)}`
-                        : canManageCourse ? "0 = Free" : undefined
+                        : canManageCourse
+                          ? "0 = Free"
+                          : undefined
                   }
                 />
 
@@ -882,8 +818,7 @@ export function CourseDetailPage({
               <div>
                 <h4 className="text-lg font-semibold text-content">Modules</h4>
                 <p className="text-xs text-content-subtle mt-0.5">
-                  Manage curriculum modules, their display order, and associated
-                  exams.
+                  Manage curriculum modules, their display order, and associated exams.
                 </p>
               </div>
 
@@ -900,9 +835,7 @@ export function CourseDetailPage({
             {modules.length === 0 ? (
               <div className="p-10 text-center text-content-soft">
                 <Icon.Folder className="w-9 h-9 mx-auto text-content-subtle mb-2" />
-                <p className="text-base font-medium text-content">
-                  No modules added yet
-                </p>
+                <p className="text-base font-medium text-content">No modules added yet</p>
                 <p className="text-xs text-content-subtle mt-1 max-w-sm mx-auto">
                   {canCreateModule
                     ? 'Click the "Add Module" button to create the first curriculum module for this course.'
@@ -913,139 +846,117 @@ export function CourseDetailPage({
               <div className="divide-y divide-line-faint">
                 <div className="hidden sm:grid grid-cols-12 gap-4 px-6 py-3 bg-surface-alt text-xs font-semibold text-content-soft">
                   <span className="col-span-1">Order</span>
-                  <span
-                    className={canCreateModule ? "col-span-3" : "col-span-4"}
-                  >
-                    Module Name
-                  </span>
-                  <span
-                    className={canCreateModule ? "col-span-2" : "col-span-4"}
-                  >
-                    Description
-                  </span>
+                  <span className={canCreateModule ? "col-span-3" : "col-span-4"}>Module Name</span>
+                  <span className={canCreateModule ? "col-span-2" : "col-span-4"}>Description</span>
                   <span className="col-span-2 text-center">Status</span>
                   <span className="col-span-1 text-center">Content</span>
-                  {canCreateModule && (
-                    <span className="col-span-3 text-right">Actions</span>
-                  )}
+                  {canCreateModule && <span className="col-span-3 text-right">Actions</span>}
                 </div>
 
                 {[...modules]
                   .sort((a, b) => a.orderIndex - b.orderIndex)
                   .map((mod, index, orderedModules) => (
-                  <div
-                    key={mod.moduleId}
-                    className="grid grid-cols-1 sm:grid-cols-12 gap-2 sm:gap-4 px-6 py-3.5 items-center hover:bg-surface-alt transition-colors"
-                  >
-                    <div className="col-span-1 flex items-center gap-1">
-                      <span className="w-6 h-6 rounded-full bg-primary-light text-brand-ink text-xs font-bold flex items-center justify-center">
-                        {mod.orderIndex}
-                      </span>
+                    <div
+                      key={mod.moduleId}
+                      className="grid grid-cols-1 sm:grid-cols-12 gap-2 sm:gap-4 px-6 py-3.5 items-center hover:bg-surface-alt transition-colors"
+                    >
+                      <div className="col-span-1 flex items-center gap-1">
+                        <span className="w-6 h-6 rounded-full bg-primary-light text-brand-ink text-xs font-bold flex items-center justify-center">
+                          {mod.orderIndex}
+                        </span>
+                        {canCreateModule && (
+                          <div className="flex flex-col -my-1">
+                            <button
+                              type="button"
+                              aria-label={`Move ${mod.title} up`}
+                              title="Move up"
+                              disabled={index === 0 || reorderingModuleId !== null}
+                              onClick={() => void handleMoveModule(mod.moduleId, -1)}
+                              className="rounded p-0.5 text-content-soft hover:bg-accent disabled:opacity-30 disabled:cursor-not-allowed"
+                            >
+                              <Icon.ArrowUp className="h-3.5 w-3.5" />
+                            </button>
+                            <button
+                              type="button"
+                              aria-label={`Move ${mod.title} down`}
+                              title="Move down"
+                              disabled={
+                                index === orderedModules.length - 1 || reorderingModuleId !== null
+                              }
+                              onClick={() => void handleMoveModule(mod.moduleId, 1)}
+                              className="rounded p-0.5 text-content-soft hover:bg-accent disabled:opacity-30 disabled:cursor-not-allowed"
+                            >
+                              <Icon.ArrowDown className="h-3.5 w-3.5" />
+                            </button>
+                          </div>
+                        )}
+                      </div>
+
+                      <div
+                        className={canCreateModule ? "col-span-3 min-w-0" : "col-span-4 min-w-0"}
+                      >
+                        <p className="text-base font-semibold text-content truncate">{mod.title}</p>
+                        <p className="text-2xs text-content-subtle sm:hidden">
+                          {mod.examCount} exams · {mod.questionCount} questions · {mod.deckCount}{" "}
+                          flashcard decks
+                        </p>
+                      </div>
+
+                      <div
+                        className={canCreateModule ? "col-span-2 min-w-0" : "col-span-4 min-w-0"}
+                      >
+                        <p className="text-sm text-content-soft truncate">
+                          {mod.description || (
+                            <span className="italic text-content-subtle">No description</span>
+                          )}
+                        </p>
+                      </div>
+
+                      <div className="col-span-2 flex flex-wrap items-center justify-center gap-2">
+                        <Badge variant={mod.status === "VISIBLE" ? "success" : "default"}>
+                          {mod.status === "VISIBLE" ? "Visible" : "Hidden"}
+                        </Badge>
+                        {mod.status === "HIDDEN" && (mod.publicContentCount ?? 0) > 0 && (
+                          <p
+                            className="w-full text-center text-2xs text-warning"
+                            title="Students don't see a hidden module or anything in it. Make the module visible to show this content."
+                          >
+                            {mod.publicContentCount} public item
+                            {mod.publicContentCount === 1 ? "" : "s"} hidden from students
+                          </p>
+                        )}
+                      </div>
+
+                      <div className="col-span-1 hidden text-center text-xs text-content-soft sm:block">
+                        <div>{mod.examCount} exams</div>
+                        <div>{mod.questionCount} questions</div>
+                        <div>{mod.deckCount} flashcard decks</div>
+                      </div>
+
                       {canCreateModule && (
-                        <div className="flex flex-col -my-1">
-                          <button
-                            type="button"
-                            aria-label={`Move ${mod.title} up`}
-                            title="Move up"
-                            disabled={index === 0 || reorderingModuleId !== null}
-                            onClick={() => void handleMoveModule(mod.moduleId, -1)}
-                            className="rounded p-0.5 text-content-soft hover:bg-accent disabled:opacity-30 disabled:cursor-not-allowed"
+                        <div className="col-span-3 flex items-center justify-end gap-1">
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            icon={<Icon.Edit className="w-3.5 h-3.5" />}
+                            onClick={() => setEditingModule(mod)}
+                            title="Edit Module"
                           >
-                            <Icon.ArrowUp className="h-3.5 w-3.5" />
-                          </button>
-                          <button
-                            type="button"
-                            aria-label={`Move ${mod.title} down`}
-                            title="Move down"
-                            disabled={
-                              index === orderedModules.length - 1 ||
-                              reorderingModuleId !== null
-                            }
-                            onClick={() => void handleMoveModule(mod.moduleId, 1)}
-                            className="rounded p-0.5 text-content-soft hover:bg-accent disabled:opacity-30 disabled:cursor-not-allowed"
+                            Edit
+                          </Button>
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            className="text-danger hover:bg-danger-light hover:text-danger"
+                            icon={<Icon.Trash className="w-3.5 h-3.5" />}
+                            onClick={() => setModuleToDelete(mod)}
+                            title="Remove Module"
                           >
-                            <Icon.ArrowDown className="h-3.5 w-3.5" />
-                          </button>
+                            Remove
+                          </Button>
                         </div>
                       )}
                     </div>
-
-                    <div
-                      className={
-                        canCreateModule
-                          ? "col-span-3 min-w-0"
-                          : "col-span-4 min-w-0"
-                      }
-                    >
-                      <p className="text-base font-semibold text-content truncate">
-                        {mod.title}
-                      </p>
-                      <p className="text-2xs text-content-subtle sm:hidden">
-                        {mod.examCount} exams · {mod.questionCount} questions · {mod.deckCount} flashcard decks
-                      </p>
-                    </div>
-
-                    <div
-                      className={
-                        canCreateModule
-                          ? "col-span-2 min-w-0"
-                          : "col-span-4 min-w-0"
-                      }
-                    >
-                      <p className="text-sm text-content-soft truncate">
-                        {mod.description || (
-                          <span className="italic text-content-subtle">
-                            No description
-                          </span>
-                        )}
-                      </p>
-                    </div>
-
-                    <div className="col-span-2 flex flex-wrap items-center justify-center gap-2">
-                      <Badge
-                        variant={
-                          mod.status === "VISIBLE" ? "success" : "default"
-                        }
-                      >
-                        {mod.status === "VISIBLE" ? "Visible" : "Hidden"}
-                      </Badge>
-                      {mod.status === "HIDDEN" && (mod.publicContentCount ?? 0) > 0 && (
-                        <p className="w-full text-center text-2xs text-warning" title="Students don't see a hidden module or anything in it. Make the module visible to show this content.">
-                          {mod.publicContentCount} public item{mod.publicContentCount === 1 ? "" : "s"} hidden from students
-                        </p>
-                      )}
-                    </div>
-
-                    <div className="col-span-1 hidden text-center text-xs text-content-soft sm:block">
-                      <div>{mod.examCount} exams</div>
-                      <div>{mod.questionCount} questions</div>
-                      <div>{mod.deckCount} flashcard decks</div>
-                    </div>
-
-                    {canCreateModule && (
-                      <div className="col-span-3 flex items-center justify-end gap-1">
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          icon={<Icon.Edit className="w-3.5 h-3.5" />}
-                          onClick={() => setEditingModule(mod)}
-                          title="Edit Module"
-                        >
-                          Edit
-                        </Button>
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          className="text-danger hover:bg-danger-light hover:text-danger"
-                          icon={<Icon.Trash className="w-3.5 h-3.5" />}
-                          onClick={() => setModuleToDelete(mod)}
-                          title="Remove Module"
-                        >
-                          Remove
-                        </Button>
-                      </div>
-                    )}
-                  </div>
                   ))}
               </div>
             )}
@@ -1057,9 +968,7 @@ export function CourseDetailPage({
         <div className="card overflow-hidden">
           <div className="flex flex-wrap items-center justify-between gap-3 px-6 py-4 border-b border-line-faint">
             <div className="flex items-center gap-3">
-              <h4 className="text-lg font-semibold text-content">
-                Enrolled Students
-              </h4>
+              <h4 className="text-lg font-semibold text-content">Enrolled Students</h4>
               <Badge variant="default">{studentTotal} students</Badge>
             </div>
             <Button
@@ -1105,23 +1014,15 @@ export function CourseDetailPage({
             </div>
           ) : studentsError ? (
             <div className="p-6 text-center text-sm text-content-subtle">
-              Student data could not be loaded. See the notification for
-              details.
-              <Button
-                variant="outline"
-                size="sm"
-                className="mx-auto mt-3"
-                onClick={loadStudents}
-              >
+              Student data could not be loaded. See the notification for details.
+              <Button variant="outline" size="sm" className="mx-auto mt-3" onClick={loadStudents}>
                 Retry
               </Button>
             </div>
           ) : students.length === 0 ? (
             <div className="p-12 text-center text-content-soft">
               <Icon.Users className="w-9 h-9 mx-auto text-content-subtle mb-2" />
-              <p className="text-base font-medium text-content">
-                No students enrolled yet
-              </p>
+              <p className="text-base font-medium text-content">No students enrolled yet</p>
               <p className="text-xs text-content-subtle mt-1 max-w-sm mx-auto">
                 Students will appear here once they enroll in this course.
               </p>
@@ -1159,11 +1060,9 @@ export function CourseDetailPage({
         title="Remove this module?"
         description={
           <>
-            <span className="font-semibold text-content">
-              "{moduleToDelete?.title}"
-            </span>{" "}
-            will be removed. Its questions and exams are not deleted — they
-            become unassigned so you can reassign them later.
+            <span className="font-semibold text-content">"{moduleToDelete?.title}"</span> will be
+            removed. Its questions and exams are not deleted — they become unassigned so you can
+            reassign them later.
           </>
         }
         confirmLabel="Remove"
@@ -1178,10 +1077,9 @@ export function CourseDetailPage({
         title="Delete this course?"
         description={
           <>
-            <span className="font-semibold text-content">"{course.title}"</span>{" "}
-            will be permanently deleted. This action cannot be undone. Courses
-            with enrolled students cannot be deleted; unpublish the course
-            instead.
+            <span className="font-semibold text-content">"{course.title}"</span> will be permanently
+            deleted. This action cannot be undone. Courses with enrolled students cannot be deleted;
+            unpublish the course instead.
           </>
         }
         confirmLabel="Delete"
@@ -1223,10 +1121,7 @@ function CourseManagerList({
   const availableManagers = [
     ...managerOptions,
     ...managerList
-      .filter(
-        (manager) =>
-          !managerOptions.some((option) => option.id === manager.userId),
-      )
+      .filter((manager) => !managerOptions.some((option) => option.id === manager.userId))
       .map((manager) => ({
         id: manager.userId,
         name: manager.fullName,
@@ -1237,8 +1132,7 @@ function CourseManagerList({
     .map((id) => availableManagers.find((manager) => String(manager.id) === id))
     .filter((manager): manager is ManagerOption => Boolean(manager));
   const hasMore = managerList.length > INITIAL_SHOW;
-  const visible =
-    expanded || !hasMore ? managerList : managerList.slice(0, INITIAL_SHOW);
+  const visible = expanded || !hasMore ? managerList : managerList.slice(0, INITIAL_SHOW);
 
   return (
     <div className="space-y-2">
@@ -1256,9 +1150,7 @@ function CourseManagerList({
           search
           searchPlaceholder="Search course managers..."
           values={selectedManagerIds}
-          onSelectMulti={(values) =>
-            onSelectedManagerIdsChange(values.map(String))
-          }
+          onSelectMulti={(values) => onSelectedManagerIdsChange(values.map(String))}
           trigger={
             <button
               type="button"
@@ -1276,9 +1168,7 @@ function CourseManagerList({
             </button>
           }
           items={availableManagers.map((manager) => ({
-            label: manager.email
-              ? `${manager.name} (${manager.email})`
-              : manager.name,
+            label: manager.email ? `${manager.name} (${manager.email})` : manager.name,
             value: String(manager.id),
           }))}
         />
@@ -1295,9 +1185,7 @@ function CourseManagerList({
                 type="button"
                 onClick={() =>
                   onSelectedManagerIdsChange(
-                    selectedManagerIds.filter(
-                      (id) => id !== String(manager.id),
-                    ),
+                    selectedManagerIds.filter((id) => id !== String(manager.id)),
                   )
                 }
                 className="hover:text-danger transition-colors"
@@ -1322,13 +1210,9 @@ function CourseManagerList({
                 </span>
               </div>
               <div className="min-w-0 flex-1">
-                <p className="text-sm font-medium text-content truncate">
-                  {manager.fullName}
-                </p>
+                <p className="text-sm font-medium text-content truncate">{manager.fullName}</p>
                 {manager.email && (
-                  <p className="text-xs text-content-soft truncate">
-                    {manager.email}
-                  </p>
+                  <p className="text-xs text-content-soft truncate">{manager.email}</p>
                 )}
               </div>
             </div>

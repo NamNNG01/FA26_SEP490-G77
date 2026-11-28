@@ -1,7 +1,7 @@
-import React from 'react';
-import { useNavigate } from 'react-router';
-import { Icon } from '@/assets/icons';
-import { ROUTES } from '@/app/routes';
+import React from "react";
+import { useNavigate } from "react-router";
+import { Icon } from "@/assets/icons";
+import { ROUTES } from "@/app/routes";
 
 /**
  * PlaceholderPage
@@ -32,12 +32,8 @@ export function PlaceholderPage({ title, subtitle }: { title: string; subtitle: 
           <div className="w-14 h-14 rounded-[14px] bg-primary-light flex items-center justify-center mx-auto">
             <Icon.Zap className="w-7 h-7 text-brand-ink" />
           </div>
-          <h1 className="text-xl font-bold text-content mt-5">
-            {title}
-          </h1>
-          <p className="text-base text-content-soft leading-relaxed mt-2">
-            {subtitle}
-          </p>
+          <h1 className="text-xl font-bold text-content mt-5">{title}</h1>
+          <p className="text-base text-content-soft leading-relaxed mt-2">{subtitle}</p>
           <button
             type="button"
             onClick={() => navigate(ROUTES.register)}

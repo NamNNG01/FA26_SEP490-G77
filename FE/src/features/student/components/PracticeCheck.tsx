@@ -1,9 +1,13 @@
-import { useEffect, useState } from 'react';
-import { Button } from '@/components/ui/Button';
-import { Icon } from '@/assets/icons';
-import type { AnswerResponse, AttemptQuestion } from '@/services/studentAttempt.service';
-import { INSTANT_CHECK_TYPES, blankKeys, type AnswerCheck } from '@/services/studentPracticeExam.service';
-import { isAnswered } from './QuestionAnswerInput';
+import { useEffect, useState } from "react";
+import { Button } from "@/components/ui/Button";
+import { Icon } from "@/assets/icons";
+import type { AnswerResponse, AttemptQuestion } from "@/services/studentAttempt.service";
+import {
+  INSTANT_CHECK_TYPES,
+  blankKeys,
+  type AnswerCheck,
+} from "@/services/studentPracticeExam.service";
+import { isAnswered } from "./QuestionAnswerInput";
 
 export interface CheckProgress {
   /** Text of the check button: says how far the answer is. */
@@ -15,41 +19,56 @@ export interface CheckProgress {
 }
 
 /** Practice: what the check button of a question says, and whether it can be pressed. */
-export function checkProgress(q: AttemptQuestion, response: AnswerResponse | null | undefined): CheckProgress {
+export function checkProgress(
+  q: AttemptQuestion,
+  response: AnswerResponse | null | undefined,
+): CheckProgress {
   switch (q.questionType) {
-    case 'MULTIPLE_CHOICE': {
+    case "MULTIPLE_CHOICE": {
       const n = response?.selectedOptionIds?.length ?? 0;
-      return { label: 'Check answer', ready: n > 0, hint: n > 0 ? null : 'Pick every correct option, then check.' };
-    }
-    case 'MATCHING': {
-      const lefts = q.matching?.lefts ?? [];
-      const done = new Set((response?.matches ?? []).filter(m => m.right).map(m => m.left));
-      const n = lefts.filter(l => done.has(l)).length;
-      const ready = lefts.length > 0 && n === lefts.length;
-      return { label: `Check answer (${n}/${lefts.length} pairs)`, ready, hint: ready ? null : 'Match every item to check.' };
-    }
-    case 'FILL_BLANK': {
-      const keys = blankKeys(q);
-      const n = keys.filter(k => response?.blanks?.[k]?.trim()).length;
-      const ready = n === keys.length;
       return {
-        label: keys.length > 1 ? `Check answer (${n}/${keys.length} blanks)` : 'Check answer',
-        ready,
-        hint: ready ? 'Press Enter in the last blank to check.' : keys.length > 1 ? 'Fill every blank to check.' : 'Type your answer to check.',
+        label: "Check answer",
+        ready: n > 0,
+        hint: n > 0 ? null : "Pick every correct option, then check.",
       };
     }
-    case 'ORDERING': {
+    case "MATCHING": {
+      const lefts = q.matching?.lefts ?? [];
+      const done = new Set((response?.matches ?? []).filter((m) => m.right).map((m) => m.left));
+      const n = lefts.filter((l) => done.has(l)).length;
+      const ready = lefts.length > 0 && n === lefts.length;
+      return {
+        label: `Check answer (${n}/${lefts.length} pairs)`,
+        ready,
+        hint: ready ? null : "Match every item to check.",
+      };
+    }
+    case "FILL_BLANK": {
+      const keys = blankKeys(q);
+      const n = keys.filter((k) => response?.blanks?.[k]?.trim()).length;
+      const ready = n === keys.length;
+      return {
+        label: keys.length > 1 ? `Check answer (${n}/${keys.length} blanks)` : "Check answer",
+        ready,
+        hint: ready
+          ? "Press Enter in the last blank to check."
+          : keys.length > 1
+            ? "Fill every blank to check."
+            : "Type your answer to check.",
+      };
+    }
+    case "ORDERING": {
       const total = q.options?.length ?? 0;
       const n = response?.orderedOptionIds?.length ?? 0;
       const ready = total > 0 && n === total;
       return {
         label: `Check answer (${n}/${total} placed)`,
         ready,
-        hint: ready ? null : 'Drag every item into a slot to check.',
+        hint: ready ? null : "Drag every item into a slot to check.",
       };
     }
     default:
-      return { label: 'Check answer', ready: isAnswered(response), hint: null };
+      return { label: "Check answer", ready: isAnswered(response), hint: null };
   }
 }
 
@@ -78,18 +97,28 @@ export function PracticeCheck({
 }) {
   const [showExplanation, setShowExplanation] = useState(false);
   useEffect(() => {
-    if (check && focusNext) document.querySelector<HTMLButtonElement>('[data-next-question]')?.focus({ preventScroll: true });
+    if (check && focusNext)
+      document
+        .querySelector<HTMLButtonElement>("[data-next-question]")
+        ?.focus({ preventScroll: true });
   }, [check, focusNext]);
 
   if (!check) {
     if (!checkable) {
-      return <p className="text-xs text-content-subtle">The correct answer of this question type shows after you submit.</p>;
+      return (
+        <p className="text-xs text-content-subtle">
+          The correct answer of this question type shows after you submit.
+        </p>
+      );
     }
     if (INSTANT_CHECK_TYPES.has(question.questionType)) {
       return (
         <p className="text-xs text-content-subtle">
-          {checking ? 'Checking…' : 'Pick an answer — it is checked right away and locked.'}
-          <span className="hidden md:inline"> Keys: 1–{Math.min(question.options?.length ?? 4, 9)} or A–{optionLetterOf(question)}.</span>
+          {checking ? "Checking…" : "Pick an answer — it is checked right away and locked."}
+          <span className="hidden md:inline">
+            {" "}
+            Keys: 1–{Math.min(question.options?.length ?? 4, 9)} or A–{optionLetterOf(question)}.
+          </span>
         </p>
       );
     }
@@ -104,8 +133,10 @@ export function PracticeCheck({
           {progress.label}
         </Button>
         <span className="text-xs text-content-subtle">
-          {progress.hint ?? 'Your answer is locked once checked.'}
-          {progress.ready && question.questionType !== 'FILL_BLANK' && <span className="hidden md:inline"> Press Enter to check.</span>}
+          {progress.hint ?? "Your answer is locked once checked."}
+          {progress.ready && question.questionType !== "FILL_BLANK" && (
+            <span className="hidden md:inline"> Press Enter to check.</span>
+          )}
         </span>
       </div>
     );
@@ -113,8 +144,12 @@ export function PracticeCheck({
 
   if (!check.supported) {
     return (
-      <div role="status" className="flex items-center gap-2 rounded-[10px] border border-line bg-surface px-4 py-3 text-sm font-medium text-content-soft">
-        <Icon.Info className="w-4 h-4 flex-shrink-0" /> Answer saved — the correct answer shows after you submit.
+      <div
+        role="status"
+        className="flex items-center gap-2 rounded-[10px] border border-line bg-surface px-4 py-3 text-sm font-medium text-content-soft"
+      >
+        <Icon.Info className="w-4 h-4 flex-shrink-0" /> Answer saved — the correct answer shows
+        after you submit.
       </div>
     );
   }
@@ -129,16 +164,25 @@ export function PracticeCheck({
         type="button"
         aria-expanded={showExplanation}
         aria-controls={panelId}
-        onClick={() => setShowExplanation(s => !s)}
+        onClick={() => setShowExplanation((s) => !s)}
         className="w-full flex items-center gap-1.5 px-3 py-2.5 text-left text-xs font-semibold text-brand-ink uppercase tracking-wide"
       >
         <Icon.Lightbulb className="w-4 h-4 flex-shrink-0" />
-        {showExplanation ? 'Hide explanation' : 'Show explanation'}
-        <Icon.ChevronDown className={`w-4 h-4 ml-auto transition-transform ${showExplanation ? 'rotate-180' : ''}`} />
+        {showExplanation ? "Hide explanation" : "Show explanation"}
+        <Icon.ChevronDown
+          className={`w-4 h-4 ml-auto transition-transform ${showExplanation ? "rotate-180" : ""}`}
+        />
       </button>
       {showExplanation && (
-        <div id={panelId} className="px-3 pb-3 text-sm leading-relaxed text-content-secondary whitespace-pre-line break-words">
-          {explanation || <span className="text-content-subtle">No explanation has been added to this question yet.</span>}
+        <div
+          id={panelId}
+          className="px-3 pb-3 text-sm leading-relaxed text-content-secondary whitespace-pre-line break-words"
+        >
+          {explanation || (
+            <span className="text-content-subtle">
+              No explanation has been added to this question yet.
+            </span>
+          )}
         </div>
       )}
     </div>

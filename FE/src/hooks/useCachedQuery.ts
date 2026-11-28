@@ -1,5 +1,5 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
-import { useAutoRefresh } from './useAutoRefresh';
+import { useCallback, useEffect, useRef, useState } from "react";
+import { useAutoRefresh } from "./useAutoRefresh";
 
 /**
  * A small in-memory cache for read-only pages the student keeps coming back to (course, module,
@@ -33,7 +33,7 @@ function read<T>(key: string, fetcher: () => Promise<T>): Promise<T> {
   if (running) return running;
   const gen = generation;
   const p = fetcher()
-    .then(value => {
+    .then((value) => {
       if (gen === generation) setCached(key, value);
       return value;
     })
@@ -62,7 +62,7 @@ export function setCached<T>(key: string, value: T): void {
 
 /** Drops one entry, or every entry whose key starts with `prefix` when it ends with ':'. */
 export function invalidateCached(keyOrPrefix: string): void {
-  if (!keyOrPrefix.endsWith(':')) {
+  if (!keyOrPrefix.endsWith(":")) {
     cache.delete(keyOrPrefix);
     return;
   }
@@ -110,7 +110,11 @@ export function useCachedQuery<T>(
 
   // State is tagged with its key, so after a key change nothing of the previous key shows.
   type Entry = { key: string | null; data: T | undefined; error: unknown };
-  const fromCache = (k: string | null): Entry => ({ key: k, data: k == null ? undefined : getCached<T>(k), error: null });
+  const fromCache = (k: string | null): Entry => ({
+    key: k,
+    data: k == null ? undefined : getCached<T>(k),
+    error: null,
+  });
   const [entry, setEntry] = useState<Entry>(() => fromCache(key));
   const [tick, setTick] = useState(0);
   const current = entry.key === key ? entry : fromCache(key);
@@ -121,12 +125,13 @@ export function useCachedQuery<T>(
     if (tick === 0 && isFresh(key)) return;
     let cancelled = false;
     read(key, fetcherRef.current)
-      .then(value => {
+      .then((value) => {
         if (!cancelled) setEntry({ key, data: value, error: null });
       })
-      .catch(err => {
+      .catch((err) => {
         // With something cached the page keeps showing it; the next visit tries again.
-        if (!cancelled && getCached<T>(key) === undefined) setEntry({ key, data: undefined, error: err ?? new Error('Request failed') });
+        if (!cancelled && getCached<T>(key) === undefined)
+          setEntry({ key, data: undefined, error: err ?? new Error("Request failed") });
       });
     return () => {
       cancelled = true;
@@ -134,13 +139,14 @@ export function useCachedQuery<T>(
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [key, tick]);
 
-  const reload = useCallback(() => setTick(t => t + 1), []);
+  const reload = useCallback(() => setTick((t) => t + 1), []);
   useAutoRefresh(reload, options.autoRefresh === true && key != null);
   const setData = useCallback(
     (update: T | ((prev: T | undefined) => T)) => {
-      setEntry(prev => {
+      setEntry((prev) => {
         const base = prev.key === key ? prev.data : key == null ? undefined : getCached<T>(key);
-        const next = typeof update === 'function' ? (update as (p: T | undefined) => T)(base) : update;
+        const next =
+          typeof update === "function" ? (update as (p: T | undefined) => T)(base) : update;
         if (key != null) setCached(key, next);
         return { key, data: next, error: null };
       });

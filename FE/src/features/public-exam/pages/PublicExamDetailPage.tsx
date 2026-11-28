@@ -1,23 +1,23 @@
-import React, { useMemo, useState } from 'react';
-import { useNavigate, useParams } from 'react-router';
-import { Badge } from '@/components/ui/Badge';
-import { Breadcrumb } from '@/components/ui/Breadcrumb';
-import { Button } from '@/components/ui/Button';
-import { Select } from '@/components/ui/Select';
-import { SearchableSelect } from '@/components/ui/SearchableSelect';
-import { Tabs } from '@/components/ui/Tabs';
-import { Icon } from '@/assets/icons';
-import { useAuth } from '@/auth/authContext';
-import { useToast } from '@/components/ui/ToastHost';
-import { publicExamListPathFor } from '@/app/routes';
-import { Role } from '@/utils/permissions';
-import { useExamEditor } from '../examStore';
-import { AttemptHistory } from '../components/AttemptHistory';
+import React, { useMemo, useState } from "react";
+import { useNavigate, useParams } from "react-router";
+import { Badge } from "@/components/ui/Badge";
+import { Breadcrumb } from "@/components/ui/Breadcrumb";
+import { Button } from "@/components/ui/Button";
+import { Select } from "@/components/ui/Select";
+import { SearchableSelect } from "@/components/ui/SearchableSelect";
+import { Tabs } from "@/components/ui/Tabs";
+import { Icon } from "@/assets/icons";
+import { useAuth } from "@/auth/authContext";
+import { useToast } from "@/components/ui/ToastHost";
+import { publicExamListPathFor } from "@/app/routes";
+import { Role } from "@/utils/permissions";
+import { useExamEditor } from "../examStore";
+import { AttemptHistory } from "../components/AttemptHistory";
 import {
   NoQuestionsCard,
   QuestionEditorCard,
   QuestionGroupCard,
-} from '../components/QuestionEditorCard';
+} from "../components/QuestionEditorCard";
 import {
   DIFFICULTY_ACCENT,
   EXAM_TYPE_META,
@@ -26,8 +26,8 @@ import {
   STATUS_META,
   courseMeta,
   examSubtitle,
-} from '../mockPublicExams';
-import type { ExamQuestion } from '../mockExamQuestions';
+} from "../mockPublicExams";
+import type { ExamQuestion } from "../mockExamQuestions";
 
 /**
  * PublicExamDetailPage
@@ -49,37 +49,37 @@ import type { ExamQuestion } from '../mockExamQuestions';
  * the record up, bail out with a not-found block before rendering anything else.
  */
 
-const OVERVIEW_TAB = 'Overview';
-const HISTORY_TAB = 'History';
+const OVERVIEW_TAB = "Overview";
+const HISTORY_TAB = "History";
 
 const COURSE_FILTER_OPTIONS = [
-  { label: 'All Courses', value: '' },
-  ...PUBLIC_EXAM_COURSES.map(c => ({ label: c.shortName ?? c.name, value: c.name })),
+  { label: "All Courses", value: "" },
+  ...PUBLIC_EXAM_COURSES.map((c) => ({ label: c.shortName ?? c.name, value: c.name })),
 ];
 
 const DIFFICULTY_FILTER_OPTIONS = [
-  { label: 'All', value: '' },
-  { label: 'Easy', value: 'Easy' },
-  { label: 'Medium', value: 'Medium' },
-  { label: 'Hard', value: 'Hard' },
+  { label: "All", value: "" },
+  { label: "Easy", value: "Easy" },
+  { label: "Medium", value: "Medium" },
+  { label: "Hard", value: "Hard" },
 ];
 
 const EXAM_STATUS_OPTIONS = [
-  { label: 'All', value: '' },
-  { label: 'Not Started', value: 'available' },
-  { label: 'In Progress', value: 'in-progress' },
-  { label: 'Completed', value: 'completed' },
+  { label: "All", value: "" },
+  { label: "Not Started", value: "available" },
+  { label: "In Progress", value: "in-progress" },
+  { label: "Completed", value: "completed" },
 ];
 
 const EXAM_PUBLICATION_STATUS_OPTIONS = [
-  { label: 'Draft', value: 'Draft' },
-  { label: 'Public', value: 'Public' },
-  { label: 'Private', value: 'Private' },
+  { label: "Draft", value: "Draft" },
+  { label: "Public", value: "Public" },
+  { label: "Private", value: "Private" },
 ] as const;
 
 /** <Select> trigger sizes: the editor's form fields, and the big values in the stats row. */
-const FIELD_SELECT = 'w-full h-9 pl-3 pr-9 rounded-[10px] text-sm';
-const STAT_SELECT = 'w-full h-9 pl-3 pr-9 rounded-[10px] text-lg font-semibold';
+const FIELD_SELECT = "w-full h-9 pl-3 pr-9 rounded-[10px] text-sm";
+const STAT_SELECT = "w-full h-9 pl-3 pr-9 rounded-[10px] text-lg font-semibold";
 
 export function PublicExamDetailPage() {
   const { examId } = useParams<{ examId: string }>();
@@ -92,7 +92,8 @@ export function PublicExamDetailPage() {
   const listPath = publicExamListPathFor(roleCode);
 
   const [tab, setTab] = useState(OVERVIEW_TAB);
-  const [publicationStatus, setPublicationStatus] = useState<(typeof EXAM_PUBLICATION_STATUS_OPTIONS)[number]['value']>('Draft');
+  const [publicationStatus, setPublicationStatus] =
+    useState<(typeof EXAM_PUBLICATION_STATUS_OPTIONS)[number]["value"]>("Draft");
   // Content managers author exams; they have no attempt history of their own, so
   // the History tab is withheld from them entirely rather than shown empty.
   const tabs = useMemo(() => (canEdit ? [OVERVIEW_TAB] : [OVERVIEW_TAB, HISTORY_TAB]), [canEdit]);
@@ -100,11 +101,11 @@ export function PublicExamDetailPage() {
   // someone on a tab that is no longer in the list.
   const activeTab = tabs.includes(tab) ? tab : OVERVIEW_TAB;
 
-  const exam = PUBLIC_EXAMS.find(e => e.id === examId);
+  const exam = PUBLIC_EXAMS.find((e) => e.id === examId);
   // Hook is called before the not-found early return so hook order stays stable
   // across the render; the return below guarantees `editor.draft` is unused
   // when the id is unknown.
-  const editor = useExamEditor(examId ?? '', !canEdit);
+  const editor = useExamEditor(examId ?? "", !canEdit);
 
   if (!exam) {
     return (
@@ -130,15 +131,15 @@ export function PublicExamDetailPage() {
   const status = STATUS_META[draft.status];
   const type = EXAM_TYPE_META[draft.examType];
   const difficulty = DIFFICULTY_ACCENT[draft.difficulty];
-  const completed = draft.status === 'completed';
-  const moduleOptions = course.modules.map(m => ({ label: m, value: m }));
+  const completed = draft.status === "completed";
+  const moduleOptions = course.modules.map((m) => ({ label: m, value: m }));
 
   /** Primary student-facing action, plus the retake only a completed exam offers. */
   const primary = completed
-    ? { label: 'View Result', icon: <Icon.BarChart className="h-4 w-4" /> }
-    : draft.status === 'in-progress'
-      ? { label: 'Continue Exam', icon: <Icon.RefreshCw className="h-4 w-4" /> }
-      : { label: 'Start Practice', icon: <Icon.Zap className="h-4 w-4" /> };
+    ? { label: "View Result", icon: <Icon.BarChart className="h-4 w-4" /> }
+    : draft.status === "in-progress"
+      ? { label: "Continue Exam", icon: <Icon.RefreshCw className="h-4 w-4" /> }
+      : { label: "Start Practice", icon: <Icon.Zap className="h-4 w-4" /> };
 
   const handleSave = () => {
     editor.save();
@@ -149,7 +150,7 @@ export function PublicExamDetailPage() {
 
   const handleCancel = () => {
     editor.cancel();
-    toast.info('Changes discarded');
+    toast.info("Changes discarded");
   };
 
   /**
@@ -178,8 +179,8 @@ export function PublicExamDetailPage() {
     // Follow the question order rather than the group list so the cards appear
     // where their first question sits.
     const usedGroups = draft.groups
-      .filter(group => (byGroup.get(group.id)?.length ?? 0) > 0)
-      .map(group => ({ group, members: byGroup.get(group.id) ?? [] }));
+      .filter((group) => (byGroup.get(group.id)?.length ?? 0) > 0)
+      .map((group) => ({ group, members: byGroup.get(group.id) ?? [] }));
 
     return { usedGroups, singles };
   }, [draft.groups, draft.questions]);
@@ -189,8 +190,8 @@ export function PublicExamDetailPage() {
       <div className="flex flex-wrap items-center gap-2">
         <Breadcrumb
           items={[
-            { label: 'Public Exam', onClick: () => navigate(listPath) },
-            { label: canEdit ? 'Edit Exam' : draft.title },
+            { label: "Public Exam", onClick: () => navigate(listPath) },
+            { label: canEdit ? "Edit Exam" : draft.title },
           ]}
         />
         {/* This catalogue is a design prototype: its exams, attempts and edits are fixture data. */}
@@ -201,7 +202,7 @@ export function PublicExamDetailPage() {
         className={`grid grid-cols-1 gap-6 ${
           // The author panel carries a form, so it needs a little more room than
           // the student's action card. Same shell, one track wider.
-          canEdit ? 'lg:grid-cols-[minmax(0,1fr)_22rem]' : 'lg:grid-cols-[minmax(0,1fr)_20rem]'
+          canEdit ? "lg:grid-cols-[minmax(0,1fr)_22rem]" : "lg:grid-cols-[minmax(0,1fr)_20rem]"
         }`}
       >
         <div className="space-y-6">
@@ -209,29 +210,31 @@ export function PublicExamDetailPage() {
               managers every fact it carried lives in the Exam Information
               panel instead, so the left column is left holding just questions. */}
           {!canEdit && (
-          <section className="rounded-[14px] border border-line bg-surface p-6 shadow-sm">
-            <div className="flex flex-col gap-4 sm:flex-row sm:items-start">
-              <span
-                className="flex h-14 w-14 flex-shrink-0 items-center justify-center rounded-[12px] text-base font-bold tracking-tight"
-                style={{ background: `${course.accent}1A`, color: course.accent }}
-                title={course.name}
-              >
-                {course.monogram}
-              </span>
+            <section className="rounded-[14px] border border-line bg-surface p-6 shadow-sm">
+              <div className="flex flex-col gap-4 sm:flex-row sm:items-start">
+                <span
+                  className="flex h-14 w-14 flex-shrink-0 items-center justify-center rounded-[12px] text-base font-bold tracking-tight"
+                  style={{ background: `${course.accent}1A`, color: course.accent }}
+                  title={course.name}
+                >
+                  {course.monogram}
+                </span>
 
-              <div className="min-w-0 flex-1">
-                <div className="flex flex-wrap items-center gap-2">
-                  <Badge variant={status.badge}>{status.label}</Badge>
-                  <Badge variant={type.badge}>{type.label}</Badge>
+                <div className="min-w-0 flex-1">
+                  <div className="flex flex-wrap items-center gap-2">
+                    <Badge variant={status.badge}>{status.label}</Badge>
+                    <Badge variant={type.badge}>{type.label}</Badge>
+                  </div>
+
+                  <h1 className="mt-2.5 text-2xl font-bold leading-tight tracking-tight text-foreground">
+                    {draft.title}
+                  </h1>
+                  <p className="mt-1.5 text-sm text-muted-foreground">
+                    {examSubtitle({ ...exam, course: draft.course })}
+                  </p>
                 </div>
-
-                <h1 className="mt-2.5 text-2xl font-bold leading-tight tracking-tight text-foreground">
-                  {draft.title}
-                </h1>
-                <p className="mt-1.5 text-sm text-muted-foreground">{examSubtitle({ ...exam, course: draft.course })}</p>
               </div>
-            </div>
-          </section>
+            </section>
           )}
 
           {/* Tab strip — sits directly under the exam header. A one-item tab bar
@@ -249,192 +252,220 @@ export function PublicExamDetailPage() {
               <AttemptHistory exam={exam} />
             ) : (
               <>
-          {/* At-a-glance facts */}
-          {!canEdit && <section aria-label="Exam details" className="rounded-[14px] border border-line bg-surface p-6 shadow-sm">
-            <h2 className="text-lg font-semibold text-foreground">Exam details</h2>
-            <dl className="mt-4 grid grid-cols-2 gap-x-6 gap-y-5 sm:grid-cols-3">
-              <div>
-                <dt className="text-xs text-muted-foreground">Exam Type</dt>
-                <dd className="mt-1 text-lg font-semibold text-foreground">{type.label}</dd>
-              </div>
+                {/* At-a-glance facts */}
+                {!canEdit && (
+                  <section
+                    aria-label="Exam details"
+                    className="rounded-[14px] border border-line bg-surface p-6 shadow-sm"
+                  >
+                    <h2 className="text-lg font-semibold text-foreground">Exam details</h2>
+                    <dl className="mt-4 grid grid-cols-2 gap-x-6 gap-y-5 sm:grid-cols-3">
+                      <div>
+                        <dt className="text-xs text-muted-foreground">Exam Type</dt>
+                        <dd className="mt-1 text-lg font-semibold text-foreground">{type.label}</dd>
+                      </div>
 
-              <div>
-                <dt className="text-xs text-muted-foreground">Duration</dt>
-                <dd className="mt-1 flex items-center gap-1.5">
-                  {canEdit ? (
-                    <input
-                      type="number"
-                      min={1}
-                      value={draft.duration}
-                      onChange={e => editor.setField('duration', Math.max(1, Number(e.target.value) || 1))}
-                      aria-label="Time limit in minutes"
-                      className="h-9 w-24 rounded-[10px] border border-line bg-surface px-3 text-lg font-semibold text-foreground outline-none focus:border-primary focus:ring-2 focus:ring-primary/20"
-                    />
-                  ) : (
-                    <span className="text-lg font-semibold text-foreground">{draft.duration} min</span>
-                  )}
-                </dd>
-              </div>
+                      <div>
+                        <dt className="text-xs text-muted-foreground">Duration</dt>
+                        <dd className="mt-1 flex items-center gap-1.5">
+                          {canEdit ? (
+                            <input
+                              type="number"
+                              min={1}
+                              value={draft.duration}
+                              onChange={(e) =>
+                                editor.setField(
+                                  "duration",
+                                  Math.max(1, Number(e.target.value) || 1),
+                                )
+                              }
+                              aria-label="Time limit in minutes"
+                              className="h-9 w-24 rounded-[10px] border border-line bg-surface px-3 text-lg font-semibold text-foreground outline-none focus:border-primary focus:ring-2 focus:ring-primary/20"
+                            />
+                          ) : (
+                            <span className="text-lg font-semibold text-foreground">
+                              {draft.duration} min
+                            </span>
+                          )}
+                        </dd>
+                      </div>
 
-              <div>
-                <dt className="text-xs text-muted-foreground">Questions</dt>
-                <dd className="mt-1 text-lg font-semibold text-foreground">{exam.questions}</dd>
-              </div>
+                      <div>
+                        <dt className="text-xs text-muted-foreground">Questions</dt>
+                        <dd className="mt-1 text-lg font-semibold text-foreground">
+                          {exam.questions}
+                        </dd>
+                      </div>
 
-              <div>
-                <dt className="text-xs text-muted-foreground">Difficulty</dt>
-                <dd className="mt-1">
-                  {canEdit ? (
-                    <Select
-                      value={draft.difficulty}
-                      onChange={v => editor.setField('difficulty', v as typeof draft.difficulty)}
-                      aria-label="Difficulty"
-                      triggerClassName={STAT_SELECT}
-                      options={DIFFICULTY_FILTER_OPTIONS.filter(o => o.value)}
-                    />
-                  ) : (
-                    <span className="flex items-center gap-1.5 text-lg font-semibold text-foreground">
-                      <span aria-hidden="true" className="h-1.5 w-1.5 rounded-full" style={{ background: difficulty }} />
-                      {draft.difficulty}
-                    </span>
-                  )}
-                </dd>
-              </div>
+                      <div>
+                        <dt className="text-xs text-muted-foreground">Difficulty</dt>
+                        <dd className="mt-1">
+                          {canEdit ? (
+                            <Select
+                              value={draft.difficulty}
+                              onChange={(v) =>
+                                editor.setField("difficulty", v as typeof draft.difficulty)
+                              }
+                              aria-label="Difficulty"
+                              triggerClassName={STAT_SELECT}
+                              options={DIFFICULTY_FILTER_OPTIONS.filter((o) => o.value)}
+                            />
+                          ) : (
+                            <span className="flex items-center gap-1.5 text-lg font-semibold text-foreground">
+                              <span
+                                aria-hidden="true"
+                                className="h-1.5 w-1.5 rounded-full"
+                                style={{ background: difficulty }}
+                              />
+                              {draft.difficulty}
+                            </span>
+                          )}
+                        </dd>
+                      </div>
 
-              <div>
-                <dt className="text-xs text-muted-foreground">Status</dt>
-                <dd className="mt-1">
-                  {canEdit ? (
-                    <Select
-                      value={draft.status}
-                      onChange={v => editor.setField('status', v as typeof draft.status)}
-                      aria-label="Status"
-                      triggerClassName={STAT_SELECT}
-                      options={EXAM_STATUS_OPTIONS.filter(o => o.value)}
-                    />
-                  ) : (
-                    <span className="text-lg font-semibold text-foreground">{status.label}</span>
-                  )}
-                </dd>
-              </div>
+                      <div>
+                        <dt className="text-xs text-muted-foreground">Status</dt>
+                        <dd className="mt-1">
+                          {canEdit ? (
+                            <Select
+                              value={draft.status}
+                              onChange={(v) => editor.setField("status", v as typeof draft.status)}
+                              aria-label="Status"
+                              triggerClassName={STAT_SELECT}
+                              options={EXAM_STATUS_OPTIONS.filter((o) => o.value)}
+                            />
+                          ) : (
+                            <span className="text-lg font-semibold text-foreground">
+                              {status.label}
+                            </span>
+                          )}
+                        </dd>
+                      </div>
 
-              {completed && exam.score !== undefined && (
-                <div>
-                  <dt className="text-xs text-muted-foreground">Your Score</dt>
-                  <dd className="mt-1 text-lg font-semibold text-foreground">{exam.score}%</dd>
-                </div>
-              )}
-            </dl>
-          </section>}
+                      {completed && exam.score !== undefined && (
+                        <div>
+                          <dt className="text-xs text-muted-foreground">Your Score</dt>
+                          <dd className="mt-1 text-lg font-semibold text-foreground">
+                            {exam.score}%
+                          </dd>
+                        </div>
+                      )}
+                    </dl>
+                  </section>
+                )}
 
-          {/* Score — completed exams only */}
-          {!canEdit && completed && exam.score !== undefined && (
-            <section className="rounded-[14px] border border-line bg-surface p-6 shadow-sm">
-              <h2 className="text-lg font-semibold text-foreground">Your result</h2>
-              <p className="mt-2 text-base leading-relaxed text-muted-foreground">
-                You scored {exam.score}% on this attempt. Review every question with its explanation, or retake it
-                to improve your score.
-              </p>
-              {/* Hand-rolled bar rather than <Progress>: that component hard-codes
+                {/* Score — completed exams only */}
+                {!canEdit && completed && exam.score !== undefined && (
+                  <section className="rounded-[14px] border border-line bg-surface p-6 shadow-sm">
+                    <h2 className="text-lg font-semibold text-foreground">Your result</h2>
+                    <p className="mt-2 text-base leading-relaxed text-muted-foreground">
+                      You scored {exam.score}% on this attempt. Review every question with its
+                      explanation, or retake it to improve your score.
+                    </p>
+                    {/* Hand-rolled bar rather than <Progress>: that component hard-codes
                   #F3F4F6 / #374151, and the .dark remaps in styles/index.css don't
                   cover every one of them, so its percentage text goes invisible in
                   dark mode. bg-accent + text-foreground follow the theme instead. */}
-              <div className="mt-5">
-                <div className="flex items-baseline justify-between">
-                  <span className="text-xs text-muted-foreground">Score</span>
-                  <span className="text-xl font-bold text-foreground">{exam.score}%</span>
-                </div>
-                <div className="mt-2 h-2 w-full overflow-hidden rounded-full bg-accent">
-                  <div
-                    className="h-2 rounded-full transition-all duration-500"
-                    style={{
-                      width: `${exam.score}%`,
-                      background: exam.score >= 70 ? '#16A34A' : '#D97706',
-                    }}
-                  />
-                </div>
-              </div>
-            </section>
-          )}
-
-          {/* Questions */}
-          <section aria-label="Questions" className="space-y-4">
-            <div className="flex flex-wrap items-center justify-between gap-3">
-              <div>
-                <h2 className="text-lg font-semibold text-foreground">Questions</h2>
-                <p className="mt-0.5 text-xs text-muted-foreground">
-                  {canEdit ? `Showing ${draft.questions.length} questions` : `Showing ${draft.questions.length} of ${exam.questions}`}
-                </p>
-              </div>
-            </div>
-
-            {draft.questions.length === 0 ? (
-              canEdit ? (
-                <NoQuestionsCard onAdd={editor.addQuestion} />
-              ) : (
-                <p className="rounded-[14px] border border-line bg-surface px-6 py-10 text-center text-sm text-muted-foreground shadow-sm">
-                  This exam has no questions yet. Check back soon.
-                </p>
-              )
-            ) : (
-              <>
-                {/* One card per group. Groups are ordered by first appearance, and
-                    a group whose members were all removed or reassigned drops out. */}
-                {usedGroups.map(({ group, members }) => (
-                  <QuestionGroupCard
-                    key={group.id}
-                    group={group}
-                    canEdit={canEdit}
-                    count={members.length}
-                    onChange={patch => editor.setGroup(group.id, patch)}
-                  >
-                    {members.map(member => (
-                      <QuestionEditorCard
-                        key={member.question.id}
-                        question={member.question}
-                        index={member.position}
-                        total={draft.questions.length}
-                        groups={draft.groups}
-                        canEdit={canEdit}
-                        nested
-                        onChange={patch => editor.setQuestion(member.question.id, patch)}
-                        onRemove={() => editor.removeQuestion(member.question.id)}
-                        onMove={direction => editor.moveQuestion(member.question.id, direction)}
-                      />
-                    ))}
-                  </QuestionGroupCard>
-                ))}
-
-                {/* Standalone questions sit in their own section so grouped and
-                    ungrouped items are scannable at a glance. */}
-                {singles.length > 0 && (
-                  <div className="space-y-4 pt-2">
-                    <div className="flex items-center gap-3">
-                      <h3 className="text-lg font-semibold text-foreground">Single Questions</h3>
-                      <span className="h-px flex-1 bg-line" />
-                      <span className="text-xs text-muted-foreground">
-                        {singles.length}
-                      </span>
+                    <div className="mt-5">
+                      <div className="flex items-baseline justify-between">
+                        <span className="text-xs text-muted-foreground">Score</span>
+                        <span className="text-xl font-bold text-foreground">{exam.score}%</span>
+                      </div>
+                      <div className="mt-2 h-2 w-full overflow-hidden rounded-full bg-accent">
+                        <div
+                          className="h-2 rounded-full transition-all duration-500"
+                          style={{
+                            width: `${exam.score}%`,
+                            background: exam.score >= 70 ? "#16A34A" : "#D97706",
+                          }}
+                        />
+                      </div>
                     </div>
-
-                    {singles.map(({ question, position }) => (
-                      <QuestionEditorCard
-                        key={question.id}
-                        question={question}
-                        index={position}
-                        total={draft.questions.length}
-                        groups={draft.groups}
-                        canEdit={canEdit}
-                        onChange={patch => editor.setQuestion(question.id, patch)}
-                        onRemove={() => editor.removeQuestion(question.id)}
-                        onMove={direction => editor.moveQuestion(question.id, direction)}
-                      />
-                    ))}
-                  </div>
+                  </section>
                 )}
-              </>
-            )}
-          </section>
+
+                {/* Questions */}
+                <section aria-label="Questions" className="space-y-4">
+                  <div className="flex flex-wrap items-center justify-between gap-3">
+                    <div>
+                      <h2 className="text-lg font-semibold text-foreground">Questions</h2>
+                      <p className="mt-0.5 text-xs text-muted-foreground">
+                        {canEdit
+                          ? `Showing ${draft.questions.length} questions`
+                          : `Showing ${draft.questions.length} of ${exam.questions}`}
+                      </p>
+                    </div>
+                  </div>
+
+                  {draft.questions.length === 0 ? (
+                    canEdit ? (
+                      <NoQuestionsCard onAdd={editor.addQuestion} />
+                    ) : (
+                      <p className="rounded-[14px] border border-line bg-surface px-6 py-10 text-center text-sm text-muted-foreground shadow-sm">
+                        This exam has no questions yet. Check back soon.
+                      </p>
+                    )
+                  ) : (
+                    <>
+                      {/* One card per group. Groups are ordered by first appearance, and
+                    a group whose members were all removed or reassigned drops out. */}
+                      {usedGroups.map(({ group, members }) => (
+                        <QuestionGroupCard
+                          key={group.id}
+                          group={group}
+                          canEdit={canEdit}
+                          count={members.length}
+                          onChange={(patch) => editor.setGroup(group.id, patch)}
+                        >
+                          {members.map((member) => (
+                            <QuestionEditorCard
+                              key={member.question.id}
+                              question={member.question}
+                              index={member.position}
+                              total={draft.questions.length}
+                              groups={draft.groups}
+                              canEdit={canEdit}
+                              nested
+                              onChange={(patch) => editor.setQuestion(member.question.id, patch)}
+                              onRemove={() => editor.removeQuestion(member.question.id)}
+                              onMove={(direction) =>
+                                editor.moveQuestion(member.question.id, direction)
+                              }
+                            />
+                          ))}
+                        </QuestionGroupCard>
+                      ))}
+
+                      {/* Standalone questions sit in their own section so grouped and
+                    ungrouped items are scannable at a glance. */}
+                      {singles.length > 0 && (
+                        <div className="space-y-4 pt-2">
+                          <div className="flex items-center gap-3">
+                            <h3 className="text-lg font-semibold text-foreground">
+                              Single Questions
+                            </h3>
+                            <span className="h-px flex-1 bg-line" />
+                            <span className="text-xs text-muted-foreground">{singles.length}</span>
+                          </div>
+
+                          {singles.map(({ question, position }) => (
+                            <QuestionEditorCard
+                              key={question.id}
+                              question={question}
+                              index={position}
+                              total={draft.questions.length}
+                              groups={draft.groups}
+                              canEdit={canEdit}
+                              onChange={(patch) => editor.setQuestion(question.id, patch)}
+                              onRemove={() => editor.removeQuestion(question.id)}
+                              onMove={(direction) => editor.moveQuestion(question.id, direction)}
+                            />
+                          ))}
+                        </div>
+                      )}
+                    </>
+                  )}
+                </section>
               </>
             )}
           </div>
@@ -446,15 +477,80 @@ export function PublicExamDetailPage() {
             {canEdit && (
               <div className="mb-4 space-y-4">
                 <h2 className="text-lg font-semibold text-foreground">Exam Information</h2>
-                <label className="flex flex-col gap-1.5"><span className="text-xs text-muted-foreground">Exam Name</span><input value={draft.title} onChange={e => editor.setField('title', e.target.value)} aria-label="Exam Name" className="h-9 rounded-[10px] border border-line bg-surface px-3 text-sm text-foreground outline-none focus:border-primary focus:ring-2 focus:ring-primary/20" /></label>
-                <div className="flex flex-col gap-1.5"><span className="text-xs text-muted-foreground">Course</span><SearchableSelect value={draft.course} onChange={v => editor.setField('course', v)} aria-label="Course" options={COURSE_FILTER_OPTIONS.filter(o => o.value)} placeholder="Choose a course" searchPlaceholder="Search courses…" emptyText="No courses found" /></div>
-                <div className="flex flex-col gap-1.5"><span className="text-xs text-muted-foreground">Module</span><SearchableSelect value={draft.module} onChange={v => editor.setField('module', v)} aria-label="Module" options={moduleOptions} placeholder="Choose a module" searchPlaceholder="Search modules…" emptyText="No modules found" /></div>
-                <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-                  <label className="flex min-w-0 flex-col gap-1.5"><span className="text-xs text-muted-foreground">Time (minutes)</span><input type="number" min={1} value={draft.duration} onChange={e => editor.setField('duration', Math.max(1, Number(e.target.value) || 1))} aria-label="Time in minutes" className="h-9 w-full rounded-[10px] border border-line bg-surface px-3 text-sm text-foreground outline-none focus:border-primary focus:ring-2 focus:ring-primary/20" /></label>
-                  <label className="flex min-w-0 flex-col gap-1.5"><span className="text-xs text-muted-foreground">Number of Questions</span><input value={draft.questions.length} readOnly aria-label="Number of Questions" className="h-9 w-full rounded-[10px] border border-line bg-accent px-3 text-sm text-muted-foreground outline-none" /></label>
+                <label className="flex flex-col gap-1.5">
+                  <span className="text-xs text-muted-foreground">Exam Name</span>
+                  <input
+                    value={draft.title}
+                    onChange={(e) => editor.setField("title", e.target.value)}
+                    aria-label="Exam Name"
+                    className="h-9 rounded-[10px] border border-line bg-surface px-3 text-sm text-foreground outline-none focus:border-primary focus:ring-2 focus:ring-primary/20"
+                  />
+                </label>
+                <div className="flex flex-col gap-1.5">
+                  <span className="text-xs text-muted-foreground">Course</span>
+                  <SearchableSelect
+                    value={draft.course}
+                    onChange={(v) => editor.setField("course", v)}
+                    aria-label="Course"
+                    options={COURSE_FILTER_OPTIONS.filter((o) => o.value)}
+                    placeholder="Choose a course"
+                    searchPlaceholder="Search courses…"
+                    emptyText="No courses found"
+                  />
                 </div>
-                <div className="flex flex-col gap-1.5"><span className="text-xs text-muted-foreground">Status</span><Select value={publicationStatus} onChange={v => setPublicationStatus(v as typeof publicationStatus)} aria-label="Status" triggerClassName={FIELD_SELECT} options={[...EXAM_PUBLICATION_STATUS_OPTIONS]} /></div>
-                <Button className="w-full" icon={<Icon.Plus className="h-4 w-4" />} onClick={editor.addQuestion}>Add Question</Button>
+                <div className="flex flex-col gap-1.5">
+                  <span className="text-xs text-muted-foreground">Module</span>
+                  <SearchableSelect
+                    value={draft.module}
+                    onChange={(v) => editor.setField("module", v)}
+                    aria-label="Module"
+                    options={moduleOptions}
+                    placeholder="Choose a module"
+                    searchPlaceholder="Search modules…"
+                    emptyText="No modules found"
+                  />
+                </div>
+                <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+                  <label className="flex min-w-0 flex-col gap-1.5">
+                    <span className="text-xs text-muted-foreground">Time (minutes)</span>
+                    <input
+                      type="number"
+                      min={1}
+                      value={draft.duration}
+                      onChange={(e) =>
+                        editor.setField("duration", Math.max(1, Number(e.target.value) || 1))
+                      }
+                      aria-label="Time in minutes"
+                      className="h-9 w-full rounded-[10px] border border-line bg-surface px-3 text-sm text-foreground outline-none focus:border-primary focus:ring-2 focus:ring-primary/20"
+                    />
+                  </label>
+                  <label className="flex min-w-0 flex-col gap-1.5">
+                    <span className="text-xs text-muted-foreground">Number of Questions</span>
+                    <input
+                      value={draft.questions.length}
+                      readOnly
+                      aria-label="Number of Questions"
+                      className="h-9 w-full rounded-[10px] border border-line bg-accent px-3 text-sm text-muted-foreground outline-none"
+                    />
+                  </label>
+                </div>
+                <div className="flex flex-col gap-1.5">
+                  <span className="text-xs text-muted-foreground">Status</span>
+                  <Select
+                    value={publicationStatus}
+                    onChange={(v) => setPublicationStatus(v as typeof publicationStatus)}
+                    aria-label="Status"
+                    triggerClassName={FIELD_SELECT}
+                    options={[...EXAM_PUBLICATION_STATUS_OPTIONS]}
+                  />
+                </div>
+                <Button
+                  className="w-full"
+                  icon={<Icon.Plus className="h-4 w-4" />}
+                  onClick={editor.addQuestion}
+                >
+                  Add Question
+                </Button>
               </div>
             )}
             {canEdit && (
@@ -468,48 +564,60 @@ export function PublicExamDetailPage() {
               </div>
             )}
 
-            {!canEdit && <>
-            <p className="text-sm text-muted-foreground">
-              {completed ? 'Finished' : draft.status === 'in-progress' ? 'Partially complete' : 'Ready when you are'}
-            </p>
-            {/* These exams exist only in the fixture: starting one cannot open a real attempt, so
+            {!canEdit && (
+              <>
+                <p className="text-sm text-muted-foreground">
+                  {completed
+                    ? "Finished"
+                    : draft.status === "in-progress"
+                      ? "Partially complete"
+                      : "Ready when you are"}
+                </p>
+                {/* These exams exist only in the fixture: starting one cannot open a real attempt, so
                 the action is honestly disabled instead of navigating to an empty exam screen. */}
-            <Button className="mt-3 w-full" icon={primary.icon} disabled title="Demo exam — not part of the live catalogue">
-              {primary.label}
-            </Button>
-            {completed && (
-              <Button
-                className="mt-2 w-full"
-                variant="outline"
-                icon={<Icon.RefreshCw className="h-4 w-4" />}
-                disabled
-                title="Demo exam — not part of the live catalogue"
-              >
-                Retake Exam
-              </Button>
-            )}
-            <p className="mt-3 text-xs leading-relaxed text-content-subtle">
-              This is a demo catalogue built from fixture data. Exams here cannot be started, and nothing you
-              change on this page leaves your browser.
-            </p>
+                <Button
+                  className="mt-3 w-full"
+                  icon={primary.icon}
+                  disabled
+                  title="Demo exam — not part of the live catalogue"
+                >
+                  {primary.label}
+                </Button>
+                {completed && (
+                  <Button
+                    className="mt-2 w-full"
+                    variant="outline"
+                    icon={<Icon.RefreshCw className="h-4 w-4" />}
+                    disabled
+                    title="Demo exam — not part of the live catalogue"
+                  >
+                    Retake Exam
+                  </Button>
+                )}
+                <p className="mt-3 text-xs leading-relaxed text-content-subtle">
+                  This is a demo catalogue built from fixture data. Exams here cannot be started,
+                  and nothing you change on this page leaves your browser.
+                </p>
 
-            <dl className="mt-5 space-y-2.5 border-t border-line pt-4">
-              {[
-                { label: 'Duration', value: `${draft.duration} min` },
-                { label: 'Questions', value: String(exam.questions) },
-                { label: 'Exam type', value: type.label },
-              ].map(row => (
-                <div key={row.label} className="flex items-center justify-between gap-3">
-                  <dt className="text-sm text-muted-foreground">{row.label}</dt>
-                  <dd className="text-sm font-semibold text-foreground">{row.value}</dd>
-                </div>
-              ))}
-            </dl>
-            </>}
+                <dl className="mt-5 space-y-2.5 border-t border-line pt-4">
+                  {[
+                    { label: "Duration", value: `${draft.duration} min` },
+                    { label: "Questions", value: String(exam.questions) },
+                    { label: "Exam type", value: type.label },
+                  ].map((row) => (
+                    <div key={row.label} className="flex items-center justify-between gap-3">
+                      <dt className="text-sm text-muted-foreground">{row.label}</dt>
+                      <dd className="text-sm font-semibold text-foreground">{row.value}</dd>
+                    </div>
+                  ))}
+                </dl>
+              </>
+            )}
 
             {false && (
               <p className="mt-4 border-t border-line pt-4 text-xs leading-relaxed text-content-subtle">
-                Answer keys and correct options are only visible to you — learners never see them on this page.
+                Answer keys and correct options are only visible to you — learners never see them on
+                this page.
               </p>
             )}
           </div>

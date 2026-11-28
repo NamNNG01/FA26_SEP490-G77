@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from "react";
-import { useQuietRefresh } from '@/hooks/useAutoRefresh';
+import { useQuietRefresh } from "@/hooks/useAutoRefresh";
 import { useNavigate, useParams } from "react-router";
 import { Avatar } from "@/components/ui/Avatar";
 import { Badge } from "@/components/ui/Badge";
@@ -27,11 +27,7 @@ import {
   type StudentContest,
 } from "@/services/studentContest.service";
 import { getApiErrorMessage } from "@/utils/apiError";
-import {
-  LoadError,
-  PageTitle,
-  STUDENT_PAGE_CLASS,
-} from "../components/studentUi";
+import { LoadError, PageTitle, STUDENT_PAGE_CLASS } from "../components/studentUi";
 import { hcmInputToIso, RankMedal } from "@/features/contest/components/contestUi";
 
 const PAGE_SIZE = 9;
@@ -47,9 +43,10 @@ const STATUS_LABEL: Record<ContestStatus, string> = {
 };
 const STATUS_OPTIONS = [
   { label: "Any status", value: "" },
-  ...(["UPCOMING", "ONGOING", "ENDED", "REWARDED", "CANCELLED"] as ContestStatus[]).map(
-    (s) => ({ label: STATUS_LABEL[s], value: s }),
-  ),
+  ...(["UPCOMING", "ONGOING", "ENDED", "REWARDED", "CANCELLED"] as ContestStatus[]).map((s) => ({
+    label: STATUS_LABEL[s],
+    value: s,
+  })),
 ];
 
 export function StudentContestsPage() {
@@ -60,7 +57,13 @@ export function StudentContestsPage() {
 type Course = Pick<MyCourse, "courseId" | "title">;
 
 const EMPTY_PAGE = <T,>(): StudentPage<T> => ({
-  content: [], page: 0, size: PAGE_SIZE, totalElements: 0, totalPages: 0, first: true, last: true,
+  content: [],
+  page: 0,
+  size: PAGE_SIZE,
+  totalElements: 0,
+  totalPages: 0,
+  first: true,
+  last: true,
 });
 
 function dateFilter(value: string, endOfDay = false) {
@@ -76,7 +79,9 @@ function ContestList() {
   const [tab, setTab] = useState(LIST_TABS[0]);
   const [page, setPage] = useState(1);
   const [contestPage, setContestPage] = useState<StudentPage<StudentContest>>(() => EMPTY_PAGE());
-  const [historyPage, setHistoryPage] = useState<StudentPage<ContestHistoryItem>>(() => EMPTY_PAGE());
+  const [historyPage, setHistoryPage] = useState<StudentPage<ContestHistoryItem>>(() =>
+    EMPTY_PAGE(),
+  );
   const [courses, setCourses] = useState<Course[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -90,15 +95,23 @@ function ContestList() {
 
   useEffect(() => {
     let cancelled = false;
-    studentCourseService.getMyCourses({ page: 0, size: 100 })
+    studentCourseService
+      .getMyCourses({ page: 0, size: 100 })
       .then((result) => {
-        if (!cancelled) setCourses(result.content
-          .filter((course) => course.status !== "CANCELLED")
-          .map(({ courseId, title }) => ({ courseId, title }))
-          .sort((a, b) => a.title.localeCompare(b.title)));
+        if (!cancelled)
+          setCourses(
+            result.content
+              .filter((course) => course.status !== "CANCELLED")
+              .map(({ courseId, title }) => ({ courseId, title }))
+              .sort((a, b) => a.title.localeCompare(b.title)),
+          );
       })
-      .catch(() => { if (!cancelled) setCourses([]); });
-    return () => { cancelled = true; };
+      .catch(() => {
+        if (!cancelled) setCourses([]);
+      });
+    return () => {
+      cancelled = true;
+    };
   }, []);
 
   useEffect(() => {
@@ -120,7 +133,7 @@ function ContestList() {
       ? studentContestService.getHistory(filters)
       : studentContestService.getContests({
           ...filters,
-          status: status ? status as ContestStatus : undefined,
+          status: status ? (status as ContestStatus) : undefined,
         });
     request
       .then((result) => {
@@ -144,9 +157,7 @@ function ContestList() {
 
   const rows = isHistory ? historyPage.content : contestPage.content;
   const totalRows = isHistory ? historyPage.totalElements : contestPage.totalElements;
-  const filtersActive = Boolean(
-    (!isHistory && status) || courseId || from || to,
-  );
+  const filtersActive = Boolean((!isHistory && status) || courseId || from || to);
 
   const chooseTab = (next: string) => {
     setTab(next);
@@ -169,34 +180,29 @@ function ContestList() {
         title="Contests"
         subtitle="Join a contest, compete with other students, and claim your rewards."
       />
-      <Tabs
-        tabs={LIST_TABS}
-        active={tab}
-        onChange={chooseTab}
-        variant="underline"
-      />
+      <Tabs tabs={LIST_TABS} active={tab} onChange={chooseTab} variant="underline" />
 
       <section className="card p-4">
         <div
           className={`grid grid-cols-1 gap-3 sm:grid-cols-2 ${isHistory ? "lg:grid-cols-3" : "lg:grid-cols-4"}`}
         >
           <SearchableSelect
-              aria-label="Course"
-              value={courseId}
-              onChange={(v) => {
-                setCourseId(v);
-                setPage(1);
-              }}
-              options={[
-                { label: "All courses", value: "" },
-                ...courses.map((c) => ({
-                  label: c.title,
-                  value: String(c.courseId),
-                })),
-              ]}
-              placeholder="All courses"
-              searchPlaceholder="Search courses…"
-            />
+            aria-label="Course"
+            value={courseId}
+            onChange={(v) => {
+              setCourseId(v);
+              setPage(1);
+            }}
+            options={[
+              { label: "All courses", value: "" },
+              ...courses.map((c) => ({
+                label: c.title,
+                value: String(c.courseId),
+              })),
+            ]}
+            placeholder="All courses"
+            searchPlaceholder="Search courses…"
+          />
           {!isHistory && (
             <Select
               aria-label="Status"
@@ -241,9 +247,7 @@ function ContestList() {
       {error ? (
         <LoadError message={error} onRetry={() => setReload((v) => v + 1)} />
       ) : loading ? (
-        <div className="card p-8 text-sm text-content-subtle">
-          Loading contests…
-        </div>
+        <div className="card p-8 text-sm text-content-subtle">Loading contests…</div>
       ) : rows.length === 0 ? (
         <div className="card">
           <EmptyState
@@ -268,15 +272,10 @@ function ContestList() {
         <div className="card overflow-hidden">
           <ul className="divide-y divide-line">
             {(rows as ContestHistoryItem[]).map((item) => (
-              <li
-                key={item.contestId}
-                className="flex flex-wrap items-center gap-3 px-4 py-4"
-              >
+              <li key={item.contestId} className="flex flex-wrap items-center gap-3 px-4 py-4">
                 <Icon.Trophy className="h-5 w-5 text-warning" />
                 <div className="min-w-[12rem] flex-1">
-                  <p className="text-sm font-semibold text-content">
-                    {item.title}
-                  </p>
+                  <p className="text-sm font-semibold text-content">{item.title}</p>
                   <p className="text-xs text-content-subtle">
                     {item.course ? `${item.course.title} · ` : ""}
                     {item.startTime
@@ -286,14 +285,9 @@ function ContestList() {
                 </div>
                 <StatusBadge status={item.status} />
                 <span className="text-sm text-content-secondary">
-                  {item.rank != null ? `Rank #${item.rank}` : "—"} ·{" "}
-                  {item.score ?? "No score"}
+                  {item.rank != null ? `Rank #${item.rank}` : "—"} · {item.score ?? "No score"}
                 </span>
-                <Button
-                  size="sm"
-                  variant="outline"
-                  onClick={() => open(item.contestId)}
-                >
+                <Button size="sm" variant="outline" onClick={() => open(item.contestId)}>
                   Details
                 </Button>
               </li>
@@ -361,31 +355,20 @@ function ctaFor(contest: StudentContest): {
       ? { label: "View contest", variant: "outline" }
       : { label: "View & register", variant: "primary" };
   }
-  if (contest.status === "CANCELLED")
-    return { label: "View details", variant: "outline" };
+  if (contest.status === "CANCELLED") return { label: "View details", variant: "outline" };
   return {
     label: contest.isRegistered ? "View results" : "View leaderboard",
     variant: "outline",
   };
 }
 
-function ContestCard({
-  contest,
-  onOpen,
-}: {
-  contest: StudentContest;
-  onOpen: () => void;
-}) {
+function ContestCard({ contest, onOpen }: { contest: StudentContest; onOpen: () => void }) {
   const cta = ctaFor(contest);
   const hasLimit = Boolean(contest.maxParticipants);
   const fillPct = hasLimit
-    ? Math.min(
-        100,
-        Math.round((contest.registeredCount / contest.maxParticipants!) * 100),
-      )
+    ? Math.min(100, Math.round((contest.registeredCount / contest.maxParticipants!) * 100))
     : 0;
-  const isFull =
-    hasLimit && contest.registeredCount >= contest.maxParticipants!;
+  const isFull = hasLimit && contest.registeredCount >= contest.maxParticipants!;
 
   return (
     <article className="card group relative flex flex-col overflow-hidden transition-shadow duration-200 hover:shadow-md focus-within:shadow-md">
@@ -396,11 +379,7 @@ function ContestCard({
 
       <div className="relative">
         {contest.bannerUrl ? (
-          <img
-            src={contest.bannerUrl}
-            alt=""
-            className="h-36 w-full object-cover"
-          />
+          <img src={contest.bannerUrl} alt="" className="h-36 w-full object-cover" />
         ) : (
           <div className="flex h-36 items-center justify-center bg-gradient-to-br from-primary-light to-surface-muted text-primary">
             <span className="flex h-14 w-14 items-center justify-center rounded-full bg-surface shadow-sm">
@@ -428,9 +407,7 @@ function ContestCard({
             {contest.title}
           </h2>
           {contest.course && (
-            <p className="truncate text-xs font-medium text-primary">
-              {contest.course.title}
-            </p>
+            <p className="truncate text-xs font-medium text-primary">{contest.course.title}</p>
           )}
           <p className="line-clamp-2 min-h-10 text-sm leading-5 text-content-soft">
             {contest.description ||
@@ -441,12 +418,8 @@ function ContestCard({
         <div className="space-y-2 border-t border-line-soft pt-3 text-sm text-content-secondary">
           <p className="flex items-center gap-2">
             <Icon.Calendar className="h-4 w-4 flex-shrink-0 text-primary" />
-            <span className="text-content-subtle">
-              {startLabel(contest.status)}
-            </span>
-            <span className="font-medium text-content">
-              {formatDate(contest.startTime)}
-            </span>
+            <span className="text-content-subtle">{startLabel(contest.status)}</span>
+            <span className="font-medium text-content">{formatDate(contest.startTime)}</span>
           </p>
           <p className="flex items-center gap-2">
             <Icon.Clock className="h-4 w-4 flex-shrink-0 text-primary" />
@@ -454,9 +427,7 @@ function ContestCard({
             <span className="text-line" aria-hidden="true">
               |
             </span>
-            <span className="tabular-nums">
-              {contest.questionCount} questions
-            </span>
+            <span className="tabular-nums">{contest.questionCount} questions</span>
           </p>
         </div>
 
@@ -509,7 +480,8 @@ function ownReward(result: ContestResult | null): ContestReward | null {
 function prizeText(prize: ContestPrize | null | undefined) {
   if (!prize) return null;
   if (prize.value == null) return prize.discountCode || prize.name || null;
-  if (!prize.discountCode) return prize.name || `${prize.value}${prize.discountType === "PERCENT" ? "% off" : " off"}`;
+  if (!prize.discountCode)
+    return prize.name || `${prize.value}${prize.discountType === "PERCENT" ? "% off" : " off"}`;
   return `${prize.discountCode} · ${prize.discountType === "PERCENT" ? `${prize.value}% off` : `${formatVnd(prize.value)} off`}`;
 }
 
@@ -566,13 +538,9 @@ function ActionPanel({
   onRegister: () => void;
   onStart: () => void;
 }) {
-  const countdown = useCountdown(
-    contest.startTime,
-    contest.status === "UPCOMING",
-  );
+  const countdown = useCountdown(contest.startTime, contest.status === "UPCOMING");
   const isFull =
-    Boolean(contest.maxParticipants) &&
-    contest.registeredCount >= contest.maxParticipants!;
+    Boolean(contest.maxParticipants) && contest.registeredCount >= contest.maxParticipants!;
 
   let heading = "";
   let body = "";
@@ -644,20 +612,12 @@ function ActionPanel({
   );
 }
 
-function PrizesCard({
-  prizes,
-  ownRank,
-}: {
-  prizes: ContestPrize[];
-  ownRank?: number | null;
-}) {
+function PrizesCard({ prizes, ownRank }: { prizes: ContestPrize[]; ownRank?: number | null }) {
   return (
     <section className="card overflow-hidden">
       <div className="border-b border-line p-4">
         <h2 className="font-semibold text-content">Prizes</h2>
-        <p className="mt-0.5 text-xs text-content-subtle">
-          Finish in one of these ranks to win.
-        </p>
+        <p className="mt-0.5 text-xs text-content-subtle">Finish in one of these ranks to win.</p>
       </div>
       <ul className="divide-y divide-line">
         {[...prizes]
@@ -738,9 +698,7 @@ function ResultCard({
           )}
         </div>
       ) : (
-        <p className="text-xs text-content-subtle">
-          No reward for your rank this time.
-        </p>
+        <p className="text-xs text-content-subtle">No reward for your rank this time.</p>
       )}
 
       {certificate && (
@@ -761,9 +719,7 @@ function ContestDetail({ contestId }: { contestId: string }) {
   const navigate = useNavigate();
   const toast = useToast();
   const [contest, setContest] = useState<StudentContest | null>(null);
-  const [leaderboard, setLeaderboard] = useState<ContestLeaderboard | null>(
-    null,
-  );
+  const [leaderboard, setLeaderboard] = useState<ContestLeaderboard | null>(null);
   const [result, setResult] = useState<ContestResult | null>(null);
   const [attemptScore, setAttemptScore] = useState<number | null>(null);
   const [loading, setLoading] = useState(true);
@@ -787,10 +743,7 @@ function ContestDetail({ contestId }: { contestId: string }) {
         setAttemptScore(next.score ?? resultData?.score ?? null);
       } catch (err) {
         if (!silent) {
-          const message = getApiErrorMessage(
-            err,
-            "Failed to load this contest.",
-          );
+          const message = getApiErrorMessage(err, "Failed to load this contest.");
           setError(message);
           toast.error(message);
         }
@@ -829,9 +782,7 @@ function ContestDetail({ contestId }: { contestId: string }) {
       );
       toast.success("You are registered for this contest.");
     } catch (err) {
-      toast.error(
-        getApiErrorMessage(err, "Could not register for this contest."),
-      );
+      toast.error(getApiErrorMessage(err, "Could not register for this contest."));
     } finally {
       setBusy(null);
     }
@@ -840,10 +791,9 @@ function ContestDetail({ contestId }: { contestId: string }) {
     setBusy("start");
     try {
       const attempt = await studentContestService.start(contestId);
-      navigate(
-        `${ROUTES.studentExam}?attemptId=${encodeURIComponent(String(attempt.attemptId))}`,
-        { state: { contestId: Number(contestId), endsAt: attempt.endsAt } },
-      );
+      navigate(`${ROUTES.studentExam}?attemptId=${encodeURIComponent(String(attempt.attemptId))}`, {
+        state: { contestId: Number(contestId), endsAt: attempt.endsAt },
+      });
     } catch (err) {
       toast.error(getApiErrorMessage(err, "Could not start the contest."));
       setBusy(null);
@@ -852,25 +802,22 @@ function ContestDetail({ contestId }: { contestId: string }) {
   const claim = async (rewardId: number) => {
     setBusy(rewardId);
     try {
-      const claimed = await studentContestService.claimReward(
-        contestId,
-        rewardId,
-      );
+      const claimed = await studentContestService.claimReward(contestId, rewardId);
       setResult((current) =>
         current
           ? {
               ...current,
               rewards: current.rewards.map((reward) =>
-                reward.rewardId === rewardId
-                  ? { ...reward, ...claimed, claimed: true }
-                  : reward,
+                reward.rewardId === rewardId ? { ...reward, ...claimed, claimed: true } : reward,
               ),
             }
           : current,
       );
-      setContest((current) => current?.rewardInfo
-        ? { ...current, rewardInfo: { ...current.rewardInfo, claimed: true, claimable: false } }
-        : current);
+      setContest((current) =>
+        current?.rewardInfo
+          ? { ...current, rewardInfo: { ...current.rewardInfo, claimed: true, claimable: false } }
+          : current,
+      );
       toast.success("Reward claimed.");
     } catch (err) {
       toast.error(getApiErrorMessage(err, "Could not claim this reward."));
@@ -890,10 +837,7 @@ function ContestDetail({ contestId }: { contestId: string }) {
             <div className="h-8 w-2/3 animate-pulse rounded bg-surface-muted" />
             <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
               {[0, 1, 2, 3].map((i) => (
-                <div
-                  key={i}
-                  className="h-16 animate-pulse rounded-xl bg-surface-muted"
-                />
+                <div key={i} className="h-16 animate-pulse rounded-xl bg-surface-muted" />
               ))}
             </div>
           </div>
@@ -903,10 +847,7 @@ function ContestDetail({ contestId }: { contestId: string }) {
   if (error || !contest)
     return (
       <div className={`${STUDENT_PAGE_CLASS} space-y-4`}>
-        <Button
-          variant="ghost"
-          onClick={() => navigate(ROUTES.studentContests)}
-        >
+        <Button variant="ghost" onClick={() => navigate(ROUTES.studentContests)}>
           ← Contests
         </Button>
         <LoadError
@@ -921,33 +862,36 @@ function ContestDetail({ contestId }: { contestId: string }) {
 
   const prizes = contest.rewards ?? [];
   const showPrizes =
-    (contest.status === "UPCOMING" || contest.status === "ONGOING") &&
-    prizes.length > 0;
+    (contest.status === "UPCOMING" || contest.status === "ONGOING") && prizes.length > 0;
   const resultReward = ownReward(result);
-  const reward = resultReward && contest.rewardInfo
-    ? { ...resultReward, claimed: contest.rewardInfo.claimed, claimable: contest.rewardInfo.claimable }
-    : resultReward ?? (contest.rewardInfo ? {
-        rewardId: contest.rewardInfo.rewardId,
-        rewardType: contest.rewardInfo.rewardType,
-        value: contest.rewardInfo.valueText,
-        description: contest.rewardInfo.name,
-        claimed: contest.rewardInfo.claimed,
-        rankPosition: contest.rewardInfo.rankPosition,
-        claimable: contest.rewardInfo.claimable,
-      } : null);
+  const reward =
+    resultReward && contest.rewardInfo
+      ? {
+          ...resultReward,
+          claimed: contest.rewardInfo.claimed,
+          claimable: contest.rewardInfo.claimable,
+        }
+      : (resultReward ??
+        (contest.rewardInfo
+          ? {
+              rewardId: contest.rewardInfo.rewardId,
+              rewardType: contest.rewardInfo.rewardType,
+              value: contest.rewardInfo.valueText,
+              description: contest.rewardInfo.name,
+              claimed: contest.rewardInfo.claimed,
+              rankPosition: contest.rewardInfo.rankPosition,
+              claimable: contest.rewardInfo.claimable,
+            }
+          : null));
   const score = attemptScore ?? result?.score ?? null;
   const certificate =
     result?.certificateUrl ??
-    result?.rewards.find((r) => r.rewardType === "CERTIFICATE")
-      ?.certificateUrl ??
+    result?.rewards.find((r) => r.rewardType === "CERTIFICATE")?.certificateUrl ??
     null;
 
   const hasLimit = Boolean(contest.maxParticipants);
   const fillPct = hasLimit
-    ? Math.min(
-        100,
-        Math.round((contest.registeredCount / contest.maxParticipants!) * 100),
-      )
+    ? Math.min(100, Math.round((contest.registeredCount / contest.maxParticipants!) * 100))
     : 0;
   const isFull = hasLimit && contest.registeredCount >= contest.maxParticipants!;
 
@@ -998,12 +942,11 @@ function ContestDetail({ contestId }: { contestId: string }) {
                 {contest.title}
               </h1>
               {contest.course && (
-                <p className="mt-3 text-sm font-medium text-primary">
-                  {contest.course.title}
-                </p>
+                <p className="mt-3 text-sm font-medium text-primary">{contest.course.title}</p>
               )}
               <p className="mt-4 max-w-2xl whitespace-pre-line text-base leading-relaxed text-content-secondary sm:text-lg">
-                {contest.description || "Take on the challenge, put your knowledge to work, and see where you place."}
+                {contest.description ||
+                  "Take on the challenge, put your knowledge to work, and see where you place."}
               </p>
               {score !== null && (
                 <div className="mt-6 inline-flex items-center gap-4 rounded-2xl border border-line-soft bg-surface/90 px-5 py-3 shadow-sm backdrop-blur-sm">
@@ -1017,7 +960,9 @@ function ContestDetail({ contestId }: { contestId: string }) {
                   {result?.rank != null && (
                     <div className="ml-2 border-l border-line pl-4">
                       <p className="text-xs text-content-subtle">Placement</p>
-                      <p className="mt-0.5 text-xl font-bold tabular-nums text-content">#{result.rank}</p>
+                      <p className="mt-0.5 text-xl font-bold tabular-nums text-content">
+                        #{result.rank}
+                      </p>
                     </div>
                   )}
                 </div>
@@ -1029,64 +974,104 @@ function ContestDetail({ contestId }: { contestId: string }) {
       </section>
       <div className={`${STUDENT_PAGE_CLASS} space-y-6`}>
         <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
-          <Fact icon={<Icon.Calendar className="h-5 w-5" />} value={formatDate(contest.startTime)} label={startLabel(contest.status)} />
-          <Fact icon={<Icon.Clock className="h-5 w-5" />} value={`${contest.durationMinutes} min`} label="Time limit" />
-          <Fact icon={<Icon.ClipboardList className="h-5 w-5" />} value={String(contest.questionCount)} label="Questions" />
-          <Fact icon={<Icon.Users className="h-5 w-5" />} value={hasLimit ? `${contest.registeredCount} / ${contest.maxParticipants}` : String(contest.registeredCount)} label={hasLimit ? "Spots filled" : "Participants"} />
-        </div>
-        {hasLimit && (
-          <div className="-mt-3 h-1.5 overflow-hidden rounded-full bg-line-soft" role="progressbar" aria-valuemin={0} aria-valuemax={100} aria-valuenow={fillPct} aria-label="Registration capacity">
-            <div className={`h-full rounded-full transition-[width] duration-300 ${isFull ? "bg-danger" : "bg-primary"}`} style={{ width: `${fillPct}%` }} />
-          </div>
-        )}
-      <div className="grid grid-cols-1 gap-6 lg:grid-cols-[minmax(0,1fr)_320px] lg:items-start">
-        <aside className="space-y-4 lg:order-2 lg:sticky lg:top-6">
-          {result && (
-            <ResultCard
-              result={result}
-              reward={reward}
-              busy={busy}
-              onClaim={claim}
-              certificate={certificate}
-            />
-          )}
-          {contest.rewardInfo && !result && (
-            <section className="card space-y-3 p-4">
-              <h2 className="font-semibold text-content">Your reward</h2>
-              <p className="text-sm text-content-secondary">{contest.rewardInfo.name || contest.rewardInfo.valueText}</p>
-              <p className="text-xs text-content-subtle">Rank #{contest.rewardInfo.rankPosition}{contest.rewardInfo.valueText ? ` · ${contest.rewardInfo.valueText}` : ""}</p>
-              {contest.rewardInfo.claimed ? <Badge variant="success">Claimed</Badge> : contest.rewardInfo.claimable ? (
-                <Button className="w-full" onClick={() => claim(contest.rewardInfo!.rewardId)} loading={busy === contest.rewardInfo.rewardId} disabled={busy !== null}>Claim reward</Button>
-              ) : <p className="text-xs text-content-soft">Your reward will be available after the contest is finalized.</p>}
-            </section>
-          )}
-          {showPrizes && <PrizesCard prizes={prizes} ownRank={result?.rank} />}
-        </aside>
-
-        <div className="min-w-0 lg:order-1">
-          <Results
-            contest={contest}
-            leaderboard={leaderboard}
-            result={result}
-            busy={busy}
-            onClaim={claim}
+          <Fact
+            icon={<Icon.Calendar className="h-5 w-5" />}
+            value={formatDate(contest.startTime)}
+            label={startLabel(contest.status)}
+          />
+          <Fact
+            icon={<Icon.Clock className="h-5 w-5" />}
+            value={`${contest.durationMinutes} min`}
+            label="Time limit"
+          />
+          <Fact
+            icon={<Icon.ClipboardList className="h-5 w-5" />}
+            value={String(contest.questionCount)}
+            label="Questions"
+          />
+          <Fact
+            icon={<Icon.Users className="h-5 w-5" />}
+            value={
+              hasLimit
+                ? `${contest.registeredCount} / ${contest.maxParticipants}`
+                : String(contest.registeredCount)
+            }
+            label={hasLimit ? "Spots filled" : "Participants"}
           />
         </div>
-      </div>
+        {hasLimit && (
+          <div
+            className="-mt-3 h-1.5 overflow-hidden rounded-full bg-line-soft"
+            role="progressbar"
+            aria-valuemin={0}
+            aria-valuemax={100}
+            aria-valuenow={fillPct}
+            aria-label="Registration capacity"
+          >
+            <div
+              className={`h-full rounded-full transition-[width] duration-300 ${isFull ? "bg-danger" : "bg-primary"}`}
+              style={{ width: `${fillPct}%` }}
+            />
+          </div>
+        )}
+        <div className="grid grid-cols-1 gap-6 lg:grid-cols-[minmax(0,1fr)_320px] lg:items-start">
+          <aside className="space-y-4 lg:order-2 lg:sticky lg:top-6">
+            {result && (
+              <ResultCard
+                result={result}
+                reward={reward}
+                busy={busy}
+                onClaim={claim}
+                certificate={certificate}
+              />
+            )}
+            {contest.rewardInfo && !result && (
+              <section className="card space-y-3 p-4">
+                <h2 className="font-semibold text-content">Your reward</h2>
+                <p className="text-sm text-content-secondary">
+                  {contest.rewardInfo.name || contest.rewardInfo.valueText}
+                </p>
+                <p className="text-xs text-content-subtle">
+                  Rank #{contest.rewardInfo.rankPosition}
+                  {contest.rewardInfo.valueText ? ` · ${contest.rewardInfo.valueText}` : ""}
+                </p>
+                {contest.rewardInfo.claimed ? (
+                  <Badge variant="success">Claimed</Badge>
+                ) : contest.rewardInfo.claimable ? (
+                  <Button
+                    className="w-full"
+                    onClick={() => claim(contest.rewardInfo!.rewardId)}
+                    loading={busy === contest.rewardInfo.rewardId}
+                    disabled={busy !== null}
+                  >
+                    Claim reward
+                  </Button>
+                ) : (
+                  <p className="text-xs text-content-soft">
+                    Your reward will be available after the contest is finalized.
+                  </p>
+                )}
+              </section>
+            )}
+            {showPrizes && <PrizesCard prizes={prizes} ownRank={result?.rank} />}
+          </aside>
+
+          <div className="min-w-0 lg:order-1">
+            <Results
+              contest={contest}
+              leaderboard={leaderboard}
+              result={result}
+              busy={busy}
+              onClaim={claim}
+            />
+          </div>
+        </div>
       </div>
     </div>
   );
 }
 
-function Fact({
-  icon,
-  value,
-  label,
-}: {
-  icon: React.ReactNode;
-  value: string;
-  label: string;
-}) {
+function Fact({ icon, value, label }: { icon: React.ReactNode; value: string; label: string }) {
   return (
     <div className="rounded-2xl border border-line-soft bg-surface p-5 shadow-sm">
       <span className="text-brand-ink">{icon}</span>
@@ -1137,8 +1122,7 @@ function Results({
       <div className="flex flex-wrap items-center justify-between gap-2 border-b border-line p-4">
         <h2 className="font-semibold text-content">Leaderboard</h2>
         <p className="text-xs text-content-subtle">
-          Updated{" "}
-          {leaderboard?.generatedAt ? formatDate(leaderboard.generatedAt) : "—"}
+          Updated {leaderboard?.generatedAt ? formatDate(leaderboard.generatedAt) : "—"}
           <span className="hidden sm:inline"> · refreshes every 30 seconds</span>
         </p>
       </div>
@@ -1179,8 +1163,7 @@ function Results({
             <tbody className="divide-y divide-line">
               {rows.map((row) => {
                 const mine = row.isCurrentUser;
-                const prize =
-                  prizeText(row.reward) ?? (mine && reward ? reward.value : null);
+                const prize = prizeText(row.reward) ?? (mine && reward ? reward.value : null);
                 return (
                   <tr
                     key={`${row.rank}-${row.userId}`}
@@ -1200,15 +1183,11 @@ function Results({
                           src={row.avatarUrl ?? undefined}
                           size="sm"
                         />
-                        <span className={mine ? "font-semibold" : ""}>
-                          {row.studentName}
-                        </span>
+                        <span className={mine ? "font-semibold" : ""}>{row.studentName}</span>
                         {mine && <Badge variant="info">You</Badge>}
                       </div>
                     </td>
-                    <td className="px-4 py-3 text-right font-medium tabular-nums">
-                      {row.score}
-                    </td>
+                    <td className="px-4 py-3 text-right font-medium tabular-nums">{row.score}</td>
                     <td className="px-4 py-3">
                       {prize ?? <span className="text-content-soft">—</span>}
                     </td>
@@ -1251,9 +1230,9 @@ function StatusBadge({ status }: { status: ContestStatus }) {
         ? "success"
         : status === "CANCELLED"
           ? "danger"
-        : status === "REWARDED"
-          ? "purple"
-          : "default";
+          : status === "REWARDED"
+            ? "purple"
+            : "default";
   return <Badge variant={variant}>{STATUS_LABEL[status] ?? status}</Badge>;
 }
 

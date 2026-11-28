@@ -1,21 +1,21 @@
-import React from 'react';
-import { Badge } from '@/components/ui/Badge';
-import { Button } from '@/components/ui/Button';
-import { Select } from '@/components/ui/Select';
-import { Icon } from '@/assets/icons';
-import type { ExamDifficulty } from '../mockPublicExams';
+import React from "react";
+import { Badge } from "@/components/ui/Badge";
+import { Button } from "@/components/ui/Button";
+import { Select } from "@/components/ui/Select";
+import { Icon } from "@/assets/icons";
+import type { ExamDifficulty } from "../mockPublicExams";
 import {
   QUESTION_TYPE_LABEL,
   type ExamOption,
   type ExamQuestion,
   type QuestionGroup,
-} from '../mockExamQuestions';
+} from "../mockExamQuestions";
 
 /** Per-item difficulty -> Badge variant. Green / orange / red. */
-const DIFFICULTY_VARIANT: Record<ExamDifficulty, 'success' | 'warning' | 'danger'> = {
-  Easy: 'success',
-  Medium: 'warning',
-  Hard: 'danger',
+const DIFFICULTY_VARIANT: Record<ExamDifficulty, "success" | "warning" | "danger"> = {
+  Easy: "success",
+  Medium: "warning",
+  Hard: "danger",
 };
 
 /**
@@ -35,7 +35,7 @@ const DIFFICULTY_VARIANT: Record<ExamDifficulty, 'success' | 'warning' | 'danger
  * guarantee, not a security boundary — real answers must live server-side.
  */
 
-const OPTION_LETTERS = ['A', 'B', 'C', 'D', 'E', 'F'];
+const OPTION_LETTERS = ["A", "B", "C", "D", "E", "F"];
 
 function LabelledField({ label, children }: { label: string; children: React.ReactNode }) {
   return (
@@ -47,14 +47,17 @@ function LabelledField({ label, children }: { label: string; children: React.Rea
 }
 
 /** Author-only: pick the single correct option. */
-function CorrectPicker({ options, onChange }: {
+function CorrectPicker({
+  options,
+  onChange,
+}: {
   options: ExamOption[];
   onChange: (label: string) => void;
 }) {
   return (
     <span className="flex items-center gap-1.5" title="Mark as the correct answer">
       <span className="text-2xs text-content-subtle">Correct</span>
-      {options.map(o => (
+      {options.map((o) => (
         <button
           key={o.label}
           type="button"
@@ -63,8 +66,8 @@ function CorrectPicker({ options, onChange }: {
           onClick={() => onChange(o.label)}
           className={`flex h-6 w-6 items-center justify-center rounded-full border text-2xs font-semibold transition-colors ${
             o.isCorrect
-              ? 'border-transparent bg-success-solid text-white'
-              : 'border-line bg-surface text-muted-foreground hover:border-primary/40 hover:text-foreground'
+              ? "border-transparent bg-success-solid text-white"
+              : "border-line bg-surface text-muted-foreground hover:border-primary/40 hover:text-foreground"
           }`}
         >
           {o.isCorrect ? <Icon.Check className="h-3 w-3" /> : o.label}
@@ -104,9 +107,7 @@ export function QuestionEditorCard({
   const readOnly = !canEdit;
   const grouped = Boolean(question.groupId);
   /** Level 2 inside a group, level 1 on its own. */
-  const shell = nested
-    ? 'bg-surface-alt px-4 py-4'
-    : 'border border-line bg-surface p-5 shadow-sm';
+  const shell = nested ? "bg-surface-alt px-4 py-4" : "border border-line bg-surface p-5 shadow-sm";
 
   /** Read-only rendering of one option — no correct marker, no radio affordance. */
   const optionRow = (option: ExamOption) => (
@@ -120,7 +121,7 @@ export function QuestionEditorCard({
       {canEdit ? (
         <input
           value={option.text}
-          onChange={e => onChange({ options: optionsReplaced(option.label, e.target.value) })}
+          onChange={(e) => onChange({ options: optionsReplaced(option.label, e.target.value) })}
           className="min-w-0 flex-1 rounded-[6px] border border-transparent bg-transparent px-1 py-0.5 text-sm text-foreground outline-none transition-colors hover:border-line focus:border-primary focus:ring-2 focus:ring-primary/20"
         />
       ) : (
@@ -132,11 +133,13 @@ export function QuestionEditorCard({
 
   /** Replace one option's text, leaving the rest of the array untouched. */
   function optionsReplaced(label: string, text: string): ExamOption[] {
-    return (question.options ?? []).map(o => (o.label === label ? { ...o, text } : o));
+    return (question.options ?? []).map((o) => (o.label === label ? { ...o, text } : o));
   }
 
   function markCorrect(label: string): void {
-    onChange({ options: (question.options ?? []).map(o => ({ ...o, isCorrect: o.label === label })) });
+    onChange({
+      options: (question.options ?? []).map((o) => ({ ...o, isCorrect: o.label === label })),
+    });
   }
 
   function setOrderingItem(index: number, text: string): void {
@@ -163,20 +166,20 @@ export function QuestionEditorCard({
         {canEdit ? (
           <Select
             value={question.type}
-            onChange={v => onChange({ type: v as ExamQuestion['type'] })}
+            onChange={(v) => onChange({ type: v as ExamQuestion["type"] })}
             aria-label={`Question ${index} type`}
             triggerClassName="h-7 pl-2.5 pr-8 rounded-full text-xs font-medium"
-            options={(question.type === 'essay'
-              ? ['essay']
-              : ['mcq', 'true-false', 'fill-blank', 'matching', 'ordering']
-            ).map(t => ({ value: t, label: QUESTION_TYPE_LABEL[t as ExamQuestion['type']] }))}
+            options={(question.type === "essay"
+              ? ["essay"]
+              : ["mcq", "true-false", "fill-blank", "matching", "ordering"]
+            ).map((t) => ({ value: t, label: QUESTION_TYPE_LABEL[t as ExamQuestion["type"]] }))}
           />
         ) : (
           <Badge variant="default">{QUESTION_TYPE_LABEL[question.type]}</Badge>
         )}
 
         <Badge variant={DIFFICULTY_VARIANT[question.difficulty]}>{question.difficulty}</Badge>
-        <Badge variant={grouped ? 'info' : 'default'}>{grouped ? 'Group' : 'Single'}</Badge>
+        <Badge variant={grouped ? "info" : "default"}>{grouped ? "Group" : "Single"}</Badge>
 
         <span className="text-xs text-content-subtle">{question.points} pts</span>
 
@@ -185,11 +188,14 @@ export function QuestionEditorCard({
             <span className="flex items-center gap-1.5">
               <span className="text-xs text-muted-foreground">Group</span>
               <Select
-                value={question.groupId ?? ''}
-                onChange={v => onChange({ groupId: v || undefined })}
+                value={question.groupId ?? ""}
+                onChange={(v) => onChange({ groupId: v || undefined })}
                 aria-label={`Group assignment for question ${index}`}
                 triggerClassName="h-8 w-[11rem] pl-2.5 pr-8 rounded-[10px] text-sm"
-                options={[{ value: '', label: 'No group' }, ...groups.map(g => ({ value: g.id, label: g.title }))]}
+                options={[
+                  { value: "", label: "No group" },
+                  ...groups.map((g) => ({ value: g.id, label: g.title })),
+                ]}
               />
             </span>
 
@@ -228,7 +234,7 @@ export function QuestionEditorCard({
         {canEdit ? (
           <textarea
             value={question.text}
-            onChange={e => onChange({ text: e.target.value })}
+            onChange={(e) => onChange({ text: e.target.value })}
             rows={2}
             placeholder="Enter the question text..."
             className="w-full resize-y rounded-[10px] border border-line bg-surface px-3 py-2 text-base leading-relaxed text-foreground outline-none transition-colors placeholder:text-content-placeholder focus:border-primary focus:ring-2 focus:ring-primary/20"
@@ -240,16 +246,16 @@ export function QuestionEditorCard({
 
       {/* Type-specific body */}
       <div className="mt-4 space-y-2.5">
-        {question.type === 'mcq' || question.type === 'true-false' || question.type === 'fill-blank'
+        {question.type === "mcq" || question.type === "true-false" || question.type === "fill-blank"
           ? (question.options ?? []).map(optionRow)
           : null}
 
-        {question.type === 'fill-blank' && question.answer !== undefined && (
-          <LabelledField label={canEdit ? 'Accepted answer' : 'Answer format'}>
+        {question.type === "fill-blank" && question.answer !== undefined && (
+          <LabelledField label={canEdit ? "Accepted answer" : "Answer format"}>
             {canEdit ? (
               <input
                 value={question.answer}
-                onChange={e => onChange({ answer: e.target.value })}
+                onChange={(e) => onChange({ answer: e.target.value })}
                 className="h-9 rounded-[10px] border border-line bg-surface px-3 text-sm text-foreground outline-none focus:border-primary focus:ring-2 focus:ring-primary/20"
               />
             ) : (
@@ -260,16 +266,18 @@ export function QuestionEditorCard({
           </LabelledField>
         )}
 
-        {question.type === 'matching' &&
+        {question.type === "matching" &&
           (question.pairs ?? []).map((pair, i) => (
             <div key={i} className="flex flex-wrap items-center gap-2.5">
               {canEdit ? (
                 <>
                   <input
                     value={pair.left}
-                    onChange={e =>
+                    onChange={(e) =>
                       onChange({
-                        pairs: (question.pairs ?? []).map((p, j) => (j === i ? { ...p, left: e.target.value } : p)),
+                        pairs: (question.pairs ?? []).map((p, j) =>
+                          j === i ? { ...p, left: e.target.value } : p,
+                        ),
                       })
                     }
                     className="min-w-0 flex-1 rounded-[10px] border border-line bg-surface px-3 h-9 text-sm text-foreground outline-none focus:border-primary focus:ring-2 focus:ring-primary/20"
@@ -277,9 +285,11 @@ export function QuestionEditorCard({
                   <Icon.ChevronRight className="h-4 w-4 flex-shrink-0 text-content-subtle" />
                   <input
                     value={pair.right}
-                    onChange={e =>
+                    onChange={(e) =>
                       onChange({
-                        pairs: (question.pairs ?? []).map((p, j) => (j === i ? { ...p, right: e.target.value } : p)),
+                        pairs: (question.pairs ?? []).map((p, j) =>
+                          j === i ? { ...p, right: e.target.value } : p,
+                        ),
                       })
                     }
                     className="min-w-0 flex-1 rounded-[10px] border border-line bg-surface px-3 h-9 text-sm text-foreground outline-none focus:border-primary focus:ring-2 focus:ring-primary/20"
@@ -295,7 +305,7 @@ export function QuestionEditorCard({
             </div>
           ))}
 
-        {question.type === 'ordering' &&
+        {question.type === "ordering" &&
           (question.ordering ?? []).map((item, i) => (
             <div key={i} className="flex items-center gap-2.5">
               <span className="flex h-6 w-6 flex-shrink-0 items-center justify-center rounded-full border border-line bg-surface-alt text-2xs font-semibold text-muted-foreground">
@@ -305,7 +315,7 @@ export function QuestionEditorCard({
                 <>
                   <input
                     value={item.text}
-                    onChange={e => setOrderingItem(i, e.target.value)}
+                    onChange={(e) => setOrderingItem(i, e.target.value)}
                     className="min-w-0 flex-1 rounded-[10px] border border-line bg-surface px-3 h-9 text-sm text-foreground outline-none focus:border-primary focus:ring-2 focus:ring-primary/20"
                   />
                   <button
@@ -333,7 +343,7 @@ export function QuestionEditorCard({
             </div>
           ))}
 
-        {question.type === 'essay' && (
+        {question.type === "essay" && (
           <p className="text-sm text-muted-foreground">
             Written response — graded against a rubric rather than an answer key.
           </p>
@@ -379,7 +389,7 @@ export function QuestionGroupCard({
           {canEdit ? (
             <input
               value={group.title}
-              onChange={e => onChange({ title: e.target.value })}
+              onChange={(e) => onChange({ title: e.target.value })}
               placeholder="Group title"
               aria-label="Group title"
               className="h-8 w-full rounded-[10px] border border-transparent bg-transparent px-2 text-lg font-semibold text-foreground outline-none transition-colors placeholder:text-content-placeholder hover:border-line focus:border-primary focus:ring-2 focus:ring-primary/20"
@@ -389,7 +399,7 @@ export function QuestionGroupCard({
           )}
 
           <p className="mt-0.5 text-xs font-medium text-brand-ink">
-            {count} Question{count === 1 ? '' : 's'}
+            {count} Question{count === 1 ? "" : "s"}
           </p>
         </div>
       </div>
@@ -397,7 +407,7 @@ export function QuestionGroupCard({
       {canEdit ? (
         <textarea
           value={group.passage}
-          onChange={e => onChange({ passage: e.target.value })}
+          onChange={(e) => onChange({ passage: e.target.value })}
           rows={4}
           placeholder="Shared passage text..."
           aria-label="Shared passage"

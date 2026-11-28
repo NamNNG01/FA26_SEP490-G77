@@ -1,10 +1,10 @@
-import React from 'react';
-import { ROUTES } from '@/app/routes';
-import { Container } from '../components/Container';
-import { CTAButton } from '../components/CTAButton';
-import { useRequireAuth } from '@/hooks/useRequireAuth';
-import { useCatalogOverview } from '@/features/catalog';
-import { heroContent } from '../data/landingData';
+import React from "react";
+import { ROUTES } from "@/app/routes";
+import { Container } from "../components/Container";
+import { CTAButton } from "../components/CTAButton";
+import { useRequireAuth } from "@/hooks/useRequireAuth";
+import { useCatalogOverview } from "@/features/catalog";
+import { heroContent } from "../data/landingData";
 
 /** Category names shown in the eyebrow before it gets too long. */
 const EYEBROW_MAX_CATEGORIES = 5;
@@ -31,15 +31,15 @@ export function HeroSection() {
 
   const eyebrow =
     overview && overview.categoryNames.length > 0
-      ? overview.categoryNames.slice(0, EYEBROW_MAX_CATEGORIES).join(' · ')
+      ? overview.categoryNames.slice(0, EYEBROW_MAX_CATEGORIES).join(" · ")
       : heroContent.eyebrowFallback;
 
   // "—" until the catalog answers, so the hero never shows a made-up number.
-  const show = (n: number | undefined) => (n == null ? '—' : n.toLocaleString('en-US'));
+  const show = (n: number | undefined) => (n == null ? "—" : n.toLocaleString("en-US"));
   const catalogStats = [
-    { value: show(overview?.courseCount), label: 'courses' },
-    { value: show(overview?.examCount), label: 'timed mock exams' },
-    { value: show(overview?.categoryNames.length), label: 'categories' },
+    { value: show(overview?.courseCount), label: "courses" },
+    { value: show(overview?.examCount), label: "timed mock exams" },
+    { value: show(overview?.categoryNames.length), label: "categories" },
   ];
 
   return (

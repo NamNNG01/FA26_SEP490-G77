@@ -1,33 +1,33 @@
-import React, { useEffect, useMemo, useState } from 'react';
-import { Badge } from '@/components/ui/Badge';
-import { Button } from '@/components/ui/Button';
-import { Select } from '@/components/ui/Select';
-import { Pagination, usePagination } from '@/components/ui/Pagination';
-import { SearchInput } from '@/components/common/SearchInput';
-import { Icon } from '@/assets/icons';
-import type { AiUsageLog } from '@/services/adminDashboard.service';
-import { formatDateTime, formatInteger } from '../utils/dashboardFormat';
-import { SortHeader } from './SortHeader';
+import React, { useEffect, useMemo, useState } from "react";
+import { Badge } from "@/components/ui/Badge";
+import { Button } from "@/components/ui/Button";
+import { Select } from "@/components/ui/Select";
+import { Pagination, usePagination } from "@/components/ui/Pagination";
+import { SearchInput } from "@/components/common/SearchInput";
+import { Icon } from "@/assets/icons";
+import type { AiUsageLog } from "@/services/adminDashboard.service";
+import { formatDateTime, formatInteger } from "../utils/dashboardFormat";
+import { SortHeader } from "./SortHeader";
 
 const RECENT_LOG_COUNT = 10;
 const PAGE_SIZE = 20;
 
-type ResultFilter = 'all' | 'success' | 'failed';
-type SortKey = 'time' | 'tokens';
+type ResultFilter = "all" | "success" | "failed";
+type SortKey = "time" | "tokens";
 
 /** Lower-case and strip diacritics so "huy" matches accented names. */
 function normalize(text: string): string {
   return text
-    .normalize('NFD')
-    .replace(/\p{M}/gu, '')
-    .replace(/đ/g, 'd')
-    .replace(/Đ/g, 'D')
+    .normalize("NFD")
+    .replace(/\p{M}/gu, "")
+    .replace(/đ/g, "d")
+    .replace(/Đ/g, "D")
     .toLowerCase()
     .trim();
 }
 
 const inputClass =
-  'h-9 px-3 rounded-[10px] border border-line bg-surface text-sm text-content focus:outline-none focus:ring-2 focus:ring-brand-600/20 focus:border-brand-600 transition-all';
+  "h-9 px-3 rounded-[10px] border border-line bg-surface text-sm text-content focus:outline-none focus:ring-2 focus:ring-brand-600/20 focus:border-brand-600 transition-all";
 
 /**
  * AI usage log with filters to track down problems: by user, by result
@@ -47,21 +47,26 @@ export function AiUsageLogTable({
   /** Period-wide counts from the API; `logs` only carries the newest entries. */
   totals?: { requests: number; failed: number; shown: number };
 }) {
-  const [userQuery, setUserQuery] = useState('');
-  const [result, setResult] = useState<ResultFilter>('all');
-  const [timeFrom, setTimeFrom] = useState('');
-  const [timeTo, setTimeTo] = useState('');
-  const [sort, setSort] = useState<{ key: SortKey; dir: 'asc' | 'desc' }>({ key: 'time', dir: 'desc' });
+  const [userQuery, setUserQuery] = useState("");
+  const [result, setResult] = useState<ResultFilter>("all");
+  const [timeFrom, setTimeFrom] = useState("");
+  const [timeTo, setTimeTo] = useState("");
+  const [sort, setSort] = useState<{ key: SortKey; dir: "asc" | "desc" }>({
+    key: "time",
+    dir: "desc",
+  });
   const [showAll, setShowAll] = useState(false);
 
   /** First click on a column sorts it high→low; clicking it again flips the order. */
   const toggleSort = (key: SortKey) =>
-    setSort((s) => (s.key === key ? { key, dir: s.dir === 'desc' ? 'asc' : 'desc' } : { key, dir: 'desc' }));
+    setSort((s) =>
+      s.key === key ? { key, dir: s.dir === "desc" ? "asc" : "desc" } : { key, dir: "desc" },
+    );
 
   // A new dashboard period invalidates the time window; user/result still apply.
   useEffect(() => {
-    setTimeFrom('');
-    setTimeTo('');
+    setTimeFrom("");
+    setTimeTo("");
     setShowAll(false);
   }, [dayRange.from, dayRange.to]);
 
@@ -71,20 +76,20 @@ export function AiUsageLogTable({
       const minute = log.time.slice(0, 16);
       return (
         (!query || normalize(log.user).includes(query)) &&
-        (result === 'all' || (result === 'success') === log.success) &&
+        (result === "all" || (result === "success") === log.success) &&
         (!timeFrom || minute >= timeFrom) &&
         (!timeTo || minute <= timeTo)
       );
     });
-    const sign = sort.dir === 'desc' ? -1 : 1;
+    const sign = sort.dir === "desc" ? -1 : 1;
     return rows.sort((a, b) =>
-      sort.key === 'tokens'
+      sort.key === "tokens"
         ? sign * (a.tokens - b.tokens) || b.time.localeCompare(a.time)
         : sign * a.time.localeCompare(b.time),
     );
   }, [logs, userQuery, result, timeFrom, timeTo, sort]);
 
-  const hasFilter = !!userQuery.trim() || result !== 'all' || !!timeFrom || !!timeTo;
+  const hasFilter = !!userQuery.trim() || result !== "all" || !!timeFrom || !!timeTo;
   const paged = showAll || hasFilter;
   const pages = usePagination(filtered, {
     perPage: PAGE_SIZE,
@@ -97,10 +102,10 @@ export function AiUsageLogTable({
   const maxTime = `${dayRange.to}T23:59`;
 
   const clearFilters = () => {
-    setUserQuery('');
-    setResult('all');
-    setTimeFrom('');
-    setTimeTo('');
+    setUserQuery("");
+    setResult("all");
+    setTimeFrom("");
+    setTimeTo("");
   };
 
   return (
@@ -113,15 +118,17 @@ export function AiUsageLogTable({
               {hasFilter
                 ? `${formatInteger(filtered.length)} of ${formatInteger(logs.length)} loaded requests match`
                 : `${formatInteger(totals?.requests ?? logs.length)} requests in this period`}
-              {!hasFilter && totals && totals.shown < totals.requests
-                && ` · showing the newest ${formatInteger(totals.shown)}`}
-              {(hasFilter ? failedCount : (totals?.failed ?? failedCount)) > 0
-                && ` · ${formatInteger(hasFilter ? failedCount : (totals?.failed ?? failedCount))} failed`}
+              {!hasFilter &&
+                totals &&
+                totals.shown < totals.requests &&
+                ` · showing the newest ${formatInteger(totals.shown)}`}
+              {(hasFilter ? failedCount : (totals?.failed ?? failedCount)) > 0 &&
+                ` · ${formatInteger(hasFilter ? failedCount : (totals?.failed ?? failedCount))} failed`}
             </p>
           </div>
           {!hasFilter && logs.length > RECENT_LOG_COUNT && (
             <Button variant="ghost" size="sm" onClick={() => setShowAll((v) => !v)}>
-              {showAll ? 'Show recent only' : `View all (${formatInteger(logs.length)})`}
+              {showAll ? "Show recent only" : `View all (${formatInteger(logs.length)})`}
             </Button>
           )}
         </div>
@@ -142,9 +149,9 @@ export function AiUsageLogTable({
             value={result}
             onChange={(v) => setResult(v as ResultFilter)}
             options={[
-              { label: 'All results', value: 'all' },
-              { label: 'Failed only', value: 'failed' },
-              { label: 'Success only', value: 'success' },
+              { label: "All results", value: "all" },
+              { label: "Failed only", value: "failed" },
+              { label: "Success only", value: "success" },
             ]}
             className="w-40"
           />
@@ -180,7 +187,7 @@ export function AiUsageLogTable({
 
       {filtered.length === 0 ? (
         <p className="px-5 py-10 text-center text-sm text-content-soft">
-          {hasFilter ? 'No requests match these filters.' : 'No data for this period.'}
+          {hasFilter ? "No requests match these filters." : "No data for this period."}
         </p>
       ) : (
         <div className="overflow-x-auto">
@@ -192,22 +199,29 @@ export function AiUsageLogTable({
                 <SortHeader
                   label="Tokens"
                   align="right"
-                  active={sort.key === 'tokens'}
+                  active={sort.key === "tokens"}
                   direction={sort.dir}
-                  onClick={() => toggleSort('tokens')}
+                  onClick={() => toggleSort("tokens")}
                 />
                 <SortHeader
                   label="Time"
-                  active={sort.key === 'time'}
+                  active={sort.key === "time"}
                   direction={sort.dir}
-                  onClick={() => toggleSort('time')}
+                  onClick={() => toggleSort("time")}
                 />
                 <th className="px-5 py-2.5 font-medium">Result</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-line-faint">
               {rows.map((log) => (
-                <tr key={log.id} className={log.success ? 'hover:bg-surface-hover' : 'bg-danger-light/40 hover:bg-danger-light'}>
+                <tr
+                  key={log.id}
+                  className={
+                    log.success
+                      ? "hover:bg-surface-hover"
+                      : "bg-danger-light/40 hover:bg-danger-light"
+                  }
+                >
                   <td className="px-5 py-2.5 text-content-secondary whitespace-nowrap">
                     <button
                       type="button"
@@ -219,12 +233,20 @@ export function AiUsageLogTable({
                     </button>
                   </td>
                   <td className="px-5 py-2.5 text-content-soft whitespace-nowrap">{log.feature}</td>
-                  <td className="px-5 py-2.5 text-right tabular-nums text-content">{formatInteger(log.tokens)}</td>
-                  <td className="px-5 py-2.5 text-content-soft tabular-nums whitespace-nowrap">{formatDateTime(log.time)}</td>
+                  <td className="px-5 py-2.5 text-right tabular-nums text-content">
+                    {formatInteger(log.tokens)}
+                  </td>
+                  <td className="px-5 py-2.5 text-content-soft tabular-nums whitespace-nowrap">
+                    {formatDateTime(log.time)}
+                  </td>
                   <td className="px-5 py-2.5">
-                    <Badge variant={log.success ? 'success' : 'danger'}>
-                      {log.success ? <Icon.CheckCircle className="w-3 h-3" /> : <Icon.XCircle className="w-3 h-3" />}
-                      {log.success ? 'Success' : 'Failed'}
+                    <Badge variant={log.success ? "success" : "danger"}>
+                      {log.success ? (
+                        <Icon.CheckCircle className="w-3 h-3" />
+                      ) : (
+                        <Icon.XCircle className="w-3 h-3" />
+                      )}
+                      {log.success ? "Success" : "Failed"}
                     </Badge>
                   </td>
                 </tr>
@@ -233,7 +255,13 @@ export function AiUsageLogTable({
           </table>
           {paged && (
             <div className="border-t border-line-soft">
-              <Pagination page={pages.page} total={pages.total} perPage={PAGE_SIZE} onChange={pages.setPage} unit="requests" />
+              <Pagination
+                page={pages.page}
+                total={pages.total}
+                perPage={PAGE_SIZE}
+                onChange={pages.setPage}
+                unit="requests"
+              />
             </div>
           )}
         </div>

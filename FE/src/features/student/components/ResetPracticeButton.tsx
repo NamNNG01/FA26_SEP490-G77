@@ -1,17 +1,25 @@
-import { useState } from 'react';
-import { Button } from '@/components/ui/Button';
-import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
-import { Alert } from '@/components/ui/Alert';
-import { useToast } from '@/components/ui/ToastHost';
-import { Icon } from '@/assets/icons';
-import { getApiErrorMessage } from '@/utils/apiError';
-import { modulePracticeService, type PracticeScope } from '@/services/modulePractice.service';
+import { useState } from "react";
+import { Button } from "@/components/ui/Button";
+import { ConfirmDialog } from "@/components/ui/ConfirmDialog";
+import { Alert } from "@/components/ui/Alert";
+import { useToast } from "@/components/ui/ToastHost";
+import { Icon } from "@/assets/icons";
+import { getApiErrorMessage } from "@/utils/apiError";
+import { modulePracticeService, type PracticeScope } from "@/services/modulePractice.service";
 
 /**
  * MP-12: deletes this module's (or the General pool's) practice sessions, attempts and progress —
  * never the notebook, bookmarks, exams or flashcards. Asks once before.
  */
-export function ResetPracticeButton({ scope, moduleTitle, onReset }: { scope: PracticeScope; moduleTitle: string; onReset: () => void }) {
+export function ResetPracticeButton({
+  scope,
+  moduleTitle,
+  onReset,
+}: {
+  scope: PracticeScope;
+  moduleTitle: string;
+  onReset: () => void;
+}) {
   const toast = useToast();
   const [open, setOpen] = useState(false);
   const [busy, setBusy] = useState(false);
@@ -22,11 +30,11 @@ export function ResetPracticeButton({ scope, moduleTitle, onReset }: { scope: Pr
     setError(null);
     try {
       await modulePracticeService.resetProgress(scope);
-      toast.success('Practice progress reset.');
+      toast.success("Practice progress reset.");
       setOpen(false);
       onReset();
     } catch (err) {
-      setError(getApiErrorMessage(err, 'Could not reset the practice progress.'));
+      setError(getApiErrorMessage(err, "Could not reset the practice progress."));
     } finally {
       setBusy(false);
     }
@@ -52,10 +60,13 @@ export function ResetPracticeButton({ scope, moduleTitle, onReset }: { scope: Pr
         error={error && <Alert type="error" message={error} />}
         tone="danger"
         title="Reset practice progress?"
-        description={<>
-          Every practice session, answer and statistic of <strong>{moduleTitle}</strong> will be deleted, including a session in
-          progress. Your mistake notebook, bookmarks, exams and flashcards are not affected. This cannot be undone.
-        </>}
+        description={
+          <>
+            Every practice session, answer and statistic of <strong>{moduleTitle}</strong> will be
+            deleted, including a session in progress. Your mistake notebook, bookmarks, exams and
+            flashcards are not affected. This cannot be undone.
+          </>
+        }
         cancelLabel="Keep it"
         confirmLabel="Reset"
       />

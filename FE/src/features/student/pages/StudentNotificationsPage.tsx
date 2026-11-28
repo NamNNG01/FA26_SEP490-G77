@@ -1,15 +1,15 @@
-import { useCallback, useEffect, useState } from 'react';
-import { useAutoRefresh } from '@/hooks/useAutoRefresh';
-import { useNavigate, useSearchParams } from 'react-router';
-import { Button } from '@/components/ui/Button';
-import { Pagination } from '@/components/ui/Pagination';
-import { EmptyState } from '@/components/ui/Card';
-import { Tabs } from '@/components/ui/Tabs';
-import { useToast } from '@/components/ui/ToastHost';
-import { Icon } from '@/assets/icons';
-import { useAuth } from '@/auth/authContext';
-import { getApiErrorMessage } from '@/utils/apiError';
-import { NotificationItem, notificationTarget } from '@/components/notifications/NotificationItem';
+import { useCallback, useEffect, useState } from "react";
+import { useAutoRefresh } from "@/hooks/useAutoRefresh";
+import { useNavigate, useSearchParams } from "react-router";
+import { Button } from "@/components/ui/Button";
+import { Pagination } from "@/components/ui/Pagination";
+import { EmptyState } from "@/components/ui/Card";
+import { Tabs } from "@/components/ui/Tabs";
+import { useToast } from "@/components/ui/ToastHost";
+import { Icon } from "@/assets/icons";
+import { useAuth } from "@/auth/authContext";
+import { getApiErrorMessage } from "@/utils/apiError";
+import { NotificationItem, notificationTarget } from "@/components/notifications/NotificationItem";
 import {
   markNotificationRead,
   setUnreadCount,
@@ -17,12 +17,12 @@ import {
   useUnreadNotificationCount,
   type NotificationInbox,
   type StudentNotification,
-} from '@/services/studentNotification.service';
-import { ListSkeleton, LoadError, PageTitle, STUDENT_PAGE_CLASS } from '../components/studentUi';
+} from "@/services/studentNotification.service";
+import { ListSkeleton, LoadError, PageTitle, STUDENT_PAGE_CLASS } from "../components/studentUi";
 
 const PAGE_SIZE = 20;
-const TAB_ALL = 'All';
-const TAB_UNREAD = 'Unread';
+const TAB_ALL = "All";
+const TAB_UNREAD = "Unread";
 
 /**
  * Notifications — the full inbox behind the header bell's "See all" (NT-01..NT-03).
@@ -37,56 +37,70 @@ export function StudentNotificationsPage() {
   const navigate = useNavigate();
   const toast = useToast();
   const [params, setParams] = useSearchParams();
-  const unreadOnly = params.get('filter') === 'unread';
-  const page = Math.max(1, Number(params.get('page')) || 1);
+  const unreadOnly = params.get("filter") === "unread";
+  const page = Math.max(1, Number(params.get("page")) || 1);
 
   const [inbox, setInbox] = useState<NotificationInbox | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [markingAll, setMarkingAll] = useState(false);
 
   /** `'quiet'` = shared auto-refresh: the inbox stays on screen and a failure is ignored. */
-  const load = useCallback((mode?: 'quiet') => {
-    const quiet = mode === 'quiet';
-    let cancelled = false;
-    if (!quiet) {
-      setInbox(null);
-      setError(null);
-    }
-    studentNotificationService
-      .list({ unreadOnly, page: page - 1, size: PAGE_SIZE })
-      .then(res => {
-        if (cancelled) return;
-        setInbox(res);
-        setUnreadCount(res.unreadCount);
-      })
-      .catch(err => { if (!cancelled && !quiet) setError(getApiErrorMessage(err, 'Could not load notifications.')); });
-    return () => { cancelled = true; };
-  }, [unreadOnly, page]);
+  const load = useCallback(
+    (mode?: "quiet") => {
+      const quiet = mode === "quiet";
+      let cancelled = false;
+      if (!quiet) {
+        setInbox(null);
+        setError(null);
+      }
+      studentNotificationService
+        .list({ unreadOnly, page: page - 1, size: PAGE_SIZE })
+        .then((res) => {
+          if (cancelled) return;
+          setInbox(res);
+          setUnreadCount(res.unreadCount);
+        })
+        .catch((err) => {
+          if (!cancelled && !quiet)
+            setError(getApiErrorMessage(err, "Could not load notifications."));
+        });
+      return () => {
+        cancelled = true;
+      };
+    },
+    [unreadOnly, page],
+  );
 
   useEffect(() => load(), [load]);
-  useAutoRefresh(() => void load('quiet'));
+  useAutoRefresh(() => void load("quiet"));
 
-  function update(next: { filter?: 'unread' | null; page?: number }) {
+  function update(next: { filter?: "unread" | null; page?: number }) {
     const p = new URLSearchParams(params);
     if (next.filter !== undefined) {
-      if (next.filter) p.set('filter', next.filter);
-      else p.delete('filter');
-      p.delete('page');
+      if (next.filter) p.set("filter", next.filter);
+      else p.delete("filter");
+      p.delete("page");
     }
     if (next.page !== undefined) {
-      if (next.page > 1) p.set('page', String(next.page));
-      else p.delete('page');
+      if (next.page > 1) p.set("page", String(next.page));
+      else p.delete("page");
     }
     setParams(p);
   }
 
   function markLocal(pred: (n: StudentNotification) => boolean) {
-    setInbox(prev => prev && { ...prev, content: prev.content.map(n => (pred(n) ? { ...n, isRead: true } : n)) });
+    setInbox(
+      (prev) =>
+        prev && {
+          ...prev,
+          content: prev.content.map((n) => (pred(n) ? { ...n, isRead: true } : n)),
+        },
+    );
   }
 
   function handleItem(n: StudentNotification) {
     markNotificationRead(n);
-    markLocal(i => i.notificationId === n.notificationId);
+    markLocal((i) => i.notificationId === n.notificationId);
     const target = notificationTarget(n);
     if (target) navigate(target);
   }
@@ -97,9 +111,11 @@ export function StudentNotificationsPage() {
       const res = await studentNotificationService.markAllRead();
       setUnreadCount(res.unreadCount);
       markLocal(() => true);
-      toast.success(res.markedCount > 0 ? `Marked ${res.markedCount} as read.` : 'Everything is already read.');
+      toast.success(
+        res.markedCount > 0 ? `Marked ${res.markedCount} as read.` : "Everything is already read.",
+      );
     } catch (err) {
-      toast.error(getApiErrorMessage(err, 'Could not mark notifications as read.'));
+      toast.error(getApiErrorMessage(err, "Could not mark notifications as read."));
     } finally {
       setMarkingAll(false);
     }
@@ -109,7 +125,11 @@ export function StudentNotificationsPage() {
     <div className={`${STUDENT_PAGE_CLASS} space-y-5`}>
       <PageTitle
         title="Notifications"
-        subtitle={unread > 0 ? `You have ${unread} unread notification${unread === 1 ? '' : 's'}.` : 'You are all caught up.'}
+        subtitle={
+          unread > 0
+            ? `You have ${unread} unread notification${unread === 1 ? "" : "s"}.`
+            : "You are all caught up."
+        }
         action={
           <Button
             variant="outline"
@@ -127,7 +147,7 @@ export function StudentNotificationsPage() {
         variant="underline"
         tabs={[TAB_ALL, TAB_UNREAD]}
         active={unreadOnly ? TAB_UNREAD : TAB_ALL}
-        onChange={t => update({ filter: t === TAB_UNREAD ? 'unread' : null })}
+        onChange={(t) => update({ filter: t === TAB_UNREAD ? "unread" : null })}
       />
 
       {error ? (
@@ -138,14 +158,18 @@ export function StudentNotificationsPage() {
         <div className="card">
           <EmptyState
             icon={<Icon.Bell className="w-8 h-8" />}
-            title={unreadOnly ? 'No unread notifications' : 'No notifications yet'}
-            message={unreadOnly ? 'You have read everything.' : 'Exam reminders, grading results and contest news will show up here.'}
+            title={unreadOnly ? "No unread notifications" : "No notifications yet"}
+            message={
+              unreadOnly
+                ? "You have read everything."
+                : "Exam reminders, grading results and contest news will show up here."
+            }
           />
         </div>
       ) : (
         <div className="card overflow-hidden">
           <div className="divide-y divide-line">
-            {inbox.content.map(n => (
+            {inbox.content.map((n) => (
               <NotificationItem key={n.notificationId} notification={n} onClick={handleItem} />
             ))}
           </div>
@@ -154,7 +178,7 @@ export function StudentNotificationsPage() {
               page={page}
               total={inbox.totalElements}
               perPage={PAGE_SIZE}
-              onChange={p => update({ page: p })}
+              onChange={(p) => update({ page: p })}
               unit="notifications"
             />
           </div>

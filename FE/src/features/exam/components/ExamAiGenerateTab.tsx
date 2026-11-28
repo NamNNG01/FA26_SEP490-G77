@@ -2,7 +2,7 @@ import React, { useEffect, useRef, useState } from "react";
 import { Button } from "@/components/ui/Button";
 import { Input } from "@/components/ui/Input";
 import { Select } from "@/components/ui/Select";
-import { SearchableSelect } from '@/components/ui/SearchableSelect';
+import { SearchableSelect } from "@/components/ui/SearchableSelect";
 import { Badge } from "@/components/ui/Badge";
 import { Modal } from "@/components/ui/Modal";
 import { Icon } from "@/assets/icons";
@@ -45,9 +45,10 @@ import {
 import { getApiErrorMessage } from "@/utils/apiError";
 
 function DraftDiagramPreview({ question, index }: { question: AiQuestionDraft; index: number }) {
-  const drawioXml = typeof question.questionMetadata?.drawioXml === "string"
-    ? question.questionMetadata.drawioXml
-    : "";
+  const drawioXml =
+    typeof question.questionMetadata?.drawioXml === "string"
+      ? question.questionMetadata.drawioXml
+      : "";
   const snapshot = useDrawioSnapshot(question.diagramSvg ? "" : drawioXml);
   const previewSrc = question.diagramSvg || snapshot.svg;
 
@@ -55,11 +56,17 @@ function DraftDiagramPreview({ question, index }: { question: AiQuestionDraft; i
     <>
       <div className="p-3 rounded-[8px] border border-line bg-white flex justify-center min-h-24">
         {previewSrc ? (
-          <img src={previewSrc} alt={`Model answer diagram for question ${index + 1}`} className="max-h-[300px] max-w-full object-contain" />
+          <img
+            src={previewSrc}
+            alt={`Model answer diagram for question ${index + 1}`}
+            className="max-h-[300px] max-w-full object-contain"
+          />
         ) : snapshot.status === "loading" ? (
           <span className="self-center text-sm text-content-soft">Rendering the diagram…</span>
         ) : (
-          <span className="self-center text-sm text-content-soft">Couldn’t render a preview (is diagrams.net reachable?)</span>
+          <span className="self-center text-sm text-content-soft">
+            Couldn’t render a preview (is diagrams.net reachable?)
+          </span>
         )}
       </div>
       {snapshot.frame}
@@ -92,12 +99,13 @@ function toEditorDraft(question: AiQuestionDraft): QuestionDraft {
           memoryLimitKb: question.codeConfig.memoryLimitKb ?? 262144,
         }
       : null,
-    testCases: question.testCases?.map((testCase, index) => ({
-      inputData: testCase.inputData,
-      expectedOutput: testCase.expectedOutput,
-      hidden: Boolean(testCase.hidden),
-      orderIndex: testCase.orderIndex ?? index,
-    })) ?? null,
+    testCases:
+      question.testCases?.map((testCase, index) => ({
+        inputData: testCase.inputData,
+        expectedOutput: testCase.expectedOutput,
+        hidden: Boolean(testCase.hidden),
+        orderIndex: testCase.orderIndex ?? index,
+      })) ?? null,
   });
   return { ...editorDraft, diagramSvg: question.diagramSvg ?? editorDraft.diagramSvg };
 }
@@ -122,7 +130,10 @@ function fromEditorDraft(original: AiQuestionDraft, edited: QuestionDraft): AiQu
     answerKey = {
       blanks: blankIndexes(edited.content).map((index) => ({
         index,
-        accepted: (edited.blanks[index]?.accepted ?? "").split(";").map((value) => value.trim()).filter(Boolean),
+        accepted: (edited.blanks[index]?.accepted ?? "")
+          .split(";")
+          .map((value) => value.trim())
+          .filter(Boolean),
         caseSensitive: edited.blanks[index]?.caseSensitive ?? false,
       })),
     };
@@ -134,7 +145,11 @@ function fromEditorDraft(original: AiQuestionDraft, edited: QuestionDraft): AiQu
     questionType: edited.type,
     difficulty: edited.difficulty as Difficulty,
     options: ["SINGLE_CHOICE", "MULTIPLE_CHOICE", "TRUE_FALSE"].includes(edited.type)
-      ? edited.options.map((option, orderIndex) => ({ optionText: option.text, isCorrect: option.isCorrect, orderIndex }))
+      ? edited.options.map((option, orderIndex) => ({
+          optionText: option.text,
+          isCorrect: option.isCorrect,
+          orderIndex,
+        }))
       : [],
     answerKey,
     explanation: edited.explanation,
@@ -147,26 +162,31 @@ function fromEditorDraft(original: AiQuestionDraft, edited: QuestionDraft): AiQu
             maxScore: Number(criterion.weight) || 0,
             descriptors: criterion.descriptors,
           })),
-          totalPoints: edited.rubric.reduce((sum, criterion) => sum + (Number(criterion.weight) || 0), 0),
+          totalPoints: edited.rubric.reduce(
+            (sum, criterion) => sum + (Number(criterion.weight) || 0),
+            0,
+          ),
           notes: edited.rubricNotes,
         }
       : undefined,
-    codeConfig: edited.type === "CODE"
-      ? {
-          allowedLanguages: edited.code.languages,
-          codeTemplate: edited.code.template || null,
-          timeLimitMs: Number(edited.code.timeLimitMs),
-          memoryLimitKb: Number(edited.code.memoryLimitKb),
-        }
-      : undefined,
-    testCases: edited.type === "CODE"
-      ? edited.code.testCases.map((testCase, orderIndex) => ({
-          inputData: testCase.input,
-          expectedOutput: testCase.expectedOutput,
-          hidden: testCase.hidden,
-          orderIndex,
-        }))
-      : undefined,
+    codeConfig:
+      edited.type === "CODE"
+        ? {
+            allowedLanguages: edited.code.languages,
+            codeTemplate: edited.code.template || null,
+            timeLimitMs: Number(edited.code.timeLimitMs),
+            memoryLimitKb: Number(edited.code.memoryLimitKb),
+          }
+        : undefined,
+    testCases:
+      edited.type === "CODE"
+        ? edited.code.testCases.map((testCase, orderIndex) => ({
+            inputData: testCase.input,
+            expectedOutput: testCase.expectedOutput,
+            hidden: testCase.hidden,
+            orderIndex,
+          }))
+        : undefined,
     plantUmlSource: undefined,
     diagramSvg: edited.diagramSvg,
   };
@@ -177,11 +197,7 @@ interface ExamAiGenerateTabProps {
   onCancel: () => void;
 }
 
-export function ExamAiGenerateTab({
-  formKind,
-  onCreated,
-  onCancel,
-}: ExamAiGenerateTabProps) {
+export function ExamAiGenerateTab({ formKind, onCreated, onCancel }: ExamAiGenerateTabProps) {
   const toast = useToast();
   const abortCtrlRef = useRef<AbortController | null>(null);
 
@@ -205,21 +221,11 @@ export function ExamAiGenerateTab({
     EASY: number;
     MEDIUM: number;
     HARD: number;
-  }>(
-    formKind === "CODE"
-      ? { EASY: 1, MEDIUM: 1, HARD: 1 }
-      : { EASY: 4, MEDIUM: 4, HARD: 2 },
-  );
+  }>(formKind === "CODE" ? { EASY: 1, MEDIUM: 1, HARD: 1 } : { EASY: 4, MEDIUM: 4, HARD: 2 });
 
   const allowedTypes =
     formKind === "QUIZ"
-      ? [
-          "SINGLE_CHOICE",
-          "MULTIPLE_CHOICE",
-          "TRUE_FALSE",
-          "FILL_BLANK",
-          "MATCHING",
-        ]
+      ? ["SINGLE_CHOICE", "MULTIPLE_CHOICE", "TRUE_FALSE", "FILL_BLANK", "MATCHING"]
       : formKind === "CODE"
         ? ["CODE"]
         : ["ESSAY", "DIAGRAM", "DIAGRAM_ESSAY"];
@@ -285,10 +291,10 @@ export function ExamAiGenerateTab({
         })
         .catch((err) => {
           setModules([]);
-          toast.error(
-            getApiErrorMessage(err, "Failed to load course modules."),
-            { title: "Could not load course modules", duration: null },
-          );
+          toast.error(getApiErrorMessage(err, "Failed to load course modules."), {
+            title: "Could not load course modules",
+            duration: null,
+          });
         });
     } else {
       setModules([]);
@@ -314,9 +320,7 @@ export function ExamAiGenerateTab({
   };
 
   const totalDiff =
-    Number(diffDist.EASY || 0) +
-    Number(diffDist.MEDIUM || 0) +
-    Number(diffDist.HARD || 0);
+    Number(diffDist.EASY || 0) + Number(diffDist.MEDIUM || 0) + Number(diffDist.HARD || 0);
   const totalTypes = Object.values(typeCounts).reduce(
     (sum, count) => sum + (Number(count) || 0),
     0,
@@ -332,19 +336,15 @@ export function ExamAiGenerateTab({
     maxScore <= 10000 &&
     (String(maxScore).split(".")[1]?.length ?? 0) <= 2;
   const draftTotalWeight =
-    draft?.questions.reduce(
-      (sum, question) => sum + (question.defaultPoints ?? 1),
-      0,
-    ) ?? 0;
+    draft?.questions.reduce((sum, question) => sum + (question.defaultPoints ?? 1), 0) ?? 0;
   const scoreForWeight = (weight: number) =>
-    draftTotalWeight > 0
-      ? Number(((maxScore * weight) / draftTotalWeight).toFixed(2))
-      : 0;
+    draftTotalWeight > 0 ? Number(((maxScore * weight) / draftTotalWeight).toFixed(2)) : 0;
 
   const handleGenerate = async () => {
     const errors: Record<string, string> = {};
     if (!courseId) errors.courseId = MSG01;
-    if (!context.trim() && !materialFile) errors.context = "Write instructions for the AI, or upload a material.";
+    if (!context.trim() && !materialFile)
+      errors.context = "Write instructions for the AI, or upload a material.";
     if (Object.keys(errors).length > 0) {
       setFieldErrors(errors);
       return;
@@ -361,18 +361,17 @@ export function ExamAiGenerateTab({
 
     try {
       const request = {
-          courseId: Number(courseId),
-          moduleId: selectedModuleIds.length === 1 ? selectedModuleIds[0] : undefined,
-          moduleIds: selectedModuleIds.length > 0 ? selectedModuleIds : undefined,
-          title: title.trim() || undefined,
-          questionCount,
-          difficultyDistribution: diffDist,
-          questionTypes: payloadQuestionTypes,
-          durationMinutes:
-            Number(durationMinutes) > 0 ? Number(durationMinutes) : undefined,
-          language,
-          context: context.trim() || undefined,
-        };
+        courseId: Number(courseId),
+        moduleId: selectedModuleIds.length === 1 ? selectedModuleIds[0] : undefined,
+        moduleIds: selectedModuleIds.length > 0 ? selectedModuleIds : undefined,
+        title: title.trim() || undefined,
+        questionCount,
+        difficultyDistribution: diffDist,
+        questionTypes: payloadQuestionTypes,
+        durationMinutes: Number(durationMinutes) > 0 ? Number(durationMinutes) : undefined,
+        language,
+        context: context.trim() || undefined,
+      };
       const generated = materialFile
         ? await examService.generateAiExamFromMaterial(materialFile, request, abortCtrl.signal)
         : await examService.generateAiExam(request, abortCtrl.signal);
@@ -381,7 +380,8 @@ export function ExamAiGenerateTab({
         ? {
             ...generated,
             title: title.trim() || generated.title,
-            durationMinutes: Number(durationMinutes) > 0 ? Number(durationMinutes) : generated.durationMinutes,
+            durationMinutes:
+              Number(durationMinutes) > 0 ? Number(durationMinutes) : generated.durationMinutes,
           }
         : generated;
       setDraft({
@@ -410,10 +410,7 @@ export function ExamAiGenerateTab({
         name?: string;
         response?: { status?: number; data?: { message?: string } };
       };
-      if (
-        errorObj?.name === "CanceledError" ||
-        errorObj?.name === "AbortError"
-      ) {
+      if (errorObj?.name === "CanceledError" || errorObj?.name === "AbortError") {
         return;
       }
       if (errorObj?.response?.status === 429) {
@@ -444,11 +441,10 @@ export function ExamAiGenerateTab({
           },
         });
       } else if (errorObj?.response?.status === 400) {
-        toast.error(
-          errorObj.response.data?.message ||
-            "Invalid parameters for AI generation.",
-          { title: "Could not generate exam", duration: null },
-        );
+        toast.error(errorObj.response.data?.message || "Invalid parameters for AI generation.", {
+          title: "Could not generate exam",
+          duration: null,
+        });
       } else {
         toast.error(getApiErrorMessage(err, MSG08), {
           title: "AI generation failed",
@@ -474,10 +470,7 @@ export function ExamAiGenerateTab({
     setGenerating(false);
   };
 
-  const updateDraftQuestion = (
-    index: number,
-    updated: Partial<AiQuestionDraft>,
-  ) => {
+  const updateDraftQuestion = (index: number, updated: Partial<AiQuestionDraft>) => {
     if (!draft) return;
     const questions = [...draft.questions];
     questions[index] = { ...questions[index], ...updated };
@@ -509,14 +502,19 @@ export function ExamAiGenerateTab({
   };
 
   const updateRubricCriterion = (index: number, update: Partial<AiRubricCriterion>) => {
-    setRubricEditor((current) => current ? {
-      ...current,
-      rubric: {
-        ...current.rubric,
-        criteria: current.rubric.criteria.map((criterion, criterionIndex) =>
-          criterionIndex === index ? { ...criterion, ...update } : criterion),
-      },
-    } : current);
+    setRubricEditor((current) =>
+      current
+        ? {
+            ...current,
+            rubric: {
+              ...current.rubric,
+              criteria: current.rubric.criteria.map((criterion, criterionIndex) =>
+                criterionIndex === index ? { ...criterion, ...update } : criterion,
+              ),
+            },
+          }
+        : current,
+    );
   };
 
   const saveRubricEditor = () => {
@@ -546,9 +544,7 @@ export function ExamAiGenerateTab({
     const options = q.options ?? [];
     const correctCount = options.filter((o) => o.isCorrect).length;
     if (
-      ["SINGLE_CHOICE", "MULTIPLE_CHOICE", "TRUE_FALSE"].includes(
-        q.questionType,
-      ) &&
+      ["SINGLE_CHOICE", "MULTIPLE_CHOICE", "TRUE_FALSE"].includes(q.questionType) &&
       (options.length < 2 || options.length > 10)
     )
       return "Choice questions must have 2 to 10 options";
@@ -559,10 +555,7 @@ export function ExamAiGenerateTab({
       (correctCount < 2 || correctCount === options.length)
     )
       return "Multiple choice needs at least 2 correct and 1 incorrect answer";
-    if (
-      q.questionType === "TRUE_FALSE" &&
-      (options.length !== 2 || correctCount !== 1)
-    )
+    if (q.questionType === "TRUE_FALSE" && (options.length !== 2 || correctCount !== 1))
       return "True/False question must have exactly 2 options and 1 correct answer";
     if (q.questionType === "FILL_BLANK" && !/\{\{\d+\}\}/.test(q.content))
       return "Fill blank content needs placeholders like {{1}}";
@@ -571,14 +564,17 @@ export function ExamAiGenerateTab({
       if (!q.codeConfig) return "Code question needs a code configuration";
       if (cases.some((t) => !t.expectedOutput?.trim()))
         return "Every test case needs an expected output";
-      if (!cases.some((t) => !t.hidden))
-        return "Code question needs at least one sample test case";
-      if (!cases.some((t) => t.hidden))
-        return "Code question needs at least one hidden test case";
+      if (!cases.some((t) => !t.hidden)) return "Code question needs at least one sample test case";
+      if (!cases.some((t) => t.hidden)) return "Code question needs at least one hidden test case";
     }
     const editorErrors = validateDraft(toEditorDraft(q));
     if (modules.length > 0 && !q.moduleId) {
-      return editorErrors.content ?? editorErrors.answers ?? editorErrors.type ?? "Please assign a module to this question";
+      return (
+        editorErrors.content ??
+        editorErrors.answers ??
+        editorErrors.type ??
+        "Please assign a module to this question"
+      );
     }
     return editorErrors.content ?? editorErrors.answers ?? editorErrors.type ?? null;
   };
@@ -619,11 +615,7 @@ export function ExamAiGenerateTab({
     try {
       if (questionIds.length === 0) {
         const questionsToSave = draft.questions.map(
-          ({
-            plantUmlSource: _plantUmlPreview,
-            diagramSvg: _diagramPreview,
-            ...q
-          }) => ({
+          ({ plantUmlSource: _plantUmlPreview, diagramSvg: _diagramPreview, ...q }) => ({
             ...q,
             courseId: Number(courseId),
             moduleId: q.moduleId ?? null,
@@ -696,8 +688,8 @@ export function ExamAiGenerateTab({
               Configure AI Exam Generation
             </h3>
             <p className="text-xs text-content-subtle mt-1">
-              Specify your syllabus requirements and AI will generate an
-              editable exam draft without saving to database.
+              Specify your syllabus requirements and AI will generate an editable exam draft without
+              saving to database.
             </p>
           </div>
 
@@ -728,9 +720,7 @@ export function ExamAiGenerateTab({
                 emptyText="No courses found"
               />
               {fieldErrors.courseId && (
-                <p className="text-xs text-danger mt-1">
-                  {fieldErrors.courseId}
-                </p>
+                <p className="text-xs text-danger mt-1">{fieldErrors.courseId}</p>
               )}
             </div>
 
@@ -815,9 +805,7 @@ export function ExamAiGenerateTab({
                   className="w-full px-3 py-1.5 text-sm rounded-[10px] border border-line bg-surface focus:outline-none focus:ring-1 focus:ring-brand-ink"
                   value={durationMinutes}
                   onChange={(e) =>
-                    setDurationMinutes(
-                      Math.max(1, Math.min(600, Number(e.target.value) || 1)),
-                    )
+                    setDurationMinutes(Math.max(1, Math.min(600, Number(e.target.value) || 1)))
                   }
                 />
               </div>
@@ -885,8 +873,12 @@ export function ExamAiGenerateTab({
             {materialFile ? (
               <div className="flex items-center gap-2 px-3 py-2 rounded-[10px] border border-line bg-surface">
                 <Icon.FileText className="w-4 h-4 text-brand-ink flex-shrink-0" />
-                <span className="text-sm text-content truncate flex-1" title={materialFile.name}>{materialFile.name}</span>
-                <span className="text-2xs text-content-subtle flex-shrink-0">{(materialFile.size / 1024 / 1024).toFixed(1)} MB</span>
+                <span className="text-sm text-content truncate flex-1" title={materialFile.name}>
+                  {materialFile.name}
+                </span>
+                <span className="text-2xs text-content-subtle flex-shrink-0">
+                  {(materialFile.size / 1024 / 1024).toFixed(1)} MB
+                </span>
                 <button
                   type="button"
                   onClick={() => setMaterialFile(null)}
@@ -916,9 +908,12 @@ export function ExamAiGenerateTab({
 
           <div>
             <label className="text-sm font-medium text-content-secondary block mb-1">
-              Instructions for AI {materialFile
-                ? <span className="font-normal text-content-subtle">(optional)</span>
-                : <span className="text-danger">*</span>}
+              Instructions for AI{" "}
+              {materialFile ? (
+                <span className="font-normal text-content-subtle">(optional)</span>
+              ) : (
+                <span className="text-danger">*</span>
+              )}
             </label>
             <textarea
               rows={3}
@@ -939,20 +934,16 @@ export function ExamAiGenerateTab({
               <p className="text-2xs text-danger mt-1">{fieldErrors.context}</p>
             )}
             <p className="text-2xs text-content-subtle mt-1">
-              Describe the topics, audience, or constraints for the generated
-              exam. {context.length}/2000
+              Describe the topics, audience, or constraints for the generated exam. {context.length}
+              /2000
             </p>
           </div>
 
           <div className="p-4 bg-surface-muted/60 rounded-[10px] border border-line space-y-3">
             <div className="flex items-center justify-between">
-              <h4 className="text-sm font-semibold text-content">
-                Difficulty Distribution
-              </h4>
+              <h4 className="text-sm font-semibold text-content">Difficulty Distribution</h4>
               <span
-                className={`text-xs font-semibold ${
-                  isDiffMatch ? "text-success" : "text-danger"
-                }`}
+                className={`text-xs font-semibold ${isDiffMatch ? "text-success" : "text-danger"}`}
               >
                 Total questions: {totalDiff}
               </span>
@@ -1017,13 +1008,9 @@ export function ExamAiGenerateTab({
 
           <div className="p-4 bg-surface-muted/60 rounded-[10px] border border-line space-y-3">
             <div className="flex items-center justify-between">
-              <h4 className="text-sm font-semibold text-content">
-                Question Types Breakdown
-              </h4>
+              <h4 className="text-sm font-semibold text-content">Question Types Breakdown</h4>
               <span
-                className={`text-xs font-semibold ${
-                  isTypeMatch ? "text-success" : "text-danger"
-                }`}
+                className={`text-xs font-semibold ${isTypeMatch ? "text-success" : "text-danger"}`}
               >
                 Total questions: {totalTypes}
               </span>
@@ -1056,14 +1043,8 @@ export function ExamAiGenerateTab({
             </Button>
             {generating ? (
               <div className="flex items-center gap-2">
-                <span className="text-xs text-content-subtle animate-pulse">
-                  {MSG06}
-                </span>
-                <Button
-                  variant="danger"
-                  size="sm"
-                  onClick={handleCancelGenerate}
-                >
+                <span className="text-xs text-content-subtle animate-pulse">{MSG06}</span>
+                <Button variant="danger" size="sm" onClick={handleCancelGenerate}>
                   Cancel Generation
                 </Button>
               </div>
@@ -1086,13 +1067,10 @@ export function ExamAiGenerateTab({
                 <Badge variant="purple" className="text-xs font-bold">
                   AI Draft
                 </Badge>
-                <h3 className="text-base font-bold text-content">
-                  {draft.title}
-                </h3>
+                <h3 className="text-base font-bold text-content">{draft.title}</h3>
               </div>
               <p className="text-xs text-content-subtle mt-1">
-                {draft.questions.length} questions synthesized ·{" "}
-                {draft.durationMinutes} min
+                {draft.questions.length} questions synthesized · {draft.durationMinutes} min
               </p>
             </div>
             <div className="flex items-center gap-2">
@@ -1139,7 +1117,9 @@ export function ExamAiGenerateTab({
             </div>
           )}
 
-          <div className={`space-y-4 ${savedQuestionIds.length > 0 ? "pointer-events-none opacity-70" : ""}`}>
+          <div
+            className={`space-y-4 ${savedQuestionIds.length > 0 ? "pointer-events-none opacity-70" : ""}`}
+          >
             {draft.questions.map((q, idx) => {
               const validationErr = validateDraftQuestion(q);
 
@@ -1150,9 +1130,11 @@ export function ExamAiGenerateTab({
                     q={editingQuestion.draft}
                     index={idx}
                     heading={`Edit generated question ${idx + 1}`}
-                    onChange={(updated) => setEditingQuestion((current) => current
-                      ? { ...current, draft: updated }
-                      : current)}
+                    onChange={(updated) =>
+                      setEditingQuestion((current) =>
+                        current ? { ...current, draft: updated } : current,
+                      )
+                    }
                     showErrors
                     allowedTypes={allowedTypes as EditableQuestionType[]}
                     actions={
@@ -1176,10 +1158,7 @@ export function ExamAiGenerateTab({
                       <span className="w-6 h-6 rounded-full bg-brand-light text-brand-ink flex items-center justify-center text-xs font-bold">
                         #{idx + 1}
                       </span>
-                      <Badge
-                        variant="default"
-                        className="text-2xs font-semibold"
-                      >
+                      <Badge variant="default" className="text-2xs font-semibold">
                         {q.questionType.replace("_", " ")}
                       </Badge>
                       {q.questionMetadata?.skillTag && (
@@ -1271,9 +1250,7 @@ export function ExamAiGenerateTab({
                       rows={2}
                       className="w-full px-3 py-1.5 text-sm rounded-[8px] border border-line bg-surface focus:outline-none focus:ring-1 focus:ring-brand-ink"
                       value={q.content}
-                      onChange={(e) =>
-                        updateDraftQuestion(idx, { content: e.target.value })
-                      }
+                      onChange={(e) => updateDraftQuestion(idx, { content: e.target.value })}
                     />
                   </div>
 
@@ -1340,8 +1317,8 @@ export function ExamAiGenerateTab({
                       </span>
                       {q.answerKey.blanks.map((b) => (
                         <p key={b.index}>
-                          <span className="font-semibold">{`{{${b.index}}}`}</span>
-                          : {b.accepted.join(" / ")}
+                          <span className="font-semibold">{`{{${b.index}}}`}</span>:{" "}
+                          {b.accepted.join(" / ")}
                         </p>
                       ))}
                     </div>
@@ -1374,11 +1351,17 @@ export function ExamAiGenerateTab({
                             <span className="font-medium text-content-secondary block">
                               Test case {tIdx + 1} input{t.hidden ? " (hidden)" : " (sample)"}
                             </span>
-                            <pre className="whitespace-pre-wrap break-words font-mono text-content">{t.inputData || "—"}</pre>
+                            <pre className="whitespace-pre-wrap break-words font-mono text-content">
+                              {t.inputData || "—"}
+                            </pre>
                           </div>
                           <div className="min-w-0">
-                            <span className="font-medium text-content-secondary block">Expected output</span>
-                            <pre className="whitespace-pre-wrap break-words font-mono text-content">{t.expectedOutput || "—"}</pre>
+                            <span className="font-medium text-content-secondary block">
+                              Expected output
+                            </span>
+                            <pre className="whitespace-pre-wrap break-words font-mono text-content">
+                              {t.expectedOutput || "—"}
+                            </pre>
                           </div>
                         </div>
                       ))}
@@ -1407,9 +1390,7 @@ export function ExamAiGenerateTab({
                   {["ESSAY", "DIAGRAM", "DIAGRAM_ESSAY"].includes(q.questionType) && (
                     <div className="p-3 rounded-[8px] border border-line bg-surface-muted/40 text-xs space-y-2">
                       <div className="flex items-center justify-between gap-2">
-                        <span className="font-medium text-content-secondary">
-                          Grading rubric
-                        </span>
+                        <span className="font-medium text-content-secondary">Grading rubric</span>
                         <Button
                           size="sm"
                           variant="outline"
@@ -1423,11 +1404,7 @@ export function ExamAiGenerateTab({
                           <p className="font-semibold text-content">
                             {c.name} — Weight {c.weight ?? c.maxScore ?? "—"}
                           </p>
-                          {c.descriptors && (
-                            <p className="text-content-subtle">
-                              {c.descriptors}
-                            </p>
-                          )}
+                          {c.descriptors && <p className="text-content-subtle">{c.descriptors}</p>}
                         </div>
                       ))}
                       {q.essayGradingRubric?.notes && (
@@ -1462,9 +1439,7 @@ export function ExamAiGenerateTab({
                   </div>
 
                   {validationErr && (
-                    <p className="text-xs text-danger font-medium">
-                      ⚠️ {validationErr}
-                    </p>
+                    <p className="text-xs text-danger font-medium">⚠️ {validationErr}</p>
                   )}
                 </div>
               );
@@ -1490,9 +1465,7 @@ export function ExamAiGenerateTab({
         {rubricEditor && (
           <div className="space-y-4">
             <div className="flex items-center justify-between gap-2">
-              <p className="text-sm font-semibold text-content">
-                Evaluation Criteria
-              </p>
+              <p className="text-sm font-semibold text-content">Evaluation Criteria</p>
               <Button
                 size="sm"
                 variant="secondary"
@@ -1627,11 +1600,8 @@ export function ExamAiGenerateTab({
               : draft?.questions[diagramEditorQuestionIndex];
           if (!question) return "";
           const existingXml = question.questionMetadata?.drawioXml;
-          if (typeof existingXml === "string" && existingXml.trim())
-            return existingXml;
-          return question.plantUmlSource
-            ? plantUmlToDrawioXml(question.plantUmlSource)
-            : "";
+          if (typeof existingXml === "string" && existingXml.trim()) return existingXml;
+          return question.plantUmlSource ? plantUmlToDrawioXml(question.plantUmlSource) : "";
         })()}
         onClose={() => setDiagramEditorQuestionIndex(null)}
         onSave={(diagramXml, diagramSvg) => {

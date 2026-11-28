@@ -1,27 +1,27 @@
-import React, { useState } from 'react';
-import { useNavigate } from 'react-router';
-import { useAuth } from '@/auth/authContext';
-import type { UserResponse } from '@/types/auth';
-import { ROUTES } from '@/app/routes';
-import { Avatar } from '@/components/ui/Avatar';
-import { Badge } from '@/components/ui/Badge';
-import { Button } from '@/components/ui/Button';
-import { Icon } from '@/assets/icons';
-import { ImagePickButton } from '@/components/common/ImagePickButton';
-import { useToast } from '@/components/ui/ToastHost';
-import { uploadService } from '@/services/upload.service';
-import { getApiErrorMessage } from '@/utils/apiError';
-import { roleLabel } from '@/utils/permissions';
-import type { ProfileStat } from '../hooks/useProfileOverview';
-import { ChangePasswordModal } from './ChangePasswordModal';
-import { LogoutAllDevicesButton } from './LogoutAllDevicesButton';
+import React, { useState } from "react";
+import { useNavigate } from "react-router";
+import { useAuth } from "@/auth/authContext";
+import type { UserResponse } from "@/types/auth";
+import { ROUTES } from "@/app/routes";
+import { Avatar } from "@/components/ui/Avatar";
+import { Badge } from "@/components/ui/Badge";
+import { Button } from "@/components/ui/Button";
+import { Icon } from "@/assets/icons";
+import { ImagePickButton } from "@/components/common/ImagePickButton";
+import { useToast } from "@/components/ui/ToastHost";
+import { uploadService } from "@/services/upload.service";
+import { getApiErrorMessage } from "@/utils/apiError";
+import { roleLabel } from "@/utils/permissions";
+import type { ProfileStat } from "../hooks/useProfileOverview";
+import { ChangePasswordModal } from "./ChangePasswordModal";
+import { LogoutAllDevicesButton } from "./LogoutAllDevicesButton";
 
 function memberDetails(user: UserResponse): string {
-  const status = user.status ? user.status.charAt(0) + user.status.slice(1).toLowerCase() : '';
+  const status = user.status ? user.status.charAt(0) + user.status.slice(1).toLowerCase() : "";
   if (!user.createdAt) return status;
-  const since = new Date(user.createdAt).toLocaleDateString('en-US', {
-    month: 'long',
-    year: 'numeric',
+  const since = new Date(user.createdAt).toLocaleDateString("en-US", {
+    month: "long",
+    year: "numeric",
   });
   return status ? `Member since ${since} · ${status}` : `Member since ${since}`;
 }
@@ -55,9 +55,9 @@ export function ProfileHeaderCard({
     setUploadingAvatar(true);
     try {
       updateUser(await uploadService.uploadAvatar(file));
-      toast.success('Avatar updated.');
+      toast.success("Avatar updated.");
     } catch (err) {
-      toast.error(getApiErrorMessage(err, 'Could not upload the avatar.'));
+      toast.error(getApiErrorMessage(err, "Could not upload the avatar."));
     } finally {
       setUploadingAvatar(false);
     }
@@ -71,7 +71,12 @@ export function ProfileHeaderCard({
     <div className="card p-6">
       <div className="flex flex-col sm:flex-row sm:items-start gap-4">
         <div className="flex flex-col items-center gap-2 shrink-0">
-          <Avatar name={user.fullName} src={user.avatarUrl ?? undefined} size="xl" color="#F27124" />
+          <Avatar
+            name={user.fullName}
+            src={user.avatarUrl ?? undefined}
+            size="xl"
+            color="#F27124"
+          />
           <ImagePickButton
             variant="ghost"
             loading={uploadingAvatar}

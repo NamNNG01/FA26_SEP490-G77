@@ -1,29 +1,33 @@
-import React from 'react';
-import { Icon } from '@/assets/icons';
-import type { AnswerResponse, AttemptOption, AttemptQuestion } from '@/services/studentAttempt.service';
-import { normalizeBlank, type CorrectAnswer } from '@/services/studentPracticeExam.service';
-import { DiagramAnswerInput } from './DiagramAnswerInput';
-import { DiagramReview } from './result/DiagramReview';
-import { QuestionContent } from '@/components/common/QuestionContent';
+import React from "react";
+import { Icon } from "@/assets/icons";
+import type {
+  AnswerResponse,
+  AttemptOption,
+  AttemptQuestion,
+} from "@/services/studentAttempt.service";
+import { normalizeBlank, type CorrectAnswer } from "@/services/studentPracticeExam.service";
+import { DiagramAnswerInput } from "./DiagramAnswerInput";
+import { DiagramReview } from "./result/DiagramReview";
+import { QuestionContent } from "@/components/common/QuestionContent";
 
 /** ESSAY / CODE text limit when the paper sets none (BE AnswerResponseValidator). */
 const DEFAULT_TEXT_LIMIT = 10_000;
 const BLANK = /\{\{(\d+)\}\}/g;
 
 const FIELD =
-  'rounded-[10px] border border-line bg-surface px-3 text-base text-content placeholder:text-content-placeholder transition-all focus:outline-none focus:ring-2 focus:ring-brand-600/20 focus:border-brand-600';
+  "rounded-[10px] border border-line bg-surface px-3 text-base text-content placeholder:text-content-placeholder transition-all focus:outline-none focus:ring-2 focus:ring-brand-600/20 focus:border-brand-600";
 
 export const QUESTION_TYPE_LABEL: Record<string, string> = {
-  SINGLE_CHOICE: 'Single choice',
-  MULTIPLE_CHOICE: 'Multiple choice',
-  TRUE_FALSE: 'True / False',
-  MATCHING: 'Matching',
-  FILL_BLANK: 'Fill in the blank',
-  ORDERING: 'Ordering',
-  ESSAY: 'Essay',
-  CODE: 'Code',
-  DIAGRAM: 'Diagram',
-  DIAGRAM_ESSAY: 'Diagram + Essay',
+  SINGLE_CHOICE: "Single choice",
+  MULTIPLE_CHOICE: "Multiple choice",
+  TRUE_FALSE: "True / False",
+  MATCHING: "Matching",
+  FILL_BLANK: "Fill in the blank",
+  ORDERING: "Ordering",
+  ESSAY: "Essay",
+  CODE: "Code",
+  DIAGRAM: "Diagram",
+  DIAGRAM_ESSAY: "Diagram + Essay",
 };
 
 export function optionLetter(i: number): string {
@@ -33,20 +37,21 @@ export function optionLetter(i: number): string {
 /** True when the response holds no real answer (mirrors BE AnswerResponseValidator.isEmpty). */
 export function isAnswered(response: AnswerResponse | null | undefined): boolean {
   if (!response) return false;
-  return Object.values(response).some(v => {
+  return Object.values(response).some((v) => {
     if (v == null) return false;
-    if (typeof v === 'string') return v.trim() !== '';
+    if (typeof v === "string") return v.trim() !== "";
     if (Array.isArray(v)) return v.length > 0;
-    if (typeof v === 'object') return Object.values(v).some(x => typeof x === 'string' && x.trim() !== '');
+    if (typeof v === "object")
+      return Object.values(v).some((x) => typeof x === "string" && x.trim() !== "");
     return true;
   });
 }
 
 /** Question text — fill-blank `{{n}}` placeholders become "(n) ____". */
-export function QuestionText({ content, className = '' }: { content: string; className?: string }) {
+export function QuestionText({ content, className = "" }: { content: string; className?: string }) {
   return (
     <p className={`whitespace-pre-line break-words ${className}`}>
-      <QuestionContent text={content.replace(BLANK, '($1) ______')} />
+      <QuestionContent text={content.replace(BLANK, "($1) ______")} />
     </p>
   );
 }
@@ -87,46 +92,103 @@ export interface AnswerReveal {
 /** The answer control for one question, by type. Emits the SA-03 `response` payload. */
 export function QuestionAnswerInput(props: InputProps) {
   const { question, verdict } = props;
-  if (verdict == null || CHOICE_TYPES.has(question.questionType)) return <AnswerControl {...props} />;
+  if (verdict == null || CHOICE_TYPES.has(question.questionType))
+    return <AnswerControl {...props} />;
   return (
     <div className={`rounded-[12px] border-2 p-3 ${partTone(verdict)}`}>
-      <p className={`flex items-center gap-1.5 text-xs font-semibold mb-2 ${verdict ? 'text-success-strong' : 'text-danger-strong'}`}>
-        <PartMark ok={verdict} /> {verdict ? 'Correct' : 'Wrong'}
+      <p
+        className={`flex items-center gap-1.5 text-xs font-semibold mb-2 ${verdict ? "text-success-strong" : "text-danger-strong"}`}
+      >
+        <PartMark ok={verdict} /> {verdict ? "Correct" : "Wrong"}
       </p>
       <AnswerControl {...props} />
     </div>
   );
 }
 
-const CHOICE_TYPES: ReadonlySet<string> = new Set(['SINGLE_CHOICE', 'TRUE_FALSE', 'MULTIPLE_CHOICE']);
+const CHOICE_TYPES: ReadonlySet<string> = new Set([
+  "SINGLE_CHOICE",
+  "TRUE_FALSE",
+  "MULTIPLE_CHOICE",
+]);
 
-function AnswerControl({ question, value, onChange, roomy, fill, readOnly, reveal, onEnter, verdict, renderOption }: InputProps) {
+function AnswerControl({
+  question,
+  value,
+  onChange,
+  roomy,
+  fill,
+  readOnly,
+  reveal,
+  onEnter,
+  verdict,
+  renderOption,
+}: InputProps) {
   switch (question.questionType) {
-    case 'SINGLE_CHOICE':
-    case 'TRUE_FALSE':
-    case 'MULTIPLE_CHOICE':
-      return <ChoiceInput question={question} value={value} onChange={onChange} reveal={reveal} verdict={verdict} renderOption={renderOption} />;
-    case 'FILL_BLANK':
-      return <FillBlankInput question={question} value={value} onChange={onChange} reveal={reveal} onEnter={onEnter} />;
-    case 'MATCHING':
-      return <MatchingInput question={question} value={value} onChange={onChange} reveal={reveal} />;
-    case 'ORDERING':
-      return <OrderingInput question={question} value={value} onChange={onChange} reveal={reveal} />;
-    case 'ESSAY':
-    case 'CODE':
-      return <TextInput question={question} value={value} onChange={onChange} roomy={roomy} fill={fill} />;
-    case 'DIAGRAM':
-      if (readOnly) return <DiagramReview xml={value?.drawioXml ?? ''} />;
+    case "SINGLE_CHOICE":
+    case "TRUE_FALSE":
+    case "MULTIPLE_CHOICE":
+      return (
+        <ChoiceInput
+          question={question}
+          value={value}
+          onChange={onChange}
+          reveal={reveal}
+          verdict={verdict}
+          renderOption={renderOption}
+        />
+      );
+    case "FILL_BLANK":
+      return (
+        <FillBlankInput
+          question={question}
+          value={value}
+          onChange={onChange}
+          reveal={reveal}
+          onEnter={onEnter}
+        />
+      );
+    case "MATCHING":
+      return (
+        <MatchingInput question={question} value={value} onChange={onChange} reveal={reveal} />
+      );
+    case "ORDERING":
+      return (
+        <OrderingInput question={question} value={value} onChange={onChange} reveal={reveal} />
+      );
+    case "ESSAY":
+    case "CODE":
+      return (
+        <TextInput
+          question={question}
+          value={value}
+          onChange={onChange}
+          roomy={roomy}
+          fill={fill}
+        />
+      );
+    case "DIAGRAM":
+      if (readOnly) return <DiagramReview xml={value?.drawioXml ?? ""} />;
       return <DiagramAnswerInput value={value} onChange={onChange} roomy={roomy} />;
-    case 'DIAGRAM_ESSAY':
-      return <DiagramEssayInput question={question} value={value} onChange={onChange} roomy={roomy} readOnly={readOnly} />;
+    case "DIAGRAM_ESSAY":
+      return (
+        <DiagramEssayInput
+          question={question}
+          value={value}
+          onChange={onChange}
+          roomy={roomy}
+          readOnly={readOnly}
+        />
+      );
     default:
-      return <p className="text-sm text-content-soft">This question type can't be answered here.</p>;
+      return (
+        <p className="text-sm text-content-soft">This question type can't be answered here.</p>
+      );
   }
 }
 
 function ChoiceInput({ question, value, onChange, reveal, verdict, renderOption }: InputProps) {
-  const multi = question.questionType === 'MULTIPLE_CHOICE';
+  const multi = question.questionType === "MULTIPLE_CHOICE";
   const selected = new Set(value?.selectedOptionIds ?? []);
   const correct = reveal ? new Set(reveal.correctOptionIds) : null;
   const toggle = (id: number) => {
@@ -138,7 +200,7 @@ function ChoiceInput({ question, value, onChange, reveal, verdict, renderOption 
     onChange({ selectedOptionIds: [...next] });
   };
   return (
-    <div role={multi ? 'group' : 'radiogroup'} aria-label="Answer options" className="space-y-2.5">
+    <div role={multi ? "group" : "radiogroup"} aria-label="Answer options" className="space-y-2.5">
       {multi && <p className="text-xs text-content-subtle">Select every correct answer.</p>}
       {(question.options ?? []).map((opt, i) => {
         const isOn = selected.has(opt.optionId);
@@ -149,50 +211,54 @@ function ChoiceInput({ question, value, onChange, reveal, verdict, renderOption 
         const tone = judged
           ? isOn
             ? verdict
-              ? 'border-success-solid bg-success-light'
-              : 'border-danger-solid bg-danger-light'
-            : 'border-line bg-surface opacity-70'
+              ? "border-success-solid bg-success-light"
+              : "border-danger-solid bg-danger-light"
+            : "border-line bg-surface opacity-70"
           : !correct
-          ? isOn
-            ? 'border-brand-600 bg-primary-light'
-            : 'border-line bg-surface hover:border-brand-600 hover:bg-surface-hover'
-          : missed
-            ? 'border-dashed border-success-solid bg-surface'
-            : correct.has(opt.optionId)
-            ? 'border-success-solid bg-success-light'
-            : isOn
-              ? 'border-danger-solid bg-danger-light'
-              : 'border-line bg-surface opacity-70';
+            ? isOn
+              ? "border-brand-600 bg-primary-light"
+              : "border-line bg-surface hover:border-brand-600 hover:bg-surface-hover"
+            : missed
+              ? "border-dashed border-success-solid bg-surface"
+              : correct.has(opt.optionId)
+                ? "border-success-solid bg-success-light"
+                : isOn
+                  ? "border-danger-solid bg-danger-light"
+                  : "border-line bg-surface opacity-70";
         const badge = judged
           ? isOn
             ? verdict
-              ? 'bg-success-solid text-white'
-              : 'bg-danger-solid text-white'
-            : 'bg-surface-muted text-content-secondary'
+              ? "bg-success-solid text-white"
+              : "bg-danger-solid text-white"
+            : "bg-surface-muted text-content-secondary"
           : !correct
-          ? isOn
-            ? 'bg-brand-600 text-white'
-            : 'bg-surface-muted text-content-secondary'
-          : correct.has(opt.optionId)
-            ? 'bg-success-solid text-white'
-            : isOn
-              ? 'bg-danger-solid text-white'
-              : 'bg-surface-muted text-content-secondary';
+            ? isOn
+              ? "bg-brand-600 text-white"
+              : "bg-surface-muted text-content-secondary"
+            : correct.has(opt.optionId)
+              ? "bg-success-solid text-white"
+              : isOn
+                ? "bg-danger-solid text-white"
+                : "bg-surface-muted text-content-secondary";
         return (
           <button
             key={opt.optionId}
             type="button"
-            role={multi ? 'checkbox' : 'radio'}
+            role={multi ? "checkbox" : "radio"}
             aria-checked={isOn}
             aria-disabled={correct ? true : undefined}
             onClick={() => toggle(opt.optionId)}
-            className={`w-full text-left flex items-start gap-3 p-4 rounded-[10px] border-2 transition-all ${correct ? 'cursor-default' : ''} ${tone}`}
+            className={`w-full text-left flex items-start gap-3 p-4 rounded-[10px] border-2 transition-all ${correct ? "cursor-default" : ""} ${tone}`}
           >
             <span
-              className={`w-7 h-7 flex items-center justify-center text-sm font-bold flex-shrink-0 mt-0.5 ${multi ? 'rounded-[6px]' : 'rounded-full'} ${badge}`}
+              className={`w-7 h-7 flex items-center justify-center text-sm font-bold flex-shrink-0 mt-0.5 ${multi ? "rounded-[6px]" : "rounded-full"} ${badge}`}
             >
               {judged && isOn ? (
-                verdict ? <Icon.Check className="w-4 h-4" /> : <Icon.X className="w-4 h-4" />
+                verdict ? (
+                  <Icon.Check className="w-4 h-4" />
+                ) : (
+                  <Icon.X className="w-4 h-4" />
+                )
               ) : correct && correct.has(opt.optionId) ? (
                 <Icon.Check className="w-4 h-4" />
               ) : correct && isOn ? (
@@ -206,16 +272,20 @@ function ChoiceInput({ question, value, onChange, reveal, verdict, renderOption 
             {renderOption ? (
               <span className="flex-1 min-w-0">{renderOption(opt)}</span>
             ) : (
-              <span className="flex-1 text-base leading-relaxed text-content-secondary break-words">{opt.optionText}</span>
+              <span className="flex-1 text-base leading-relaxed text-content-secondary break-words">
+                {opt.optionText}
+              </span>
             )}
             {judged && isOn && (
-              <span className={`flex-shrink-0 self-center text-xs font-semibold ${verdict ? 'text-success-strong' : 'text-danger-strong'}`}>
-                {verdict ? 'Correct' : 'Wrong'}
+              <span
+                className={`flex-shrink-0 self-center text-xs font-semibold ${verdict ? "text-success-strong" : "text-danger-strong"}`}
+              >
+                {verdict ? "Correct" : "Wrong"}
               </span>
             )}
             {correct?.has(opt.optionId) && (
               <span className="flex-shrink-0 self-center text-xs font-semibold text-success-strong">
-                {missed ? 'Missed' : 'Correct answer'}
+                {missed ? "Missed" : "Correct answer"}
               </span>
             )}
           </button>
@@ -227,9 +297,9 @@ function ChoiceInput({ question, value, onChange, reveal, verdict, renderOption 
 
 /** Tone of one answer part after a practice check: right, wrong, or not checked yet. */
 function partTone(verdict: boolean | null): string {
-  if (verdict === true) return 'border-success-solid bg-success-light';
-  if (verdict === false) return 'border-danger-solid bg-danger-light';
-  return 'border-line bg-surface';
+  if (verdict === true) return "border-success-solid bg-success-light";
+  if (verdict === false) return "border-danger-solid bg-danger-light";
+  return "border-line bg-surface";
 }
 
 /** "✓" / "✗" mark of a checked part. */
@@ -242,12 +312,12 @@ function PartMark({ ok }: { ok: boolean }) {
 }
 
 function FillBlankInput({ question, value, onChange, reveal, onEnter }: InputProps) {
-  const found = [...new Set([...question.content.matchAll(BLANK)].map(m => m[1]))];
-  const indices = found.length > 0 ? found : ['1'];
+  const found = [...new Set([...question.content.matchAll(BLANK)].map((m) => m[1]))];
+  const indices = found.length > 0 ? found : ["1"];
   const blanks = value?.blanks ?? {};
   const key = reveal?.correctAnswer?.blanks ?? null;
   const verdict = (n: string) =>
-    key ? (key[n] ?? []).some(a => normalizeBlank(a) === normalizeBlank(blanks[n])) : null;
+    key ? (key[n] ?? []).some((a) => normalizeBlank(a) === normalizeBlank(blanks[n])) : null;
   return (
     <div className="space-y-3" data-blanks>
       {indices.map((n, i) => {
@@ -255,20 +325,24 @@ function FillBlankInput({ question, value, onChange, reveal, onEnter }: InputPro
         return (
           <div key={n} className="space-y-1">
             <label className="flex items-center gap-3">
-              {found.length > 0 && <span className="w-10 text-sm font-semibold text-content-secondary">({n})</span>}
+              {found.length > 0 && (
+                <span className="w-10 text-sm font-semibold text-content-secondary">({n})</span>
+              )}
               <input
-                className={`${FIELD} h-10 flex-1 ${ok === true ? '!border-success-solid !bg-success-light' : ok === false ? '!border-danger-solid !bg-danger-light' : ''}`}
-                placeholder={found.length > 0 ? `Blank ${n}` : 'Your answer'}
-                aria-label={found.length > 0 ? `Blank ${n}` : 'Your answer'}
+                className={`${FIELD} h-10 flex-1 ${ok === true ? "!border-success-solid !bg-success-light" : ok === false ? "!border-danger-solid !bg-danger-light" : ""}`}
+                placeholder={found.length > 0 ? `Blank ${n}` : "Your answer"}
+                aria-label={found.length > 0 ? `Blank ${n}` : "Your answer"}
                 aria-invalid={ok === false || undefined}
                 readOnly={Boolean(key)}
-                value={blanks[n] ?? ''}
-                onChange={e => onChange({ blanks: { ...blanks, [n]: e.target.value } })}
-                onKeyDown={e => {
-                  if (e.key !== 'Enter' || !onEnter) return;
+                value={blanks[n] ?? ""}
+                onChange={(e) => onChange({ blanks: { ...blanks, [n]: e.target.value } })}
+                onKeyDown={(e) => {
+                  if (e.key !== "Enter" || !onEnter) return;
                   e.preventDefault();
                   // Enter moves to the next blank; on the last one it checks the answer.
-                  const next = e.currentTarget.closest('[data-blanks]')?.querySelectorAll('input')[i + 1];
+                  const next = e.currentTarget.closest("[data-blanks]")?.querySelectorAll("input")[
+                    i + 1
+                  ];
                   if (next) next.focus();
                   else onEnter();
                 }}
@@ -276,8 +350,11 @@ function FillBlankInput({ question, value, onChange, reveal, onEnter }: InputPro
               {ok != null && <PartMark ok={ok} />}
             </label>
             {ok === false && (
-              <p className={`text-sm text-success-strong ${found.length > 0 ? 'pl-[3.25rem]' : ''}`}>
-                Correct answer: <span className="font-semibold">{(key?.[n] ?? []).join(' / ') || '—'}</span>
+              <p
+                className={`text-sm text-success-strong ${found.length > 0 ? "pl-[3.25rem]" : ""}`}
+              >
+                Correct answer:{" "}
+                <span className="font-semibold">{(key?.[n] ?? []).join(" / ") || "—"}</span>
               </p>
             )}
           </div>
@@ -290,21 +367,25 @@ function FillBlankInput({ question, value, onChange, reveal, onEnter }: InputPro
 function MatchingInput({ question, value, onChange, reveal }: InputProps) {
   const lefts = question.matching?.lefts ?? [];
   const rights = question.matching?.rights ?? [];
-  const current = new Map((value?.matches ?? []).filter(m => rights.includes(m.right)).map(m => [m.left, m.right]));
-  const key = reveal?.correctAnswer?.pairs ? new Map(reveal.correctAnswer.pairs.map(p => [p.left, p.right])) : null;
+  const current = new Map(
+    (value?.matches ?? []).filter((m) => rights.includes(m.right)).map((m) => [m.left, m.right]),
+  );
+  const key = reveal?.correctAnswer?.pairs
+    ? new Map(reveal.correctAnswer.pairs.map((p) => [p.left, p.right]))
+    : null;
   if (key) return <MatchingReveal lefts={lefts} current={current} keyMap={key} />;
   return (
     <MatchingBoard
       lefts={lefts}
       rights={rights}
       current={current}
-      onChange={next => onChange({ matches: [...next].map(([l, r]) => ({ left: l, right: r })) })}
+      onChange={(next) => onChange({ matches: [...next].map(([l, r]) => ({ left: l, right: r })) })}
     />
   );
 }
 
 /** Where a dragged answer would land: the slot beside a left item (its index) or back in the pool. */
-type MatchingTarget = number | 'pool' | null;
+type MatchingTarget = number | "pool" | null;
 
 interface MatchingDrag {
   right: string;
@@ -339,12 +420,12 @@ function MatchingBoard({
   const draggedRef = React.useRef(false);
 
   const used = new Set(current.values());
-  const pool = rights.filter(r => !used.has(r));
+  const pool = rights.filter((r) => !used.has(r));
   const leftOf = (right: string) => [...current].find(([, r]) => r === right)?.[0];
 
   /** Put `right` beside `lefts[slot]` (or in the first empty slot), swapping with what was there. */
   const place = (right: string, slot?: number) => {
-    const target = slot != null ? lefts[slot] : lefts.find(l => !current.has(l));
+    const target = slot != null ? lefts[slot] : lefts.find((l) => !current.has(l));
     if (target == null) return;
     const next = new Map(current);
     const from = leftOf(right);
@@ -367,32 +448,39 @@ function MatchingBoard({
 
   const targetAt = (x: number, y: number): MatchingTarget => {
     const el = document.elementFromPoint(x, y) as HTMLElement | null;
-    const slot = el?.closest<HTMLElement>('[data-match-slot]');
+    const slot = el?.closest<HTMLElement>("[data-match-slot]");
     if (slot) return Number(slot.dataset.matchSlot);
-    return el?.closest('[data-match-pool]') ? 'pool' : null;
+    return el?.closest("[data-match-pool]") ? "pool" : null;
   };
 
   const startPress = (e: React.PointerEvent<HTMLElement>, right: string) => {
-    if (e.button !== 0 || (e.target as HTMLElement).closest('button[data-match-action]')) return;
+    if (e.button !== 0 || (e.target as HTMLElement).closest("button[data-match-action]")) return;
     // A sent answer sits in a disabled fieldset: nothing moves.
-    if (e.currentTarget.closest('fieldset:disabled')) return;
+    if (e.currentTarget.closest("fieldset:disabled")) return;
     const startX = e.clientX;
     const startY = e.clientY;
     const width = e.currentTarget.getBoundingClientRect().width;
     draggedRef.current = false;
 
     const onMove = (ev: PointerEvent) => {
-      if (!dragRef.current && Math.hypot(ev.clientX - startX, ev.clientY - startY) < DRAG_THRESHOLD) return;
+      if (!dragRef.current && Math.hypot(ev.clientX - startX, ev.clientY - startY) < DRAG_THRESHOLD)
+        return;
       draggedRef.current = true;
       ev.preventDefault();
-      const next = { right, x: ev.clientX, y: ev.clientY, width, over: targetAt(ev.clientX, ev.clientY) };
+      const next = {
+        right,
+        x: ev.clientX,
+        y: ev.clientY,
+        width,
+        over: targetAt(ev.clientX, ev.clientY),
+      };
       dragRef.current = next;
       setDrag(next);
     };
     const onUp = (ev: PointerEvent) => {
-      window.removeEventListener('pointermove', onMove);
-      window.removeEventListener('pointerup', onUp);
-      window.removeEventListener('pointercancel', onUp);
+      window.removeEventListener("pointermove", onMove);
+      window.removeEventListener("pointerup", onUp);
+      window.removeEventListener("pointercancel", onUp);
       const done = dragRef.current;
       dragRef.current = null;
       setDrag(null);
@@ -400,44 +488,54 @@ function MatchingBoard({
         draggedRef.current = false;
       }, 0);
       if (!done) return;
-      const over = ev.type === 'pointerup' ? targetAt(ev.clientX, ev.clientY) : null;
-      if (over === 'pool') unplace(done.right);
-      else if (typeof over === 'number') place(done.right, over);
+      const over = ev.type === "pointerup" ? targetAt(ev.clientX, ev.clientY) : null;
+      if (over === "pool") unplace(done.right);
+      else if (typeof over === "number") place(done.right, over);
     };
-    window.addEventListener('pointermove', onMove);
-    window.addEventListener('pointerup', onUp);
-    window.addEventListener('pointercancel', onUp);
+    window.addEventListener("pointermove", onMove);
+    window.addEventListener("pointerup", onUp);
+    window.addEventListener("pointercancel", onUp);
   };
 
-  const chipCls = 'touch-none select-none inline-flex items-center gap-2 rounded-[8px] border bg-surface px-3 py-2 text-left text-sm text-content shadow-sm cursor-grab transition-opacity';
+  const chipCls =
+    "touch-none select-none inline-flex items-center gap-2 rounded-[8px] border bg-surface px-3 py-2 text-left text-sm text-content shadow-sm cursor-grab transition-opacity";
 
   return (
-    <div className={`space-y-4 ${drag ? 'select-none cursor-grabbing' : ''}`}>
+    <div className={`space-y-4 ${drag ? "select-none cursor-grabbing" : ""}`}>
       <div>
-        <p className="text-xs font-semibold text-content-subtle uppercase tracking-wide mb-2">Answers</p>
+        <p className="text-xs font-semibold text-content-subtle uppercase tracking-wide mb-2">
+          Answers
+        </p>
         <div
           data-match-pool
           className={`min-h-[3.25rem] flex flex-wrap gap-2 rounded-[10px] border-2 border-dashed p-2.5 transition-colors ${
-            drag?.over === 'pool' ? 'border-brand-600 bg-primary-light' : 'border-line bg-surface-alt'
+            drag?.over === "pool"
+              ? "border-brand-600 bg-primary-light"
+              : "border-line bg-surface-alt"
           }`}
         >
           {pool.length === 0 ? (
-            <p className="self-center px-1 text-xs text-content-subtle">Every answer is placed. Drag one back here to take it out.</p>
+            <p className="self-center px-1 text-xs text-content-subtle">
+              Every answer is placed. Drag one back here to take it out.
+            </p>
           ) : (
-            pool.map(right => (
+            pool.map((right) => (
               <button
                 key={right}
                 type="button"
-                onPointerDown={e => startPress(e, right)}
-                onDragStart={e => e.preventDefault()}
+                onPointerDown={(e) => startPress(e, right)}
+                onDragStart={(e) => e.preventDefault()}
                 onClick={() => {
                   if (draggedRef.current) return;
                   place(right);
                 }}
                 aria-label={`Match "${right}" with the first empty item`}
-                className={`${chipCls} max-w-full border-line hover:border-brand-600 ${drag?.right === right ? 'opacity-40' : ''}`}
+                className={`${chipCls} max-w-full border-line hover:border-brand-600 ${drag?.right === right ? "opacity-40" : ""}`}
               >
-                <Icon.GripVertical className="w-4 h-4 flex-shrink-0 text-content-subtle" aria-hidden="true" />
+                <Icon.GripVertical
+                  className="w-4 h-4 flex-shrink-0 text-content-subtle"
+                  aria-hidden="true"
+                />
                 <span className="break-words">{right}</span>
               </button>
             ))
@@ -454,19 +552,32 @@ function MatchingBoard({
             const right = current.get(left);
             const highlight = drag?.over === i;
             return (
-              <li key={left} className="grid grid-cols-1 sm:grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)] items-stretch sm:items-center gap-2">
-                <div className="rounded-[10px] border border-line bg-surface-alt px-3 py-2.5 text-sm text-content break-words">{left}</div>
-                <Icon.ChevronRight className="hidden sm:block w-4 h-4 text-content-subtle" aria-hidden="true" />
+              <li
+                key={left}
+                className="grid grid-cols-1 sm:grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)] items-stretch sm:items-center gap-2"
+              >
+                <div className="rounded-[10px] border border-line bg-surface-alt px-3 py-2.5 text-sm text-content break-words">
+                  {left}
+                </div>
+                <Icon.ChevronRight
+                  className="hidden sm:block w-4 h-4 text-content-subtle"
+                  aria-hidden="true"
+                />
                 <div data-match-slot={i} className="min-w-0">
                   {right != null ? (
                     <div
-                      onPointerDown={e => startPress(e, right)}
-                      onDragStart={e => e.preventDefault()}
+                      onPointerDown={(e) => startPress(e, right)}
+                      onDragStart={(e) => e.preventDefault()}
                       className={`${chipCls} w-full py-2.5 rounded-[10px] ${
-                        highlight ? 'border-brand-600 bg-primary-light' : 'border-line hover:border-brand-600'
-                      } ${drag?.right === right ? 'opacity-40' : ''}`}
+                        highlight
+                          ? "border-brand-600 bg-primary-light"
+                          : "border-line hover:border-brand-600"
+                      } ${drag?.right === right ? "opacity-40" : ""}`}
                     >
-                      <Icon.GripVertical className="w-4 h-4 flex-shrink-0 text-content-subtle" aria-hidden="true" />
+                      <Icon.GripVertical
+                        className="w-4 h-4 flex-shrink-0 text-content-subtle"
+                        aria-hidden="true"
+                      />
                       <span className="flex-1 min-w-0 break-words">{right}</span>
                       <button
                         type="button"
@@ -481,7 +592,9 @@ function MatchingBoard({
                   ) : (
                     <div
                       className={`rounded-[10px] border-2 border-dashed px-3 py-2.5 text-sm transition-colors ${
-                        highlight ? 'border-brand-600 bg-primary-light text-brand-ink' : 'border-line text-content-subtle'
+                        highlight
+                          ? "border-brand-600 bg-primary-light text-brand-ink"
+                          : "border-line text-content-subtle"
                       }`}
                     >
                       Drop an answer here
@@ -498,7 +611,12 @@ function MatchingBoard({
         <div
           aria-hidden="true"
           className="pointer-events-none fixed z-50 flex items-center gap-2 rounded-[10px] border border-brand-600 bg-surface px-3 py-2.5 text-sm text-content shadow-lg ring-2 ring-brand-600/20"
-          style={{ left: drag.x, top: drag.y, width: Math.min(drag.width, 420), transform: 'translate(-24px, -50%)' }}
+          style={{
+            left: drag.x,
+            top: drag.y,
+            width: Math.min(drag.width, 420),
+            transform: "translate(-24px, -50%)",
+          }}
         >
           <Icon.GripVertical className="w-4 h-4 flex-shrink-0 text-content-subtle" />
           <span className="truncate">{drag.right}</span>
@@ -509,23 +627,36 @@ function MatchingBoard({
 }
 
 /** A checked practice matching: each left item with the picked answer, marked right / wrong. */
-function MatchingReveal({ lefts, current, keyMap }: { lefts: string[]; current: Map<string, string>; keyMap: Map<string, string> }) {
+function MatchingReveal({
+  lefts,
+  current,
+  keyMap,
+}: {
+  lefts: string[];
+  current: Map<string, string>;
+  keyMap: Map<string, string>;
+}) {
   return (
     <ul className="space-y-2.5">
-      {lefts.map(left => {
+      {lefts.map((left) => {
         const picked = current.get(left);
         const ok = keyMap.get(left) === picked;
         return (
           <li key={left} className={`p-3 rounded-[10px] border ${partTone(ok)}`}>
             <div className="grid grid-cols-1 sm:grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)_auto] sm:items-center gap-2">
               <span className="text-sm text-content break-words">{left}</span>
-              <Icon.ChevronRight className="hidden sm:block w-4 h-4 text-content-subtle" aria-hidden="true" />
-              <span className="text-sm text-content break-words">{picked ?? <span className="italic text-content-subtle">No answer</span>}</span>
+              <Icon.ChevronRight
+                className="hidden sm:block w-4 h-4 text-content-subtle"
+                aria-hidden="true"
+              />
+              <span className="text-sm text-content break-words">
+                {picked ?? <span className="italic text-content-subtle">No answer</span>}
+              </span>
               <PartMark ok={ok} />
             </div>
             {!ok && (
               <p className="mt-2 text-sm text-success-strong sm:text-right">
-                Correct match: <span className="font-semibold">{keyMap.get(left) ?? '—'}</span>
+                Correct match: <span className="font-semibold">{keyMap.get(left) ?? "—"}</span>
               </p>
             )}
           </li>
@@ -543,17 +674,24 @@ function MatchingReveal({ lefts, current, keyMap }: { lefts: string[]; current: 
  */
 function OrderingInput({ question, value, onChange, reveal }: InputProps) {
   const options = question.options ?? [];
-  const byId = new Map(options.map(o => [o.optionId, o]));
+  const byId = new Map(options.map((o) => [o.optionId, o]));
   const key = reveal?.correctAnswer?.orderedOptionIds ?? null;
-  const placed = (value?.orderedOptionIds ?? []).filter(id => byId.has(id));
+  const placed = (value?.orderedOptionIds ?? []).filter((id) => byId.has(id));
   if (key) return <OrderingReveal byId={byId} placed={placed} keyOrder={key} />;
 
-  const pool = options.filter(o => !placed.includes(o.optionId));
-  return <OrderingBoard byId={byId} placed={placed} pool={pool.map(o => o.optionId)} onChange={ids => onChange({ orderedOptionIds: ids })} />;
+  const pool = options.filter((o) => !placed.includes(o.optionId));
+  return (
+    <OrderingBoard
+      byId={byId}
+      placed={placed}
+      pool={pool.map((o) => o.optionId)}
+      onChange={(ids) => onChange({ orderedOptionIds: ids })}
+    />
+  );
 }
 
 /** Where a dragged item would land: a slot (0-based) or back in the pool. */
-type OrderingTarget = number | 'pool' | null;
+type OrderingTarget = number | "pool" | null;
 
 interface OrderingDrag {
   id: number;
@@ -586,11 +724,11 @@ function OrderingBoard({
 
   /** Put `id` at slot `slot` (or at the end), taking it out of wherever it was. */
   const place = (id: number, slot?: number) => {
-    const rest = placed.filter(x => x !== id);
+    const rest = placed.filter((x) => x !== id);
     const at = slot == null ? rest.length : Math.min(slot, rest.length);
     onChange([...rest.slice(0, at), id, ...rest.slice(at)]);
   };
-  const unplace = (id: number) => onChange(placed.filter(x => x !== id));
+  const unplace = (id: number) => onChange(placed.filter((x) => x !== id));
   const move = (from: number, to: number) => {
     if (to < 0 || to >= placed.length) return;
     const next = [...placed];
@@ -600,30 +738,37 @@ function OrderingBoard({
 
   const targetAt = (x: number, y: number): OrderingTarget => {
     const el = document.elementFromPoint(x, y) as HTMLElement | null;
-    const slot = el?.closest<HTMLElement>('[data-order-slot]');
+    const slot = el?.closest<HTMLElement>("[data-order-slot]");
     if (slot) return Number(slot.dataset.orderSlot);
-    return el?.closest('[data-order-pool]') ? 'pool' : null;
+    return el?.closest("[data-order-pool]") ? "pool" : null;
   };
 
   const startPress = (e: React.PointerEvent<HTMLElement>, id: number) => {
-    if (e.button !== 0 || (e.target as HTMLElement).closest('button[data-order-action]')) return;
+    if (e.button !== 0 || (e.target as HTMLElement).closest("button[data-order-action]")) return;
     const startX = e.clientX;
     const startY = e.clientY;
     const width = e.currentTarget.getBoundingClientRect().width;
     draggedRef.current = false;
 
     const onMove = (ev: PointerEvent) => {
-      if (!dragRef.current && Math.hypot(ev.clientX - startX, ev.clientY - startY) < DRAG_THRESHOLD) return;
+      if (!dragRef.current && Math.hypot(ev.clientX - startX, ev.clientY - startY) < DRAG_THRESHOLD)
+        return;
       draggedRef.current = true;
       ev.preventDefault();
-      const next = { id, x: ev.clientX, y: ev.clientY, width, over: targetAt(ev.clientX, ev.clientY) };
+      const next = {
+        id,
+        x: ev.clientX,
+        y: ev.clientY,
+        width,
+        over: targetAt(ev.clientX, ev.clientY),
+      };
       dragRef.current = next;
       setDrag(next);
     };
     const onUp = (ev: PointerEvent) => {
-      window.removeEventListener('pointermove', onMove);
-      window.removeEventListener('pointerup', onUp);
-      window.removeEventListener('pointercancel', onUp);
+      window.removeEventListener("pointermove", onMove);
+      window.removeEventListener("pointerup", onUp);
+      window.removeEventListener("pointercancel", onUp);
       const done = dragRef.current;
       dragRef.current = null;
       setDrag(null);
@@ -633,48 +778,60 @@ function OrderingBoard({
       }, 0);
       if (!done) return;
       // Where the pointer is let go, not the last move: a fast drag may send few moves. A cancel drops nothing.
-      const over = ev.type === 'pointerup' ? targetAt(ev.clientX, ev.clientY) : null;
-      if (over === 'pool') unplace(done.id);
-      else if (typeof over === 'number') place(done.id, over);
+      const over = ev.type === "pointerup" ? targetAt(ev.clientX, ev.clientY) : null;
+      if (over === "pool") unplace(done.id);
+      else if (typeof over === "number") place(done.id, over);
     };
-    window.addEventListener('pointermove', onMove);
-    window.addEventListener('pointerup', onUp);
-    window.addEventListener('pointercancel', onUp);
+    window.addEventListener("pointermove", onMove);
+    window.addEventListener("pointerup", onUp);
+    window.addEventListener("pointercancel", onUp);
   };
 
   const textOf = (id: number) => byId.get(id)?.optionText ?? `#${id}`;
   /** Slot the dragged item would fill: a drop past the last filled slot lands right after it. */
-  const overSlot = typeof drag?.over === 'number' ? Math.min(drag.over, placed.filter(x => x !== drag.id).length) : null;
+  const overSlot =
+    typeof drag?.over === "number"
+      ? Math.min(drag.over, placed.filter((x) => x !== drag.id).length)
+      : null;
 
   return (
-    <div className={`space-y-4 ${drag ? 'select-none cursor-grabbing' : ''}`}>
+    <div className={`space-y-4 ${drag ? "select-none cursor-grabbing" : ""}`}>
       <div>
-        <p className="text-xs font-semibold text-content-subtle uppercase tracking-wide mb-2">Items</p>
+        <p className="text-xs font-semibold text-content-subtle uppercase tracking-wide mb-2">
+          Items
+        </p>
         <div
           data-order-pool
           className={`min-h-[3.25rem] flex flex-wrap gap-2 rounded-[10px] border-2 border-dashed p-2.5 transition-colors ${
-            drag?.over === 'pool' ? 'border-brand-600 bg-primary-light' : 'border-line bg-surface-alt'
+            drag?.over === "pool"
+              ? "border-brand-600 bg-primary-light"
+              : "border-line bg-surface-alt"
           }`}
         >
           {pool.length === 0 ? (
-            <p className="self-center px-1 text-xs text-content-subtle">Every item is placed. Drag one back here to take it out.</p>
+            <p className="self-center px-1 text-xs text-content-subtle">
+              Every item is placed. Drag one back here to take it out.
+            </p>
           ) : (
-            pool.map(id => (
+            pool.map((id) => (
               <button
                 key={id}
                 type="button"
-                onPointerDown={e => startPress(e, id)}
-                onDragStart={e => e.preventDefault()}
+                onPointerDown={(e) => startPress(e, id)}
+                onDragStart={(e) => e.preventDefault()}
                 onClick={() => {
                   if (draggedRef.current) return;
                   place(id);
                 }}
                 aria-label={`Place "${textOf(id)}" in slot ${placed.length + 1}`}
                 className={`touch-none select-none max-w-full inline-flex items-center gap-2 rounded-[8px] border border-line bg-surface px-3 py-2 text-left text-sm text-content shadow-sm cursor-grab hover:border-brand-600 transition-opacity ${
-                  drag?.id === id ? 'opacity-40' : ''
+                  drag?.id === id ? "opacity-40" : ""
                 }`}
               >
-                <Icon.GripVertical className="w-4 h-4 flex-shrink-0 text-content-subtle" aria-hidden="true" />
+                <Icon.GripVertical
+                  className="w-4 h-4 flex-shrink-0 text-content-subtle"
+                  aria-hidden="true"
+                />
                 <span className="break-words">{textOf(id)}</span>
               </button>
             ))
@@ -697,14 +854,21 @@ function OrderingBoard({
                 </span>
                 {id != null ? (
                   <div
-                    onPointerDown={e => startPress(e, id)}
-                    onDragStart={e => e.preventDefault()}
+                    onPointerDown={(e) => startPress(e, id)}
+                    onDragStart={(e) => e.preventDefault()}
                     className={`touch-none select-none flex-1 min-w-0 flex items-center gap-2 rounded-[10px] border px-3 py-2.5 cursor-grab transition-colors ${
-                      highlight ? 'border-brand-600 bg-primary-light' : 'border-line bg-surface hover:border-brand-600'
-                    } ${drag?.id === id ? 'opacity-40' : ''}`}
+                      highlight
+                        ? "border-brand-600 bg-primary-light"
+                        : "border-line bg-surface hover:border-brand-600"
+                    } ${drag?.id === id ? "opacity-40" : ""}`}
                   >
-                    <Icon.GripVertical className="w-4 h-4 flex-shrink-0 text-content-subtle" aria-hidden="true" />
-                    <span className="flex-1 min-w-0 text-sm text-content break-words">{textOf(id)}</span>
+                    <Icon.GripVertical
+                      className="w-4 h-4 flex-shrink-0 text-content-subtle"
+                      aria-hidden="true"
+                    />
+                    <span className="flex-1 min-w-0 text-sm text-content break-words">
+                      {textOf(id)}
+                    </span>
                     <button
                       type="button"
                       data-order-action
@@ -738,7 +902,9 @@ function OrderingBoard({
                 ) : (
                   <div
                     className={`flex-1 min-w-0 rounded-[10px] border-2 border-dashed px-3 py-2.5 text-sm transition-colors ${
-                      highlight ? 'border-brand-600 bg-primary-light text-brand-ink' : 'border-line text-content-subtle'
+                      highlight
+                        ? "border-brand-600 bg-primary-light text-brand-ink"
+                        : "border-line text-content-subtle"
                     }`}
                   >
                     Drop an item here
@@ -754,7 +920,12 @@ function OrderingBoard({
         <div
           aria-hidden="true"
           className="pointer-events-none fixed z-50 flex items-center gap-2 rounded-[10px] border border-brand-600 bg-surface px-3 py-2.5 text-sm text-content shadow-lg ring-2 ring-brand-600/20"
-          style={{ left: drag.x, top: drag.y, width: Math.min(drag.width, 420), transform: 'translate(-24px, -50%)' }}
+          style={{
+            left: drag.x,
+            top: drag.y,
+            width: Math.min(drag.width, 420),
+            transform: "translate(-24px, -50%)",
+          }}
         >
           <Icon.GripVertical className="w-4 h-4 flex-shrink-0 text-content-subtle" />
           <span className="truncate">{textOf(drag.id)}</span>
@@ -784,15 +955,24 @@ function OrderingReveal({
           const ok = id != null && keyOrder[i] === id;
           const rightPlace = id != null ? keyOrder.indexOf(id) + 1 : 0;
           return (
-            <li key={i} className={`flex items-center gap-3 p-3 rounded-[10px] border ${partTone(ok)}`}>
+            <li
+              key={i}
+              className={`flex items-center gap-3 p-3 rounded-[10px] border ${partTone(ok)}`}
+            >
               <span className="w-7 h-7 rounded-full bg-surface-muted text-sm font-semibold text-content-secondary flex items-center justify-center flex-shrink-0">
                 {i + 1}
               </span>
               <span className="flex-1 text-sm text-content break-words">
-                {id != null ? byId.get(id)?.optionText : <span className="italic text-content-subtle">Empty</span>}
+                {id != null ? (
+                  byId.get(id)?.optionText
+                ) : (
+                  <span className="italic text-content-subtle">Empty</span>
+                )}
               </span>
               {!ok && rightPlace > 0 && (
-                <span className="text-xs font-semibold text-danger-strong whitespace-nowrap">Belongs at #{rightPlace}</span>
+                <span className="text-xs font-semibold text-danger-strong whitespace-nowrap">
+                  Belongs at #{rightPlace}
+                </span>
               )}
               <PartMark ok={ok} />
             </li>
@@ -803,11 +983,13 @@ function OrderingReveal({
         <button
           type="button"
           aria-expanded={showKey}
-          onClick={() => setShowKey(s => !s)}
+          onClick={() => setShowKey((s) => !s)}
           className="inline-flex items-center gap-1 text-sm font-medium text-brand-ink hover:underline"
         >
-          <Icon.ChevronDown className={`w-4 h-4 transition-transform ${showKey ? 'rotate-180' : ''}`} />
-          {showKey ? 'Hide the correct order' : 'Show the correct order'}
+          <Icon.ChevronDown
+            className={`w-4 h-4 transition-transform ${showKey ? "rotate-180" : ""}`}
+          />
+          {showKey ? "Hide the correct order" : "Show the correct order"}
         </button>
         {showKey && (
           <ol className="mt-2 space-y-1.5 rounded-[10px] border border-success-line bg-success-light p-3">
@@ -834,45 +1016,55 @@ function DiagramEssayInput({ question, value, onChange, roomy, readOnly }: Input
   valueRef.current = value;
   const merge = (patch: AnswerResponse) => {
     const prev = valueRef.current;
-    onChange({ drawioXml: prev?.drawioXml ?? '', text: prev?.text ?? '', ...patch });
+    onChange({ drawioXml: prev?.drawioXml ?? "", text: prev?.text ?? "", ...patch });
   };
   return (
     <div className="space-y-4">
       <section className="space-y-2">
         <h3 className="text-xs font-semibold text-content-soft uppercase tracking-wide">Diagram</h3>
         {readOnly ? (
-          <DiagramReview xml={value?.drawioXml ?? ''} />
+          <DiagramReview xml={value?.drawioXml ?? ""} />
         ) : (
-          <DiagramAnswerInput value={value} onChange={next => merge({ drawioXml: next.drawioXml ?? '' })} roomy={roomy} />
+          <DiagramAnswerInput
+            value={value}
+            onChange={(next) => merge({ drawioXml: next.drawioXml ?? "" })}
+            roomy={roomy}
+          />
         )}
       </section>
       <section className="space-y-2">
-        <h3 className="text-xs font-semibold text-content-soft uppercase tracking-wide">Written explanation</h3>
-        <TextInput question={question} value={value} onChange={next => merge({ text: next.text ?? '' })} />
+        <h3 className="text-xs font-semibold text-content-soft uppercase tracking-wide">
+          Written explanation
+        </h3>
+        <TextInput
+          question={question}
+          value={value}
+          onChange={(next) => merge({ text: next.text ?? "" })}
+        />
       </section>
     </div>
   );
 }
 
 function TextInput({ question, value, onChange, roomy, fill }: InputProps) {
-  const text = value?.text ?? '';
+  const text = value?.text ?? "";
   const limit = question.answerSpace?.maxLength ?? DEFAULT_TEXT_LIMIT;
   const words = text.trim() ? text.trim().split(/\s+/).length : 0;
   // fill: on md+ the box takes the free height (never under 12rem); stacked on a phone it keeps a fixed size.
   const size = fill
-    ? 'min-h-[40vh] resize-y md:min-h-[12rem] md:flex-1 md:resize-none'
-    : `resize-y ${roomy ? 'min-h-[50vh]' : 'min-h-[14rem]'}`;
+    ? "min-h-[40vh] resize-y md:min-h-[12rem] md:flex-1 md:resize-none"
+    : `resize-y ${roomy ? "min-h-[50vh]" : "min-h-[14rem]"}`;
   return (
-    <div className={fill ? 'flex flex-col gap-2 md:flex-1 md:min-h-0' : 'space-y-2'}>
+    <div className={fill ? "flex flex-col gap-2 md:flex-1 md:min-h-0" : "space-y-2"}>
       <textarea
         aria-label="Your answer"
         value={text}
         maxLength={limit}
-        onChange={e => onChange({ text: e.target.value })}
+        onChange={(e) => onChange({ text: e.target.value })}
         placeholder="Write your answer…"
-        spellCheck={question.questionType !== 'CODE'}
+        spellCheck={question.questionType !== "CODE"}
         className={`${FIELD} py-2.5 w-full leading-relaxed ${size} ${
-          question.questionType === 'CODE' ? 'font-mono text-sm' : 'text-base'
+          question.questionType === "CODE" ? "font-mono text-sm" : "text-base"
         }`}
       />
       <p className="text-xs text-content-subtle text-right">

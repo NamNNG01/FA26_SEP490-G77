@@ -1,5 +1,5 @@
 import React, { useEffect, useState, useCallback } from "react";
-import { useAutoRefresh } from '@/hooks/useAutoRefresh';
+import { useAutoRefresh } from "@/hooks/useAutoRefresh";
 import { useNavigate } from "react-router";
 import { Button } from "@/components/ui/Button";
 import { Select } from "@/components/ui/Select";
@@ -65,17 +65,12 @@ function exportCoursesToCsv(items: CourseSummaryItem[]) {
     `"${(c.managerName || "").replace(/"/g, '""')}"`,
     `"${c.updatedAt || ""}"`,
   ]);
-  const csvContent = [headers.join(","), ...rows.map((r) => r.join(","))].join(
-    "\n",
-  );
+  const csvContent = [headers.join(","), ...rows.map((r) => r.join(","))].join("\n");
   const blob = new Blob([csvContent], { type: "text/csv;charset=utf-8;" });
   const url = URL.createObjectURL(blob);
   const link = document.createElement("a");
   link.setAttribute("href", url);
-  link.setAttribute(
-    "download",
-    `courses_export_${new Date().toISOString().slice(0, 10)}.csv`,
-  );
+  link.setAttribute("download", `courses_export_${new Date().toISOString().slice(0, 10)}.csv`);
   document.body.appendChild(link);
   link.click();
   document.body.removeChild(link);
@@ -146,10 +141,7 @@ export function CourseListPage({
         });
       })
       .catch((err) => {
-        const message = getApiErrorMessage(
-          err,
-          "Failed to load course summary.",
-        );
+        const message = getApiErrorMessage(err, "Failed to load course summary.");
         toast.error(message, {
           title: "Could not load course summary",
           duration: null,
@@ -158,47 +150,47 @@ export function CourseListPage({
   }, [user?.role]);
 
   /** `'quiet'` = shared auto-refresh: no loader; a failure keeps the list and shows no toast. */
-  const fetchCourses = useCallback(async (mode?: 'quiet') => {
-    const quiet = mode === 'quiet';
-    if (!quiet) {
-      setLoading(true);
-      setError(null);
-    }
-    try {
-      const categoryIdParam =
-        selectedCategory !== "all" && !Number.isNaN(Number(selectedCategory))
-          ? Number(selectedCategory)
-          : undefined;
+  const fetchCourses = useCallback(
+    async (mode?: "quiet") => {
+      const quiet = mode === "quiet";
+      if (!quiet) {
+        setLoading(true);
+        setError(null);
+      }
+      try {
+        const categoryIdParam =
+          selectedCategory !== "all" && !Number.isNaN(Number(selectedCategory))
+            ? Number(selectedCategory)
+            : undefined;
 
-      const data = await courseService.getCourses({
-        search: search.trim() || undefined,
-        categoryId: categoryIdParam,
-        status: selectedStatus === "all" ? undefined : selectedStatus,
-        page: page - 1,
-        size: pageSize,
-      });
+        const data = await courseService.getCourses({
+          search: search.trim() || undefined,
+          categoryId: categoryIdParam,
+          status: selectedStatus === "all" ? undefined : selectedStatus,
+          page: page - 1,
+          size: pageSize,
+        });
 
-      setCourses(data.content);
-      setTotalElements(data.totalElements);
-    } catch (err: unknown) {
-      if (quiet) return;
-      const msg = getApiErrorMessage(
-        err,
-        "Failed to load courses. Please try again.",
-      );
-      setError(msg);
-      toast.error(msg, { title: "Could not load courses", duration: null });
-      setCourses([]);
-      setTotalElements(0);
-    } finally {
-      setLoading(false);
-    }
-  }, [search, selectedCategory, selectedStatus, page, pageSize, toast]);
+        setCourses(data.content);
+        setTotalElements(data.totalElements);
+      } catch (err: unknown) {
+        if (quiet) return;
+        const msg = getApiErrorMessage(err, "Failed to load courses. Please try again.");
+        setError(msg);
+        toast.error(msg, { title: "Could not load courses", duration: null });
+        setCourses([]);
+        setTotalElements(0);
+      } finally {
+        setLoading(false);
+      }
+    },
+    [search, selectedCategory, selectedStatus, page, pageSize, toast],
+  );
 
   useEffect(() => {
     fetchCourses();
   }, [fetchCourses]);
-  useAutoRefresh(() => void fetchCourses('quiet'));
+  useAutoRefresh(() => void fetchCourses("quiet"));
 
   const handleSearchChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     setSearch(e.target.value);
@@ -307,10 +299,7 @@ export function CourseListPage({
           { label: "Drafts", value: summaryStats.drafts, color: "#D97706" },
         ].map((s) => (
           <div key={s.label} className="card p-4 flex items-center gap-3">
-            <div
-              className="w-2 h-10 rounded-full flex-shrink-0"
-              style={{ background: s.color }}
-            />
+            <div className="w-2 h-10 rounded-full flex-shrink-0" style={{ background: s.color }} />
             <div>
               <p className="text-xl font-bold text-content">{s.value}</p>
               <p className="text-xs text-content-subtle">{s.label}</p>
@@ -350,12 +339,9 @@ export function CourseListPage({
       {!loading && courses.length === 0 && !error && (
         <div className="card p-12 text-center text-[#6B7280]">
           <Icon.Book className="w-10 h-10 mx-auto text-[#9CA3AF] mb-3" />
-          <h3 className="text-[16px] font-semibold text-[#111827]">
-            No courses found
-          </h3>
+          <h3 className="text-[16px] font-semibold text-[#111827]">No courses found</h3>
           <p className="text-[13px] text-[#9CA3AF] mt-1 max-w-sm mx-auto">
-            Try adjusting your search keywords or filters to find what you are
-            looking for.
+            Try adjusting your search keywords or filters to find what you are looking for.
           </p>
         </div>
       )}

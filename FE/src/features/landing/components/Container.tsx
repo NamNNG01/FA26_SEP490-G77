@@ -1,4 +1,4 @@
-import React from 'react';
+import React from "react";
 
 /**
  * Container
@@ -12,15 +12,13 @@ import React from 'react';
  */
 export function Container({
   children,
-  className = '',
+  className = "",
 }: {
   children: React.ReactNode;
   className?: string;
 }) {
   return (
-    <div
-      className={`w-[min(100%,1400px)] mx-auto px-[clamp(16px,4vw,48px)] ${className}`}
-    >
+    <div className={`w-[min(100%,1400px)] mx-auto px-[clamp(16px,4vw,48px)] ${className}`}>
       {children}
     </div>
   );

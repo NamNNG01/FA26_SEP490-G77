@@ -1,14 +1,18 @@
-import React, { useEffect, useState } from 'react';
-import { useNavigate, useSearchParams } from 'react-router';
-import axios from 'axios';
-import { Button } from '@/components/ui/Button';
-import { Input } from '@/components/ui/Input';
-import { Alert } from '@/components/ui/Alert';
-import { Icon } from '@/assets/icons';
-import { ROUTES } from '@/app/routes';
-import { useAuth } from '@/auth/authContext';
-import { passwordService, PASSWORD_MIN_LENGTH, getPasswordValidationError } from '@/services/password.service';
-import { AuthPageHeader } from '../components/AuthPageHeader';
+import React, { useEffect, useState } from "react";
+import { useNavigate, useSearchParams } from "react-router";
+import axios from "axios";
+import { Button } from "@/components/ui/Button";
+import { Input } from "@/components/ui/Input";
+import { Alert } from "@/components/ui/Alert";
+import { Icon } from "@/assets/icons";
+import { ROUTES } from "@/app/routes";
+import { useAuth } from "@/auth/authContext";
+import {
+  passwordService,
+  PASSWORD_MIN_LENGTH,
+  getPasswordValidationError,
+} from "@/services/password.service";
+import { AuthPageHeader } from "../components/AuthPageHeader";
 
 /**
  * Accepts either the raw token or the whole link from the email
@@ -43,45 +47,45 @@ export function ResetPasswordPage() {
   const navigate = useNavigate();
   const { isAuthenticated, logout } = useAuth();
   const [searchParams, setSearchParams] = useSearchParams();
-  const [tokenFromLink] = useState(() => searchParams.get('token') ?? '');
+  const [tokenFromLink] = useState(() => searchParams.get("token") ?? "");
 
   useEffect(() => {
-    if (searchParams.has('token')) {
+    if (searchParams.has("token")) {
       setSearchParams({}, { replace: true });
     }
   }, [searchParams, setSearchParams]);
 
   const [token, setToken] = useState(tokenFromLink);
   const [linkInvalid, setLinkInvalid] = useState(false);
-  const [password, setPassword] = useState('');
-  const [confirmPassword, setConfirmPassword] = useState('');
+  const [password, setPassword] = useState("");
+  const [confirmPassword, setConfirmPassword] = useState("");
   const [showPwd, setShowPwd] = useState(false);
   const [showConfirm, setShowConfirm] = useState(false);
   const [loading, setLoading] = useState(false);
-  const [error, setError] = useState('');
-  const [successMessage, setSuccessMessage] = useState('');
+  const [error, setError] = useState("");
+  const [successMessage, setSuccessMessage] = useState("");
 
   let strength = 0;
   if (password.length >= 8) strength++;
   if (/\p{Lu}/u.test(password)) strength++;
   if (/\p{N}/u.test(password)) strength++;
   if (/[\p{P}\p{S}]/u.test(password)) strength++;
-  const strengthLabel = ['', 'Weak', 'Fair', 'Good', 'Strong'];
-  const strengthColor = ['', '#DC2626', '#D97706', '#F27124', '#16A34A'];
+  const strengthLabel = ["", "Weak", "Fair", "Good", "Strong"];
+  const strengthColor = ["", "#DC2626", "#D97706", "#F27124", "#16A34A"];
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    setError('');
+    setError("");
     setLinkInvalid(false);
 
     // Backend validation (from ResetPasswordRequest):
     const resetToken = extractResetToken(token);
     if (!resetToken) {
-      setError('Reset link is required');
+      setError("Reset link is required");
       return;
     }
     if (!password) {
-      setError('New password is required');
+      setError("New password is required");
       return;
     }
     const passwordError = getPasswordValidationError(password);
@@ -90,7 +94,7 @@ export function ResetPasswordPage() {
       return;
     }
     if (password !== confirmPassword) {
-      setError('Passwords do not match.');
+      setError("Passwords do not match.");
       return;
     }
 
@@ -102,7 +106,9 @@ export function ResetPasswordPage() {
       if (axios.isAxiosError(err) && err.response?.status === 401) {
         setLinkInvalid(true);
       }
-      setError(err instanceof Error ? err.message : 'Could not reset your password. Please try again.');
+      setError(
+        err instanceof Error ? err.message : "Could not reset your password. Please try again.",
+      );
     } finally {
       setLoading(false);
     }
@@ -154,7 +160,11 @@ export function ResetPasswordPage() {
           </Button>
         )}
 
-        <form onSubmit={handleSubmit} noValidate className="space-y-[18px] [@media(max-height:850px)]:space-y-3.5">
+        <form
+          onSubmit={handleSubmit}
+          noValidate
+          className="space-y-[18px] [@media(max-height:850px)]:space-y-3.5"
+        >
           {!tokenFromLink && (
             <Input
               label="Reset link"
@@ -168,7 +178,7 @@ export function ResetPasswordPage() {
           <Input
             label="New password"
             placeholder="Enter your new password"
-            type={showPwd ? 'text' : 'password'}
+            type={showPwd ? "text" : "password"}
             autoComplete="new-password"
             autoFocus={!!tokenFromLink}
             value={password}
@@ -177,7 +187,7 @@ export function ResetPasswordPage() {
             suffix={
               <button
                 type="button"
-                aria-label={showPwd ? 'Hide password' : 'Show password'}
+                aria-label={showPwd ? "Hide password" : "Show password"}
                 onClick={() => setShowPwd((s) => !s)}
                 className="hover:text-content-secondary transition-colors"
               >
@@ -191,7 +201,7 @@ export function ResetPasswordPage() {
                 {[1, 2, 3, 4].map((i) => (
                   <div
                     key={i}
-                    className={`flex-1 h-1.5 rounded-full transition-colors ${i <= strength ? '' : 'bg-surface-muted'}`}
+                    className={`flex-1 h-1.5 rounded-full transition-colors ${i <= strength ? "" : "bg-surface-muted"}`}
                     style={i <= strength ? { background: strengthColor[strength] } : undefined}
                   />
                 ))}
@@ -204,20 +214,26 @@ export function ResetPasswordPage() {
           <Input
             label="Confirm password"
             placeholder="Re-enter your new password"
-            type={showConfirm ? 'text' : 'password'}
+            type={showConfirm ? "text" : "password"}
             autoComplete="new-password"
             value={confirmPassword}
             onChange={(e) => setConfirmPassword(e.target.value)}
-            error={confirmPassword && confirmPassword !== password ? 'Passwords do not match' : undefined}
+            error={
+              confirmPassword && confirmPassword !== password ? "Passwords do not match" : undefined
+            }
             icon={<Icon.Lock className="w-4 h-4" />}
             suffix={
               <button
                 type="button"
-                aria-label={showConfirm ? 'Hide password' : 'Show password'}
+                aria-label={showConfirm ? "Hide password" : "Show password"}
                 onClick={() => setShowConfirm((s) => !s)}
                 className="hover:text-content-secondary transition-colors"
               >
-                {showConfirm ? <Icon.EyeOff className="w-4 h-4" /> : <Icon.Eye className="w-4 h-4" />}
+                {showConfirm ? (
+                  <Icon.EyeOff className="w-4 h-4" />
+                ) : (
+                  <Icon.Eye className="w-4 h-4" />
+                )}
               </button>
             }
           />

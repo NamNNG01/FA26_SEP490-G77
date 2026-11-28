@@ -1,11 +1,18 @@
-import React, { forwardRef, useEffect, useImperativeHandle, useMemo, useRef, useState } from 'react';
-import { Alert } from '@/components/ui/Alert';
-import { Badge } from '@/components/ui/Badge';
-import { Button } from '@/components/ui/Button';
-import { Select } from '@/components/ui/Select';
-import { Spinner } from '@/components/ui/Spinner';
-import { useToast } from '@/components/ui/ToastHost';
-import { Icon } from '@/assets/icons';
+import React, {
+  forwardRef,
+  useEffect,
+  useImperativeHandle,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
+import { Alert } from "@/components/ui/Alert";
+import { Badge } from "@/components/ui/Badge";
+import { Button } from "@/components/ui/Button";
+import { Select } from "@/components/ui/Select";
+import { Spinner } from "@/components/ui/Spinner";
+import { useToast } from "@/components/ui/ToastHost";
+import { Icon } from "@/assets/icons";
 import {
   AI_CONTEXT_MAX,
   AI_MATERIAL_EXTENSIONS,
@@ -15,7 +22,7 @@ import {
   type QuestionAiPreview,
   type QuestionDifficulty,
   type QuestionType,
-} from '@/services/question.service';
+} from "@/services/question.service";
 import {
   AI_QUESTION_TYPE_OPTIONS,
   DIFFICULTY_OPTIONS,
@@ -29,10 +36,10 @@ import {
   validateDraft,
   type EditableQuestionType,
   type QuestionDraft,
-} from '../model';
-import { checkPlantUml, plantUmlSvgUrl } from '../diagram';
-import { QuestionForm } from './QuestionForm';
-import { TypeCountSelect, type TypeCounts } from './TypeCountSelect';
+} from "../model";
+import { checkPlantUml, plantUmlSvgUrl } from "../diagram";
+import { QuestionForm } from "./QuestionForm";
+import { TypeCountSelect, type TypeCounts } from "./TypeCountSelect";
 
 const MIN_COUNT = 1;
 const MAX_COUNT = 10;
@@ -40,41 +47,59 @@ const DEFAULT_COUNT = 5;
 /** The backend drafts at most 50 questions per AI call, and one Save All takes at most 50. */
 const MAX_TOTAL = 50;
 
-type Language = NonNullable<QuestionAiGenerateRequest['language']>;
+type Language = NonNullable<QuestionAiGenerateRequest["language"]>;
 
 const LANGUAGE_OPTIONS: { label: string; value: Language }[] = [
-  { label: 'English', value: 'English' },
-  { label: 'Vietnamese', value: 'Vietnamese' },
+  { label: "English", value: "English" },
+  { label: "Vietnamese", value: "Vietnamese" },
 ];
 
-const typeLabel = (t: string) => QUESTION_TYPE_OPTIONS.find(o => o.value === t)?.label ?? t;
-const difficultyLabel = (d: string) => DIFFICULTY_OPTIONS.find(o => o.value === d)?.label ?? d;
+const typeLabel = (t: string) => QUESTION_TYPE_OPTIONS.find((o) => o.value === t)?.label ?? t;
+const difficultyLabel = (d: string) => DIFFICULTY_OPTIONS.find((o) => o.value === d)?.label ?? d;
 
 /** Why the suggestion's type can't go into the batch's group, or undefined. */
 const kindIssue = (q: QuestionDraft, allowedTypes?: QuestionType[]) =>
-  allowedTypes && !allowedTypes.includes(q.type) ? `${typeLabel(q.type)} questions can’t go into this group — change the type.` : undefined;
+  allowedTypes && !allowedTypes.includes(q.type)
+    ? `${typeLabel(q.type)} questions can’t go into this group — change the type.`
+    : undefined;
 
 /** Ready to be saved as it is. */
-const acceptable = (q: QuestionDraft, allowedTypes?: QuestionType[]) => isDraftValid(q) && !kindIssue(q, allowedTypes);
+const acceptable = (q: QuestionDraft, allowedTypes?: QuestionType[]) =>
+  isDraftValid(q) && !kindIssue(q, allowedTypes);
 
 /** Same content as a question already in the course — saving it unchanged is rejected (409). */
 const inBank = (p: Preview) => p.duplicate && !p.edited;
 
 /** AI generation errors → what the manager can do about them. */
 function aiErrorMessage(err: unknown): string {
-  const e = err as { code?: string; message?: string; response?: { status?: number; data?: { message?: string } } };
-  if (e?.code === 'ECONNABORTED') return 'The AI took too long to respond. Try fewer questions or try again.';
+  const e = err as {
+    code?: string;
+    message?: string;
+    response?: { status?: number; data?: { message?: string } };
+  };
+  if (e?.code === "ECONNABORTED")
+    return "The AI took too long to respond. Try fewer questions or try again.";
   switch (e?.response?.status) {
     // Bad settings, or the AI's answer was unusable (e.g. "AI returned an incorrect question distribution").
-    case 400: return e.response.data?.message || 'The AI could not draft these questions. Try again.';
-    case 403: return 'You are not a manager of this course, so you cannot generate questions for it.';
-    case 404: return e.response.data?.message || 'The course was not found.';
-    case 429: return 'You have reached today’s AI generation limit. Try again tomorrow or write the questions manually.';
-    case 502: return e.response.data?.message || 'The AI service returned an error. Please try again in a moment.';
-    case 503: return 'The AI service is busy right now. Please try again in a moment.';
-    case 504: return 'The AI took too long to respond. Try fewer questions or try again.';
+    case 400:
+      return e.response.data?.message || "The AI could not draft these questions. Try again.";
+    case 403:
+      return "You are not a manager of this course, so you cannot generate questions for it.";
+    case 404:
+      return e.response.data?.message || "The course was not found.";
+    case 429:
+      return "You have reached today’s AI generation limit. Try again tomorrow or write the questions manually.";
+    case 502:
+      return (
+        e.response.data?.message ||
+        "The AI service returned an error. Please try again in a moment."
+      );
+    case 503:
+      return "The AI service is busy right now. Please try again in a moment.";
+    case 504:
+      return "The AI took too long to respond. Try fewer questions or try again.";
   }
-  return e?.message || 'Could not generate questions. Please try again.';
+  return e?.message || "Could not generate questions. Please try again.";
 }
 
 interface Preview {
@@ -93,10 +118,18 @@ interface Preview {
   regenerateError?: string;
 }
 
-const toPreview = (p: QuestionAiPreview, request: QuestionAiGenerateRequest, materialFile?: File | null): Preview => ({
-  id: newKey('ai'),
+const toPreview = (
+  p: QuestionAiPreview,
+  request: QuestionAiGenerateRequest,
+  materialFile?: File | null,
+): Preview => ({
+  id: newKey("ai"),
   draft: fromAiDraft(p.question),
-  request: { ...request, questionTypeCounts: { [p.question.questionType]: 1 }, difficultyCounts: { [p.question.difficulty ?? 'MEDIUM']: 1 } },
+  request: {
+    ...request,
+    questionTypeCounts: { [p.question.questionType]: 1 },
+    difficultyCounts: { [p.question.difficulty ?? "MEDIUM"]: 1 },
+  },
   materialFile: materialFile ?? null,
   duplicate: p.hasHashConflict,
   accepted: false,
@@ -118,43 +151,55 @@ export interface AiGeneratePanelHandle {
  * manager to review. Accepted
  * suggestions are reported through onAcceptedChange; the page saves them.
  */
-export const AiGeneratePanel = forwardRef<AiGeneratePanelHandle, {
-  courseId: string;
-  moduleId: string;
-  /** The group's kind limits the types (undefined = any type). */
-  allowedTypes?: QuestionType[];
-  /** True when generating into a new or existing Question Group. */
-  isGroupMode?: boolean;
-  groupTitle?: string;
-  groupPassage?: string;
-  groupIssue?: string;
-  onGroupInvalid?: () => void;
-  /** The suggestions accepted so far, in order — what Save stores. */
-  onAcceptedChange: (drafts: QuestionDraft[]) => void;
-  /** Suggestions not saved yet (accepted or not) — they're lost if the page is left. */
-  onPendingChange?: (count: number) => void;
-  disabled?: boolean;
-}>(function AiGeneratePanel({
-  courseId,
-  moduleId,
-  allowedTypes,
-  isGroupMode = false,
-  groupTitle,
-  groupPassage,
-  groupIssue,
-  onGroupInvalid,
-  onAcceptedChange,
-  onPendingChange,
-  disabled,
-}, ref) {
+export const AiGeneratePanel = forwardRef<
+  AiGeneratePanelHandle,
+  {
+    courseId: string;
+    moduleId: string;
+    /** The group's kind limits the types (undefined = any type). */
+    allowedTypes?: QuestionType[];
+    /** True when generating into a new or existing Question Group. */
+    isGroupMode?: boolean;
+    groupTitle?: string;
+    groupPassage?: string;
+    groupIssue?: string;
+    onGroupInvalid?: () => void;
+    /** The suggestions accepted so far, in order — what Save stores. */
+    onAcceptedChange: (drafts: QuestionDraft[]) => void;
+    /** Suggestions not saved yet (accepted or not) — they're lost if the page is left. */
+    onPendingChange?: (count: number) => void;
+    disabled?: boolean;
+  }
+>(function AiGeneratePanel(
+  {
+    courseId,
+    moduleId,
+    allowedTypes,
+    isGroupMode = false,
+    groupTitle,
+    groupPassage,
+    groupIssue,
+    onGroupInvalid,
+    onAcceptedChange,
+    onPendingChange,
+    disabled,
+  },
+  ref,
+) {
   const toast = useToast();
-  const typeOptions = allowedTypes ? AI_QUESTION_TYPE_OPTIONS.filter(o => allowedTypes.includes(o.value)) : AI_QUESTION_TYPE_OPTIONS;
-  const [typeCounts, setTypeCounts] = useState<TypeCounts<QuestionType>>({ SINGLE_CHOICE: String(DEFAULT_COUNT) });
-  const [context, setContext] = useState('');
+  const typeOptions = allowedTypes
+    ? AI_QUESTION_TYPE_OPTIONS.filter((o) => allowedTypes.includes(o.value))
+    : AI_QUESTION_TYPE_OPTIONS;
+  const [typeCounts, setTypeCounts] = useState<TypeCounts<QuestionType>>({
+    SINGLE_CHOICE: String(DEFAULT_COUNT),
+  });
+  const [context, setContext] = useState("");
   const [materialFile, setMaterialFile] = useState<File | null>(null);
   const materialInputRef = useRef<HTMLInputElement>(null);
-  const [difficultyCounts, setDifficultyCounts] = useState<TypeCounts<QuestionDifficulty>>({ MEDIUM: String(DEFAULT_COUNT) });
-  const [language, setLanguage] = useState<Language>('English');
+  const [difficultyCounts, setDifficultyCounts] = useState<TypeCounts<QuestionDifficulty>>({
+    MEDIUM: String(DEFAULT_COUNT),
+  });
+  const [language, setLanguage] = useState<Language>("English");
   const [showErrors, setShowErrors] = useState(false);
 
   const [generating, setGenerating] = useState(false);
@@ -167,60 +212,96 @@ export const AiGeneratePanel = forwardRef<AiGeneratePanelHandle, {
   const regenRef = useRef(new Map<string, AbortController>());
 
   const abortRegenerations = () => {
-    regenRef.current.forEach(c => c.abort());
+    regenRef.current.forEach((c) => c.abort());
     regenRef.current.clear();
   };
 
-  useEffect(() => () => { abortRef.current?.abort(); abortRegenerations(); }, []);
+  useEffect(
+    () => () => {
+      abortRef.current?.abort();
+      abortRegenerations();
+    },
+    [],
+  );
 
   // A group's kind narrows the types — drop the ones it no longer allows.
-  const allowedKey = allowedTypes?.join(',');
+  const allowedKey = allowedTypes?.join(",");
   useEffect(() => {
     if (!allowedTypes) return;
-    setTypeCounts(prev => {
-      const kept = Object.fromEntries(Object.entries(prev).filter(([t]) => allowedTypes.includes(t as QuestionType))) as TypeCounts<QuestionType>;
+    setTypeCounts((prev) => {
+      const kept = Object.fromEntries(
+        Object.entries(prev).filter(([t]) => allowedTypes.includes(t as QuestionType)),
+      ) as TypeCounts<QuestionType>;
       if (Object.keys(kept).length) return kept;
-      const first = AI_QUESTION_TYPE_OPTIONS.find(o => allowedTypes.includes(o.value))?.value;
+      const first = AI_QUESTION_TYPE_OPTIONS.find((o) => allowedTypes.includes(o.value))?.value;
       return first ? { [first]: String(DEFAULT_COUNT) } : {};
     });
-    setPreviews(prev => prev && prev.map(p => (
-      p.accepted && !allowedTypes.includes(p.draft.type)
-        ? { ...p, accepted: false, editing: true }
-        : p
-    )));
+    setPreviews(
+      (prev) =>
+        prev &&
+        prev.map((p) =>
+          p.accepted && !allowedTypes.includes(p.draft.type)
+            ? { ...p, accepted: false, editing: true }
+            : p,
+        ),
+    );
     // eslint-disable-next-line react-hooks/exhaustive-deps -- allowedKey stands in for allowedTypes (a new array every render)
   }, [allowedKey]);
 
-  const counts = Object.entries(typeCounts).map(([type, c]) => [type as QuestionType, Number(c)] as const);
-  const countsValid = counts.length > 0 && counts.every(([, n]) => Number.isInteger(n) && n >= MIN_COUNT && n <= MAX_COUNT);
+  const counts = Object.entries(typeCounts).map(
+    ([type, c]) => [type as QuestionType, Number(c)] as const,
+  );
+  const countsValid =
+    counts.length > 0 &&
+    counts.every(([, n]) => Number.isInteger(n) && n >= MIN_COUNT && n <= MAX_COUNT);
   const total = countsValid ? counts.reduce((sum, [, n]) => sum + n, 0) : 0;
 
-  const levels = Object.entries(difficultyCounts).map(([d, c]) => [d as QuestionDifficulty, Number(c)] as const);
-  const levelsValid = levels.length > 0 && levels.every(([, n]) => Number.isInteger(n) && n >= MIN_COUNT && n <= MAX_TOTAL);
+  const levels = Object.entries(difficultyCounts).map(
+    ([d, c]) => [d as QuestionDifficulty, Number(c)] as const,
+  );
+  const levelsValid =
+    levels.length > 0 &&
+    levels.every(([, n]) => Number.isInteger(n) && n >= MIN_COUNT && n <= MAX_TOTAL);
   const levelTotal = levelsValid ? levels.reduce((sum, [, n]) => sum + n, 0) : 0;
 
   // One difficulty picked: it can only be the whole run, so it follows the types' total.
   const levelKeys = Object.keys(difficultyCounts) as QuestionDifficulty[];
   const onlyLevel = levelKeys.length === 1 ? levelKeys[0] : undefined;
   useEffect(() => {
-    if (onlyLevel && total) setDifficultyCounts(prev => (prev[onlyLevel] === String(total) ? prev : { [onlyLevel]: String(total) }));
+    if (onlyLevel && total)
+      setDifficultyCounts((prev) =>
+        prev[onlyLevel] === String(total) ? prev : { [onlyLevel]: String(total) },
+      );
   }, [onlyLevel, total]);
 
   const hasPassage = Boolean(isGroupMode && groupPassage?.trim());
   const contextOptional = hasPassage || Boolean(materialFile);
-  const contextError = showErrors && !contextOptional && !context.trim() ? 'Describe what the questions should be about, or upload a study material.' : undefined;
-  const typesError = !showErrors ? undefined
-    : !counts.length ? 'Pick at least one question type.'
-    : !countsValid ? `Enter a number from ${MIN_COUNT} to ${MAX_COUNT} for each type.`
-    : undefined;
-  const difficultiesError = !showErrors ? undefined
-    : !levels.length ? 'Pick at least one difficulty.'
-    : !levelsValid ? `Enter a number from ${MIN_COUNT} to ${MAX_TOTAL} for each difficulty.`
-    : undefined;
-  const totalError = total > MAX_TOTAL ? `At most ${MAX_TOTAL} questions per run — lower the numbers or pick fewer types.` : undefined;
-  const mismatchError = total > 0 && levelsValid && levelTotal !== total
-    ? `The difficulties add up to ${levelTotal} but the question types to ${total} — make them match.`
-    : undefined;
+  const contextError =
+    showErrors && !contextOptional && !context.trim()
+      ? "Describe what the questions should be about, or upload a study material."
+      : undefined;
+  const typesError = !showErrors
+    ? undefined
+    : !counts.length
+      ? "Pick at least one question type."
+      : !countsValid
+        ? `Enter a number from ${MIN_COUNT} to ${MAX_COUNT} for each type.`
+        : undefined;
+  const difficultiesError = !showErrors
+    ? undefined
+    : !levels.length
+      ? "Pick at least one difficulty."
+      : !levelsValid
+        ? `Enter a number from ${MIN_COUNT} to ${MAX_TOTAL} for each difficulty.`
+        : undefined;
+  const totalError =
+    total > MAX_TOTAL
+      ? `At most ${MAX_TOTAL} questions per run — lower the numbers or pick fewer types.`
+      : undefined;
+  const mismatchError =
+    total > 0 && levelsValid && levelTotal !== total
+      ? `The difficulties add up to ${levelTotal} but the question types to ${total} — make them match.`
+      : undefined;
 
   const generate = async () => {
     setShowErrors(true);
@@ -228,7 +309,16 @@ export const AiGeneratePanel = forwardRef<AiGeneratePanelHandle, {
       onGroupInvalid?.();
       return;
     }
-    if (!courseId || !moduleId || (!contextOptional && !context.trim()) || !total || !levelsValid || totalError || mismatchError) return;
+    if (
+      !courseId ||
+      !moduleId ||
+      (!contextOptional && !context.trim()) ||
+      !total ||
+      !levelsValid ||
+      totalError ||
+      mismatchError
+    )
+      return;
 
     abortRef.current?.abort();
     abortRegenerations();
@@ -244,14 +334,20 @@ export const AiGeneratePanel = forwardRef<AiGeneratePanelHandle, {
         questionTypeCounts: Object.fromEntries(counts),
         difficultyCounts: Object.fromEntries(levels),
         ...(context.trim() ? { topic: context.trim() } : {}),
-        ...(isGroupMode && groupPassage?.trim() ? { passageText: groupPassage.trim(), groupTitle: groupTitle?.trim() || undefined } : {}),
+        ...(isGroupMode && groupPassage?.trim()
+          ? { passageText: groupPassage.trim(), groupTitle: groupTitle?.trim() || undefined }
+          : {}),
         language,
       };
       const res = materialFile
-        ? await questionService.generateAiQuestionsFromMaterial(materialFile, request, controller.signal)
+        ? await questionService.generateAiQuestionsFromMaterial(
+            materialFile,
+            request,
+            controller.signal,
+          )
         : await questionService.generateAiQuestions(request, controller.signal);
       if (controller.signal.aborted) return;
-      setPreviews(res.questions.map(q => toPreview(q, request, materialFile)));
+      setPreviews(res.questions.map((q) => toPreview(q, request, materialFile)));
       setIsDemo(Boolean(res.mock));
     } catch (err) {
       if (!controller.signal.aborted) setError(aiErrorMessage(err));
@@ -272,37 +368,55 @@ export const AiGeneratePanel = forwardRef<AiGeneratePanelHandle, {
   /** Accepts the suggestions that are ready to save (valid, and of an allowed type), up to one save's worth. */
   const accept = (indexes: number[]) => {
     if (!previews) return;
-    const ready = indexes.filter(i => !previews[i].accepted && !inBank(previews[i]) && acceptable(previews[i].draft, allowedTypes));
-    const room = Math.max(0, MAX_TOTAL - previews.filter(p => p.accepted).length);
+    const ready = indexes.filter(
+      (i) =>
+        !previews[i].accepted &&
+        !inBank(previews[i]) &&
+        acceptable(previews[i].draft, allowedTypes),
+    );
+    const room = Math.max(0, MAX_TOTAL - previews.filter((p) => p.accepted).length);
     const taken = ready.slice(0, room);
-    if (taken.length < ready.length) toast.warning(`You can save up to ${MAX_TOTAL} questions at a time — save these first.`);
-    if (indexes.length > 1 && ready.length < indexes.filter(i => !previews[i].accepted).length) {
-      toast.info('Suggestions that need edits were left out — fix them, then accept.');
+    if (taken.length < ready.length)
+      toast.warning(`You can save up to ${MAX_TOTAL} questions at a time — save these first.`);
+    if (indexes.length > 1 && ready.length < indexes.filter((i) => !previews[i].accepted).length) {
+      toast.info("Suggestions that need edits were left out — fix them, then accept.");
     }
     if (!taken.length) return;
-    setPreviews(prev => prev && prev.map((p, i) => (taken.includes(i) ? { ...p, accepted: true, editing: false } : p)));
+    setPreviews(
+      (prev) =>
+        prev &&
+        prev.map((p, i) => (taken.includes(i) ? { ...p, accepted: true, editing: false } : p)),
+    );
   };
 
-  const unaccept = (i: number) => setPreviews(prev => prev && prev.map((p, pi) => (pi === i ? { ...p, accepted: false, editing: true } : p)));
+  const unaccept = (i: number) =>
+    setPreviews(
+      (prev) =>
+        prev && prev.map((p, pi) => (pi === i ? { ...p, accepted: false, editing: true } : p)),
+    );
 
-  useImperativeHandle(ref, () => ({
-    removeAccepted: () => {
-      const left = (previews ?? []).filter(p => !p.accepted);
-      setPreviews(left.length ? left : null);
-      return left.length;
-    },
-    clear: () => {
-      abortRef.current?.abort();
-      abortRef.current = null;
-      abortRegenerations();
-      setGenerating(false);
-      setPreviews(null);
-      setError(null);
-    },
-  }), [previews]);
+  useImperativeHandle(
+    ref,
+    () => ({
+      removeAccepted: () => {
+        const left = (previews ?? []).filter((p) => !p.accepted);
+        setPreviews(left.length ? left : null);
+        return left.length;
+      },
+      clear: () => {
+        abortRef.current?.abort();
+        abortRef.current = null;
+        abortRegenerations();
+        setGenerating(false);
+        setPreviews(null);
+        setError(null);
+      },
+    }),
+    [previews],
+  );
 
   const patchPreview = (id: string, patch: Partial<Preview>) =>
-    setPreviews(prev => prev && prev.map(p => (p.id === id ? { ...p, ...patch } : p)));
+    setPreviews((prev) => prev && prev.map((p) => (p.id === id ? { ...p, ...patch } : p)));
 
   /** Ask the AI for one fresh question with the same settings, replacing this one. */
   const regenerate = async (p: Preview) => {
@@ -312,53 +426,97 @@ export const AiGeneratePanel = forwardRef<AiGeneratePanelHandle, {
     patchPreview(p.id, { regenerating: true, regenerateError: undefined });
     try {
       const res = p.materialFile
-        ? await questionService.generateAiQuestionsFromMaterial(p.materialFile, p.request, controller.signal)
+        ? await questionService.generateAiQuestionsFromMaterial(
+            p.materialFile,
+            p.request,
+            controller.signal,
+          )
         : await questionService.generateAiQuestions(p.request, controller.signal);
       if (controller.signal.aborted) return;
       const next = res.questions[0];
-      if (next) patchPreview(p.id, { draft: fromAiDraft(next.question), duplicate: next.hasHashConflict, editing: true, edited: false, regenerating: false });
-      else patchPreview(p.id, { regenerating: false, regenerateError: 'The AI returned no usable question. Try again.' });
+      if (next)
+        patchPreview(p.id, {
+          draft: fromAiDraft(next.question),
+          duplicate: next.hasHashConflict,
+          editing: true,
+          edited: false,
+          regenerating: false,
+        });
+      else
+        patchPreview(p.id, {
+          regenerating: false,
+          regenerateError: "The AI returned no usable question. Try again.",
+        });
     } catch (err) {
-      if (!controller.signal.aborted) patchPreview(p.id, { regenerating: false, regenerateError: aiErrorMessage(err) });
+      if (!controller.signal.aborted)
+        patchPreview(p.id, { regenerating: false, regenerateError: aiErrorMessage(err) });
     } finally {
       if (regenRef.current.get(p.id) === controller) regenRef.current.delete(p.id);
     }
   };
 
-  const pending = useMemo(() => (previews ?? []).map((p, i) => (p.accepted ? -1 : i)).filter(i => i >= 0), [previews]);
-  const anyOpen = (previews ?? []).some(p => !p.accepted && p.editing);
-  const accepted = useMemo(() => (previews ?? []).filter(p => p.accepted).map(p => p.draft), [previews]);
+  const pending = useMemo(
+    () => (previews ?? []).map((p, i) => (p.accepted ? -1 : i)).filter((i) => i >= 0),
+    [previews],
+  );
+  const anyOpen = (previews ?? []).some((p) => !p.accepted && p.editing);
+  const accepted = useMemo(
+    () => (previews ?? []).filter((p) => p.accepted).map((p) => p.draft),
+    [previews],
+  );
 
-  useEffect(() => { onPendingChange?.(previews?.length ?? 0); }, [previews?.length, onPendingChange]);
-  useEffect(() => { onAcceptedChange(accepted); }, [accepted, onAcceptedChange]);
+  useEffect(() => {
+    onPendingChange?.(previews?.length ?? 0);
+  }, [previews?.length, onPendingChange]);
+  useEffect(() => {
+    onAcceptedChange(accepted);
+  }, [accepted, onAcceptedChange]);
 
   return (
     <div className="space-y-3">
       <section className="card px-4 py-3.5 space-y-3" aria-labelledby="ai-gen-title">
         <div className="flex items-center gap-2">
-          <span className="w-7 h-7 rounded-[8px] bg-brand-600/10 flex items-center justify-center"><Icon.Zap className="w-4 h-4 text-brand-ink" /></span>
+          <span className="w-7 h-7 rounded-[8px] bg-brand-600/10 flex items-center justify-center">
+            <Icon.Zap className="w-4 h-4 text-brand-ink" />
+          </span>
           <div>
-            <h3 id="ai-gen-title" className="text-lg font-semibold text-content">Generate with AI</h3>
-            <p className="text-xs text-content-soft">Review each suggestion and accept the ones you want, then save them with “Save Accepted”.</p>
+            <h3 id="ai-gen-title" className="text-lg font-semibold text-content">
+              Generate with AI
+            </h3>
+            <p className="text-xs text-content-soft">
+              Review each suggestion and accept the ones you want, then save them with “Save
+              Accepted”.
+            </p>
           </div>
         </div>
 
         {isGroupMode && (
-          <div className={`rounded-[10px] border px-3 py-2 text-xs flex items-start gap-2 ${
-            groupIssue || !hasPassage
-              ? (showErrors ? 'border-danger-solid/40 bg-danger-solid/5 text-danger' : 'border-line bg-surface-alt text-content-soft')
-              : 'border-brand-600/25 bg-brand-600/5 text-content-secondary'
-          }`}>
+          <div
+            className={`rounded-[10px] border px-3 py-2 text-xs flex items-start gap-2 ${
+              groupIssue || !hasPassage
+                ? showErrors
+                  ? "border-danger-solid/40 bg-danger-solid/5 text-danger"
+                  : "border-line bg-surface-alt text-content-soft"
+                : "border-brand-600/25 bg-brand-600/5 text-content-secondary"
+            }`}
+          >
             <Icon.Layers className="w-4 h-4 mt-0.5 flex-shrink-0 text-brand-ink" />
             <div>
               {groupIssue ? (
                 <span>{groupIssue}</span>
               ) : hasPassage ? (
                 <span>
-                  Shared passage from <strong className="font-semibold text-content">“{groupTitle || 'Question Group'}”</strong> will be sent to AI automatically. Question types are filtered to match this group.
+                  Shared passage from{" "}
+                  <strong className="font-semibold text-content">
+                    “{groupTitle || "Question Group"}”
+                  </strong>{" "}
+                  will be sent to AI automatically. Question types are filtered to match this group.
                 </span>
               ) : (
-                <span>Select a question group or enter the shared passage above before generating questions.</span>
+                <span>
+                  Select a question group or enter the shared passage above before generating
+                  questions.
+                </span>
               )}
             </div>
           </div>
@@ -367,25 +525,26 @@ export const AiGeneratePanel = forwardRef<AiGeneratePanelHandle, {
         <div className="flex flex-col gap-1.5">
           <div className="flex items-center justify-between gap-2">
             <label className="text-sm font-medium text-content-secondary">
-              Study material <span className="font-normal text-content-subtle">(optional, PDF / DOCX / TXT)</span>
+              Study material{" "}
+              <span className="font-normal text-content-subtle">(optional, PDF / DOCX / TXT)</span>
             </label>
           </div>
           <input
             ref={materialInputRef}
             type="file"
-            accept={AI_MATERIAL_EXTENSIONS.join(',')}
+            accept={AI_MATERIAL_EXTENSIONS.join(",")}
             className="hidden"
-            onChange={e => {
+            onChange={(e) => {
               const file = e.target.files?.[0] ?? null;
-              e.target.value = '';
+              e.target.value = "";
               if (!file) return;
-              const ext = file.name.slice(file.name.lastIndexOf('.')).toLowerCase();
+              const ext = file.name.slice(file.name.lastIndexOf(".")).toLowerCase();
               if (!(AI_MATERIAL_EXTENSIONS as readonly string[]).includes(ext)) {
-                toast.error('Upload a PDF, DOCX, or TXT file.', { title: 'Unsupported file' });
+                toast.error("Upload a PDF, DOCX, or TXT file.", { title: "Unsupported file" });
                 return;
               }
               if (file.size > IMPORT_MAX_BYTES) {
-                toast.error('The material must not exceed 10 MB.', { title: 'File too large' });
+                toast.error("The material must not exceed 10 MB.", { title: "File too large" });
                 return;
               }
               setMaterialFile(file);
@@ -431,30 +590,45 @@ export const AiGeneratePanel = forwardRef<AiGeneratePanelHandle, {
         <div className="flex flex-col gap-1.5">
           <div className="flex items-center justify-between gap-2">
             <label htmlFor="ai-gen-context" className="text-sm font-medium text-content-secondary">
-              {contextOptional ? 'Additional instructions (optional)' : 'Context *'}
+              {contextOptional ? "Additional instructions (optional)" : "Context *"}
             </label>
-            <span className="text-2xs text-content-subtle">{context.length}/{AI_CONTEXT_MAX}</span>
+            <span className="text-2xs text-content-subtle">
+              {context.length}/{AI_CONTEXT_MAX}
+            </span>
           </div>
           <textarea
             id="ai-gen-context"
             value={context}
-            onChange={e => setContext(e.target.value)}
+            onChange={(e) => setContext(e.target.value)}
             // Enter starts a new line; Ctrl/Cmd + Enter generates.
-            onKeyDown={e => { if (e.key === 'Enter' && (e.ctrlKey || e.metaKey) && !generating) generate(); }}
-            placeholder={contextOptional
-              ? 'Optional guidance for AI based on the shared passage, e.g. Focus on inference and vocabulary.'
-              : 'What the questions should be about, e.g.\nOOP inheritance in Java: extends, method overriding, super, and when to prefer composition.'}
+            onKeyDown={(e) => {
+              if (e.key === "Enter" && (e.ctrlKey || e.metaKey) && !generating) generate();
+            }}
+            placeholder={
+              contextOptional
+                ? "Optional guidance for AI based on the shared passage, e.g. Focus on inference and vocabulary."
+                : "What the questions should be about, e.g.\nOOP inheritance in Java: extends, method overriding, super, and when to prefer composition."
+            }
             maxLength={AI_CONTEXT_MAX}
             disabled={generating}
             aria-invalid={contextError ? true : undefined}
-            aria-describedby={contextError ? 'ai-gen-context-error' : undefined}
+            aria-describedby={contextError ? "ai-gen-context-error" : undefined}
             className={`w-full h-[120px] px-3 py-2 rounded-[10px] border text-base text-content placeholder:text-content-placeholder bg-surface resize-y focus:outline-none focus:ring-2 transition-all disabled:opacity-60 ${
-              contextError ? 'border-danger-solid focus:ring-danger-solid/20 focus:border-danger-solid' : 'border-line focus:ring-brand-600/20 focus:border-brand-600'
+              contextError
+                ? "border-danger-solid focus:ring-danger-solid/20 focus:border-danger-solid"
+                : "border-line focus:ring-brand-600/20 focus:border-brand-600"
             }`}
           />
-          {contextError
-            ? <p id="ai-gen-context-error" className="text-xs text-danger">{contextError}</p>
-            : <p className="text-xs text-content-soft">The more detail you give, the closer the questions match what you want. Ctrl + Enter to generate.</p>}
+          {contextError ? (
+            <p id="ai-gen-context-error" className="text-xs text-danger">
+              {contextError}
+            </p>
+          ) : (
+            <p className="text-xs text-content-soft">
+              The more detail you give, the closer the questions match what you want. Ctrl + Enter
+              to generate.
+            </p>
+          )}
         </div>
 
         <div className="grid grid-cols-1 md:grid-cols-[minmax(0,2fr)_minmax(0,1fr)_minmax(0,1fr)] gap-3 items-start">
@@ -483,38 +657,67 @@ export const AiGeneratePanel = forwardRef<AiGeneratePanelHandle, {
             error={difficultiesError}
             disabled={generating}
           />
-          <Select label="Language" value={language} onChange={v => setLanguage(v as Language)} options={LANGUAGE_OPTIONS} disabled={generating} />
+          <Select
+            label="Language"
+            value={language}
+            onChange={(v) => setLanguage(v as Language)}
+            options={LANGUAGE_OPTIONS}
+            disabled={generating}
+          />
         </div>
 
         {total > 0 && levels.length > 0 && (
-          <p className={`text-xs ${totalError || mismatchError ? 'text-danger' : 'text-content-soft'}`}>
+          <p
+            className={`text-xs ${totalError || mismatchError ? "text-danger" : "text-content-soft"}`}
+          >
             {totalError ?? mismatchError ?? (
               <>
-                Will generate <span className="font-medium text-content-secondary">{total} question{total === 1 ? '' : 's'}</span>
-                {levels.length > 1 && <> — {levels.map(([d, n]) => `${n} ${difficultyLabel(d)}`).join(', ')}</>}.
+                Will generate{" "}
+                <span className="font-medium text-content-secondary">
+                  {total} question{total === 1 ? "" : "s"}
+                </span>
+                {levels.length > 1 && (
+                  <> — {levels.map(([d, n]) => `${n} ${difficultyLabel(d)}`).join(", ")}</>
+                )}
+                .
               </>
             )}
           </p>
         )}
 
         {(!courseId || !moduleId) && (
-          <p className={`flex items-start gap-1.5 text-xs ${showErrors ? 'text-danger' : 'text-content-soft'}`}>
+          <p
+            className={`flex items-start gap-1.5 text-xs ${showErrors ? "text-danger" : "text-content-soft"}`}
+          >
             <Icon.Info className="w-3.5 h-3.5 mt-0.5 flex-shrink-0" />
             Pick a course and module on the right first — the AI drafts questions for that module.
           </p>
         )}
 
         <div className="flex flex-wrap items-center gap-2">
-          <Button icon={<Icon.Zap className="w-4 h-4" />} onClick={generate} loading={generating} disabled={generating || disabled || !courseId || !moduleId}>
-            {previews ? 'Generate again' : 'Generate'}
+          <Button
+            icon={<Icon.Zap className="w-4 h-4" />}
+            onClick={generate}
+            loading={generating}
+            disabled={generating || disabled || !courseId || !moduleId}
+          >
+            {previews ? "Generate again" : "Generate"}
           </Button>
-          {generating && <Button variant="ghost" onClick={stop}>Stop</Button>}
+          {generating && (
+            <Button variant="ghost" onClick={stop}>
+              Stop
+            </Button>
+          )}
         </div>
       </section>
 
       {error && <Alert type="error" title="Could not generate questions" message={error} />}
       {isDemo && previews && !error && (
-        <Alert type="info" title="Demo data" message="AI demo mode is on (VITE_AI_MOCK), so these are sample questions. They can be accepted and edited like real suggestions." />
+        <Alert
+          type="info"
+          title="Demo data"
+          message="AI demo mode is on (VITE_AI_MOCK), so these are sample questions. They can be accepted and edited like real suggestions."
+        />
       )}
 
       {generating && !previews && (
@@ -525,8 +728,12 @@ export const AiGeneratePanel = forwardRef<AiGeneratePanelHandle, {
 
       {previews && previews.length === 0 && !generating && (
         <div className="card p-10 text-center">
-          <p className="text-base font-medium text-content-secondary">No usable questions came back</p>
-          <p className="text-sm text-content-subtle mt-1">Try a more specific context or generate again.</p>
+          <p className="text-base font-medium text-content-secondary">
+            No usable questions came back
+          </p>
+          <p className="text-sm text-content-subtle mt-1">
+            Try a more specific context or generate again.
+          </p>
         </div>
       )}
 
@@ -534,25 +741,42 @@ export const AiGeneratePanel = forwardRef<AiGeneratePanelHandle, {
         <>
           <div className="flex items-center justify-between gap-2">
             <p className="text-sm text-content-soft">
-              {previews.length} suggestion{previews.length === 1 ? '' : 's'} · {previews.length - pending.length} accepted
+              {previews.length} suggestion{previews.length === 1 ? "" : "s"} ·{" "}
+              {previews.length - pending.length} accepted
             </p>
             <div className="flex items-center gap-2">
               {pending.length > 0 && (
                 <Button
                   variant="ghost"
                   size="sm"
-                  icon={<Icon.ChevronDown className={`w-3.5 h-3.5 ${anyOpen ? 'rotate-180' : ''}`} />}
-                  onClick={() => setPreviews(prev => prev && prev.map(p => (p.accepted ? p : { ...p, editing: !anyOpen })))}
+                  icon={
+                    <Icon.ChevronDown className={`w-3.5 h-3.5 ${anyOpen ? "rotate-180" : ""}`} />
+                  }
+                  onClick={() =>
+                    setPreviews(
+                      (prev) =>
+                        prev && prev.map((p) => (p.accepted ? p : { ...p, editing: !anyOpen })),
+                    )
+                  }
                 >
-                  {anyOpen ? 'Collapse all' : 'Expand all'}
+                  {anyOpen ? "Collapse all" : "Expand all"}
                 </Button>
               )}
-              <Button variant="outline" size="sm" icon={<Icon.Check className="w-3.5 h-3.5" />} onClick={() => accept(pending)} disabled={!pending.length || disabled}>
+              <Button
+                variant="outline"
+                size="sm"
+                icon={<Icon.Check className="w-3.5 h-3.5" />}
+                onClick={() => accept(pending)}
+                disabled={!pending.length || disabled}
+              >
                 Accept all ({pending.length})
               </Button>
             </div>
           </div>
-          <div className={`space-y-3 ${generating ? 'opacity-50 pointer-events-none' : ''}`} aria-busy={generating}>
+          <div
+            className={`space-y-3 ${generating ? "opacity-50 pointer-events-none" : ""}`}
+            aria-busy={generating}
+          >
             {previews.map((p, i) => (
               <AiPreviewCard
                 key={p.id}
@@ -560,8 +784,8 @@ export const AiGeneratePanel = forwardRef<AiGeneratePanelHandle, {
                 preview={p}
                 allowedTypes={allowedTypes}
                 onAccept={() => (p.accepted ? unaccept(i) : accept([i]))}
-                onEdit={editing => patchPreview(p.id, { editing })}
-                onChange={draft => patchPreview(p.id, { draft, edited: true })}
+                onEdit={(editing) => patchPreview(p.id, { editing })}
+                onChange={(draft) => patchPreview(p.id, { draft, edited: true })}
                 onRegenerate={() => regenerate(p)}
                 disabled={disabled}
               />
@@ -573,9 +797,19 @@ export const AiGeneratePanel = forwardRef<AiGeneratePanelHandle, {
   );
 });
 
-const iconBtn = 'p-1.5 rounded-[6px] text-content-subtle hover:bg-accent hover:text-content-secondary disabled:opacity-30 disabled:cursor-not-allowed';
+const iconBtn =
+  "p-1.5 rounded-[6px] text-content-subtle hover:bg-accent hover:text-content-secondary disabled:opacity-30 disabled:cursor-not-allowed";
 
-function AiPreviewCard({ index, preview, allowedTypes, onAccept, onEdit, onChange, onRegenerate, disabled }: {
+function AiPreviewCard({
+  index,
+  preview,
+  allowedTypes,
+  onAccept,
+  onEdit,
+  onChange,
+  onRegenerate,
+  disabled,
+}: {
   index: number;
   preview: Preview;
   onAccept: () => void;
@@ -592,7 +826,11 @@ function AiPreviewCard({ index, preview, allowedTypes, onAccept, onEdit, onChang
     <button
       type="button"
       onClick={() => {
-        if (edited && !window.confirm('Regenerating replaces your edits to this question. Continue?')) return;
+        if (
+          edited &&
+          !window.confirm("Regenerating replaces your edits to this question. Continue?")
+        )
+          return;
         onRegenerate();
       }}
       disabled={locked}
@@ -600,21 +838,35 @@ function AiPreviewCard({ index, preview, allowedTypes, onAccept, onEdit, onChang
       aria-label={`Regenerate suggestion ${index + 1}`}
       title="Regenerate this question"
     >
-      <Icon.RefreshCw className={`w-4 h-4 ${regenerating ? 'animate-spin' : ''}`} />
+      <Icon.RefreshCw className={`w-4 h-4 ${regenerating ? "animate-spin" : ""}`} />
     </button>
   );
   const ready = acceptable(q, allowedTypes) && !inBank(preview);
   const acceptBtn = (
     <Button
       size="sm"
-      variant={accepted ? 'ghost' : 'primary'}
-      icon={accepted ? <Icon.CheckCircle className="w-3.5 h-3.5" /> : <Icon.Plus className="w-3.5 h-3.5" />}
+      variant={accepted ? "ghost" : "primary"}
+      icon={
+        accepted ? (
+          <Icon.CheckCircle className="w-3.5 h-3.5" />
+        ) : (
+          <Icon.Plus className="w-3.5 h-3.5" />
+        )
+      }
       onClick={onAccept}
       // Accepted ones can be un-accepted until they are saved.
       disabled={regenerating || disabled || (!accepted && !ready)}
-      title={accepted ? 'Accepted — click to undo' : ready ? 'Accept to save with the others' : inBank(preview) ? 'Already in the bank — edit or regenerate it first' : 'Fix this suggestion before accepting it'}
+      title={
+        accepted
+          ? "Accepted — click to undo"
+          : ready
+            ? "Accept to save with the others"
+            : inBank(preview)
+              ? "Already in the bank — edit or regenerate it first"
+              : "Fix this suggestion before accepting it"
+      }
     >
-      {accepted ? 'Accepted' : 'Accept'}
+      {accepted ? "Accepted" : "Accept"}
     </Button>
   );
 
@@ -632,7 +884,15 @@ function AiPreviewCard({ index, preview, allowedTypes, onAccept, onEdit, onChang
           actions={
             <>
               {regenerateBtn}
-              <Button size="sm" variant="ghost" icon={<Icon.ChevronDown className="w-3.5 h-3.5 rotate-180" />} onClick={() => onEdit(false)} disabled={regenerating}>Collapse</Button>
+              <Button
+                size="sm"
+                variant="ghost"
+                icon={<Icon.ChevronDown className="w-3.5 h-3.5 rotate-180" />}
+                onClick={() => onEdit(false)}
+                disabled={regenerating}
+              >
+                Collapse
+              </Button>
               {acceptBtn}
             </>
           }
@@ -642,57 +902,100 @@ function AiPreviewCard({ index, preview, allowedTypes, onAccept, onEdit, onChang
     );
   }
 
-  return <AiPreviewView index={index} preview={preview} allowedTypes={allowedTypes} actions={
-    <div className="flex items-center gap-1 flex-shrink-0">
-      {!accepted && (
-        <button type="button" onClick={() => onEdit(true)} disabled={locked} className={iconBtn} aria-label={`Edit suggestion ${index + 1}`} title="Expand to edit">
-          <Icon.Edit className="w-4 h-4" />
-        </button>
-      )}
-      {!accepted && regenerateBtn}
-      {acceptBtn}
-    </div>
-  } />;
+  return (
+    <AiPreviewView
+      index={index}
+      preview={preview}
+      allowedTypes={allowedTypes}
+      actions={
+        <div className="flex items-center gap-1 flex-shrink-0">
+          {!accepted && (
+            <button
+              type="button"
+              onClick={() => onEdit(true)}
+              disabled={locked}
+              className={iconBtn}
+              aria-label={`Edit suggestion ${index + 1}`}
+              title="Expand to edit"
+            >
+              <Icon.Edit className="w-4 h-4" />
+            </button>
+          )}
+          {!accepted && regenerateBtn}
+          {acceptBtn}
+        </div>
+      }
+    />
+  );
 }
 
 /** Read-only view of one suggestion. */
-function AiPreviewView({ index, preview, allowedTypes, actions }: { index: number; preview: Preview; allowedTypes?: QuestionType[]; actions: React.ReactNode }) {
+function AiPreviewView({
+  index,
+  preview,
+  allowedTypes,
+  actions,
+}: {
+  index: number;
+  preview: Preview;
+  allowedTypes?: QuestionType[];
+  actions: React.ReactNode;
+}) {
   const { draft: q, accepted, edited, duplicate, regenerating, regenerateError } = preview;
   const issues = validateDraft(q);
   const issue = kindIssue(q, allowedTypes) ?? issues.content ?? issues.answers;
-  const plantUml = typeof q.metadata.plantUmlSource === 'string' ? q.metadata.plantUmlSource : '';
+  const plantUml = typeof q.metadata.plantUmlSource === "string" ? q.metadata.plantUmlSource : "";
   /** Q-10 stand-in: does the PlantUML render? undefined = checking, null = unknown. */
   const [renders, setRenders] = useState<boolean | null | undefined>(undefined);
 
   useEffect(() => {
-    if ((q.type !== 'DIAGRAM' && q.type !== 'DIAGRAM_ESSAY') || !plantUml) return;
+    if ((q.type !== "DIAGRAM" && q.type !== "DIAGRAM_ESSAY") || !plantUml) return;
     setRenders(undefined);
     const controller = new AbortController();
-    checkPlantUml(plantUml, controller.signal).then(ok => { if (!controller.signal.aborted) setRenders(ok); });
+    checkPlantUml(plantUml, controller.signal).then((ok) => {
+      if (!controller.signal.aborted) setRenders(ok);
+    });
     return () => controller.abort();
   }, [q.type, plantUml]);
 
   return (
-    <article className={`card px-4 py-3.5 space-y-2.5 relative ${accepted ? 'opacity-70' : ''}`} aria-label={`AI suggestion ${index + 1}`} aria-busy={regenerating}>
+    <article
+      className={`card px-4 py-3.5 space-y-2.5 relative ${accepted ? "opacity-70" : ""}`}
+      aria-label={`AI suggestion ${index + 1}`}
+      aria-busy={regenerating}
+    >
       <div className="flex items-start justify-between gap-2">
         <div className="flex flex-wrap items-center gap-1.5">
-          <span className="min-w-6 h-6 px-1 rounded-[6px] bg-brand-600/10 text-brand-ink flex items-center justify-center text-xs font-bold">#{index + 1}</span>
+          <span className="min-w-6 h-6 px-1 rounded-[6px] bg-brand-600/10 text-brand-ink flex items-center justify-center text-xs font-bold">
+            #{index + 1}
+          </span>
           <Badge>{typeLabel(q.type)}</Badge>
           <Badge variant="default">{difficultyLabel(q.difficulty)}</Badge>
-          {edited && <Badge variant="purple"><Icon.Edit className="w-3 h-3" /> Edited</Badge>}
+          {edited && (
+            <Badge variant="purple">
+              <Icon.Edit className="w-3 h-3" /> Edited
+            </Badge>
+          )}
           {issue && !accepted && (
-            <Badge variant="warning"><Icon.AlertCircle className="w-3.5 h-3.5" /> Needs edits</Badge>
+            <Badge variant="warning">
+              <Icon.AlertCircle className="w-3.5 h-3.5" /> Needs edits
+            </Badge>
           )}
           {duplicate && !edited && (
             <span title="A question with the same content is already in this course. Edit or regenerate it before accepting.">
-              <Badge variant="warning"><Icon.Copy className="w-3.5 h-3.5" /> Already in bank</Badge>
+              <Badge variant="warning">
+                <Icon.Copy className="w-3.5 h-3.5" /> Already in bank
+              </Badge>
             </span>
           )}
         </div>
         {actions}
       </div>
       {duplicate && !edited && !accepted && (
-        <p className="text-xs text-warning">This question already exists in the course, so it can’t be saved as is. Edit or regenerate it first.</p>
+        <p className="text-xs text-warning">
+          This question already exists in the course, so it can’t be saved as is. Edit or regenerate
+          it first.
+        </p>
       )}
 
       {regenerating && (
@@ -704,10 +1007,13 @@ function AiPreviewView({ index, preview, allowedTypes, actions }: { index: numbe
 
       <p className="text-base text-content whitespace-pre-wrap">{q.content}</p>
 
-      {(q.type === 'SINGLE_CHOICE' || q.type === 'MULTIPLE_CHOICE' || q.type === 'TRUE_FALSE') && (
+      {(q.type === "SINGLE_CHOICE" || q.type === "MULTIPLE_CHOICE" || q.type === "TRUE_FALSE") && (
         <ul className="space-y-1">
           {q.options.map((o, i) => (
-            <li key={o.key} className={`flex items-center gap-2 text-sm rounded-[8px] px-2 py-1 ${o.isCorrect ? 'bg-success-light text-success font-medium' : 'text-content-secondary'}`}>
+            <li
+              key={o.key}
+              className={`flex items-center gap-2 text-sm rounded-[8px] px-2 py-1 ${o.isCorrect ? "bg-success-light text-success font-medium" : "text-content-secondary"}`}
+            >
               <span className="w-5 text-xs font-bold">{optionLabel(i)}</span>
               <span className="flex-1">{o.text}</span>
               {o.isCorrect && <Icon.Check className="w-4 h-4" aria-label="Correct answer" />}
@@ -716,57 +1022,85 @@ function AiPreviewView({ index, preview, allowedTypes, actions }: { index: numbe
         </ul>
       )}
 
-      {q.type === 'MATCHING' && (
+      {q.type === "MATCHING" && (
         <ul className="space-y-1 text-sm text-content-secondary">
-          {q.pairs.filter(p => p.left || p.right).map(p => (
-            <li key={p.key} className="flex items-center gap-2"><span>{p.left}</span><Icon.ChevronRight className="w-3.5 h-3.5 text-content-subtle" /><span>{p.right}</span></li>
-          ))}
+          {q.pairs
+            .filter((p) => p.left || p.right)
+            .map((p) => (
+              <li key={p.key} className="flex items-center gap-2">
+                <span>{p.left}</span>
+                <Icon.ChevronRight className="w-3.5 h-3.5 text-content-subtle" />
+                <span>{p.right}</span>
+              </li>
+            ))}
         </ul>
       )}
 
-      {q.type === 'ORDERING' && (
+      {q.type === "ORDERING" && (
         <ol className="space-y-1 text-sm text-content-secondary">
-          {q.ordering.filter(o => o.text).map((o, i) => (
-            <li key={o.key} className="flex items-center gap-2">
-              <span className="min-w-5 h-5 px-1 rounded-[6px] bg-surface-muted text-xs font-bold flex items-center justify-center">{i + 1}</span>
-              <span className="flex-1">{o.text}</span>
-            </li>
-          ))}
+          {q.ordering
+            .filter((o) => o.text)
+            .map((o, i) => (
+              <li key={o.key} className="flex items-center gap-2">
+                <span className="min-w-5 h-5 px-1 rounded-[6px] bg-surface-muted text-xs font-bold flex items-center justify-center">
+                  {i + 1}
+                </span>
+                <span className="flex-1">{o.text}</span>
+              </li>
+            ))}
         </ol>
       )}
 
-      {q.type === 'FILL_BLANK' && (
+      {q.type === "FILL_BLANK" && (
         <ul className="space-y-1 text-sm text-content-secondary">
-          {blankIndexes(q.content).map(n => (
-            <li key={n}><code className="px-1 rounded bg-surface-muted">{`{{${n}}}`}</code> {q.blanks[n]?.accepted || <span className="text-content-subtle">no answer</span>}</li>
+          {blankIndexes(q.content).map((n) => (
+            <li key={n}>
+              <code className="px-1 rounded bg-surface-muted">{`{{${n}}}`}</code>{" "}
+              {q.blanks[n]?.accepted || <span className="text-content-subtle">no answer</span>}
+            </li>
           ))}
         </ul>
       )}
 
-      {(q.type === 'DIAGRAM' || q.type === 'DIAGRAM_ESSAY') && plantUml && (
+      {(q.type === "DIAGRAM" || q.type === "DIAGRAM_ESSAY") && plantUml && (
         <div className="space-y-1.5">
           <div className="rounded-[10px] border border-line bg-white p-3 flex items-center justify-center min-h-[120px]">
-            <img src={plantUmlSvgUrl(plantUml)} alt={`Diagram for suggestion ${index + 1}`} className="max-h-[240px] max-w-full object-contain" />
+            <img
+              src={plantUmlSvgUrl(plantUml)}
+              alt={`Diagram for suggestion ${index + 1}`}
+              className="max-h-[240px] max-w-full object-contain"
+            />
           </div>
-          {renders === undefined && <p className="flex items-center gap-1.5 text-xs text-content-soft"><Spinner size="sm" /> Checking the diagram renders…</p>}
+          {renders === undefined && (
+            <p className="flex items-center gap-1.5 text-xs text-content-soft">
+              <Spinner size="sm" /> Checking the diagram renders…
+            </p>
+          )}
           {renders === false && (
             <p className="flex items-start gap-1.5 text-xs text-warning">
               <Icon.AlertCircle className="w-3.5 h-3.5 mt-0.5 flex-shrink-0" />
-              This PlantUML has syntax errors. You can still accept it and redraw the diagram in draw.io.
+              This PlantUML has syntax errors. You can still accept it and redraw the diagram in
+              draw.io.
             </p>
           )}
-          {renders === null && <p className="text-xs text-content-subtle">Couldn’t reach the PlantUML server to check this diagram.</p>}
+          {renders === null && (
+            <p className="text-xs text-content-subtle">
+              Couldn’t reach the PlantUML server to check this diagram.
+            </p>
+          )}
         </div>
       )}
 
       {RUBRIC_TYPES.includes(q.type) && (q.rubric.length > 0 || q.rubricNotes) && (
         <details className="text-sm text-content-secondary">
-          <summary className="cursor-pointer select-none text-content-soft">Suggested grading rubric</summary>
+          <summary className="cursor-pointer select-none text-content-soft">
+            Suggested grading rubric
+          </summary>
           <ul className="mt-1.5 space-y-1">
-            {q.rubric.map(c => (
+            {q.rubric.map((c) => (
               <li key={c.key} className="rounded-[8px] bg-surface-alt px-2 py-1">
-                <span className="font-medium">{c.name || 'Unnamed criterion'}</span>
-                <span className="text-content-soft"> · Weight {c.weight || '?'}</span>
+                <span className="font-medium">{c.name || "Unnamed criterion"}</span>
+                <span className="text-content-soft"> · Weight {c.weight || "?"}</span>
                 {c.descriptors && <p className="text-xs text-content-soft">{c.descriptors}</p>}
               </li>
             ))}
@@ -776,7 +1110,10 @@ function AiPreviewView({ index, preview, allowedTypes, actions }: { index: numbe
       )}
 
       {q.explanation && (
-        <p className="text-sm text-content-soft"><span className="font-medium text-content-secondary">Explanation: </span>{q.explanation}</p>
+        <p className="text-sm text-content-soft">
+          <span className="font-medium text-content-secondary">Explanation: </span>
+          {q.explanation}
+        </p>
       )}
       {issue && !accepted && <p className="text-xs text-warning">{issue} Expand it to fix it.</p>}
     </article>

@@ -1,60 +1,75 @@
-import { useEffect, useMemo, useState } from 'react';
-import { useQuietRefresh } from '@/hooks/useAutoRefresh';
-import { useNavigate, useSearchParams } from 'react-router';
-import { Button } from '@/components/ui/Button';
-import { Table, type TableColumn } from '@/components/ui/Table';
-import { EmptyState } from '@/components/ui/Card';
-import { Select } from '@/components/ui/Select';
-import { SearchableSelect } from '@/components/ui/SearchableSelect';
-import { Badge, type BadgeVariant } from '@/components/ui/Badge';
-import { SearchInput } from '@/components/common/SearchInput';
-import { Icon } from '@/assets/icons';
-import { ROUTES, studentCoursePath, studentExamAttemptsPath } from '@/app/routes';
-import { getApiErrorMessage } from '@/utils/apiError';
-import { studentCourseService, type MyCourse } from '@/services/studentCourse.service';
-import { studentPracticeExamService } from '@/services/studentPracticeExam.service';
-import { materialService } from '@/services/studentMaterial.service';
-import { ListSkeleton, LoadError, PageTitle, STUDENT_PAGE_CLASS, formatScore } from '../components/studentUi';
-import { SmartPracticeModal } from '../components/SmartPracticeModal';
-import { MaterialQuizModal } from '../components/MaterialQuizModal';
+import { useEffect, useMemo, useState } from "react";
+import { useQuietRefresh } from "@/hooks/useAutoRefresh";
+import { useNavigate, useSearchParams } from "react-router";
+import { Button } from "@/components/ui/Button";
+import { Table, type TableColumn } from "@/components/ui/Table";
+import { EmptyState } from "@/components/ui/Card";
+import { Select } from "@/components/ui/Select";
+import { SearchableSelect } from "@/components/ui/SearchableSelect";
+import { Badge, type BadgeVariant } from "@/components/ui/Badge";
+import { SearchInput } from "@/components/common/SearchInput";
+import { Icon } from "@/assets/icons";
+import { ROUTES, studentCoursePath, studentExamAttemptsPath } from "@/app/routes";
+import { getApiErrorMessage } from "@/utils/apiError";
+import { studentCourseService, type MyCourse } from "@/services/studentCourse.service";
+import { studentPracticeExamService } from "@/services/studentPracticeExam.service";
+import { materialService } from "@/services/studentMaterial.service";
+import {
+  ListSkeleton,
+  LoadError,
+  PageTitle,
+  STUDENT_PAGE_CLASS,
+  formatScore,
+} from "../components/studentUi";
+import { SmartPracticeModal } from "../components/SmartPracticeModal";
+import { MaterialQuizModal } from "../components/MaterialQuizModal";
 const PAGE_SIZE = 10;
-const ALL = '';
+const ALL = "";
 
 /** Exam.mode of a row (ME-01 `mode`). */
-type ExamKind = 'EXAM' | 'PRACTICE' | 'PRACTICE_EXAM' | 'SMART_PRACTICE' | 'MATERIAL_QUIZ' | 'CONTEST';
+type ExamKind =
+  | "EXAM"
+  | "PRACTICE"
+  | "PRACTICE_EXAM"
+  | "SMART_PRACTICE"
+  | "MATERIAL_QUIZ"
+  | "CONTEST";
 
 /** Kinds shown, and filtered, under PRACTICE: PQ-01 practice exams, AI-built practice exams, material quizzes. */
-const PRACTICE_ALIASES: readonly ExamKind[] = ['PRACTICE_EXAM', 'SMART_PRACTICE', 'MATERIAL_QUIZ'];
+const PRACTICE_ALIASES: readonly ExamKind[] = ["PRACTICE_EXAM", "SMART_PRACTICE", "MATERIAL_QUIZ"];
 
 const KIND_LABEL: Record<ExamKind, string> = {
-  EXAM: 'Simulation Exam',
-  PRACTICE: 'Practice Exam',
-  PRACTICE_EXAM: 'Practice Exam',
-  SMART_PRACTICE: 'Practice Exam',
-  MATERIAL_QUIZ: 'AI-Generated Quiz',
-  CONTEST: 'Contest',
+  EXAM: "Simulation Exam",
+  PRACTICE: "Practice Exam",
+  PRACTICE_EXAM: "Practice Exam",
+  SMART_PRACTICE: "Practice Exam",
+  MATERIAL_QUIZ: "AI-Generated Quiz",
+  CONTEST: "Contest",
 };
 const KIND_BADGE: Record<ExamKind, BadgeVariant> = {
-  EXAM: 'default',
-  PRACTICE: 'info',
-  PRACTICE_EXAM: 'info',
-  SMART_PRACTICE: 'info',
-  MATERIAL_QUIZ: 'info',
-  CONTEST: 'warning',
+  EXAM: "default",
+  PRACTICE: "info",
+  PRACTICE_EXAM: "info",
+  SMART_PRACTICE: "info",
+  MATERIAL_QUIZ: "info",
+  CONTEST: "warning",
 };
 const KIND_OPTIONS = [
-  { label: 'All types', value: ALL },
-  ...(Object.keys(KIND_LABEL) as ExamKind[]).filter(k => !PRACTICE_ALIASES.includes(k)).map(k => ({ label: KIND_LABEL[k], value: k })),
+  { label: "All types", value: ALL },
+  ...(Object.keys(KIND_LABEL) as ExamKind[])
+    .filter((k) => !PRACTICE_ALIASES.includes(k))
+    .map((k) => ({ label: KIND_LABEL[k], value: k })),
 ];
 
 /** Type filter value for exams with a CODE question (ME-01 `hasCodeQuestions`) — across every kind. */
-const CODE_FILTER = 'CODE';
-const CODE_OPTION = { label: 'Coding exam', value: CODE_FILTER };
+const CODE_FILTER = "CODE";
+const CODE_OPTION = { label: "Coding exam", value: CODE_FILTER };
 
-const toKind = (mode: string | null | undefined): ExamKind => (mode && mode in KIND_LABEL ? (mode as ExamKind) : 'EXAM');
+const toKind = (mode: string | null | undefined): ExamKind =>
+  mode && mode in KIND_LABEL ? (mode as ExamKind) : "EXAM";
 
 /** Taken in practice mode (checked answer by answer): no time limit. */
-const isPractice = (kind: ExamKind) => kind === 'PRACTICE' || PRACTICE_ALIASES.includes(kind);
+const isPractice = (kind: ExamKind) => kind === "PRACTICE" || PRACTICE_ALIASES.includes(kind);
 
 /** One exam of the history, whatever produced it. */
 interface HistoryRow {
@@ -74,27 +89,28 @@ interface HistoryRow {
   courseLeft?: boolean;
 }
 
-type SortKey = 'recent' | 'title' | 'bestScoreDesc' | 'bestScoreAsc' | 'attempts';
+type SortKey = "recent" | "title" | "bestScoreDesc" | "bestScoreAsc" | "attempts";
 
 const SORT_OPTIONS: { label: string; value: SortKey }[] = [
-  { label: 'Most recent', value: 'recent' },
-  { label: 'Exam name (A–Z)', value: 'title' },
-  { label: 'Best score (high → low)', value: 'bestScoreDesc' },
-  { label: 'Best score (low → high)', value: 'bestScoreAsc' },
-  { label: 'Most attempts', value: 'attempts' },
+  { label: "Most recent", value: "recent" },
+  { label: "Exam name (A–Z)", value: "title" },
+  { label: "Best score (high → low)", value: "bestScoreDesc" },
+  { label: "Best score (low → high)", value: "bestScoreAsc" },
+  { label: "Most attempts", value: "attempts" },
 ];
 
 /** Best score as a share of the max, so exams with different max scores compare fairly; no score = -1. */
-const ratio = (e: HistoryRow) => (e.bestScore == null || !e.maxScore ? -1 : Number(e.bestScore) / Number(e.maxScore));
+const ratio = (e: HistoryRow) =>
+  e.bestScore == null || !e.maxScore ? -1 : Number(e.bestScore) / Number(e.maxScore);
 
 function sortRows(list: HistoryRow[], sort: SortKey): HistoryRow[] {
   // mergeHistory already puts the most recent first.
-  if (sort === 'recent') return list;
+  if (sort === "recent") return list;
   const copy = [...list];
-  if (sort === 'title') copy.sort((a, b) => a.title.localeCompare(b.title));
-  if (sort === 'bestScoreDesc') copy.sort((a, b) => ratio(b) - ratio(a));
-  if (sort === 'bestScoreAsc') copy.sort((a, b) => ratio(a) - ratio(b));
-  if (sort === 'attempts') copy.sort((a, b) => b.attemptCount - a.attemptCount);
+  if (sort === "title") copy.sort((a, b) => a.title.localeCompare(b.title));
+  if (sort === "bestScoreDesc") copy.sort((a, b) => ratio(b) - ratio(a));
+  if (sort === "bestScoreAsc") copy.sort((a, b) => ratio(a) - ratio(b));
+  if (sort === "attempts") copy.sort((a, b) => b.attemptCount - a.attemptCount);
   return copy;
 }
 
@@ -109,17 +125,25 @@ async function loadHistory(): Promise<HistoryRow[]> {
     studentPracticeExamService.listAll(),
     materialService.allHistory(),
   ]);
-  const practiceByExam = new Map(practices.map(p => [p.examId, p]));
-  const materialByQuiz = new Map(materials.filter(m => m.quizId != null).map(m => [m.quizId as number, m]));
+  const practiceByExam = new Map(practices.map((p) => [p.examId, p]));
+  const materialByQuiz = new Map(
+    materials.filter((m) => m.quizId != null).map((m) => [m.quizId as number, m]),
+  );
 
-  const taken: HistoryRow[] = exams.map(e => {
+  const taken: HistoryRow[] = exams.map((e) => {
     const practice = practiceByExam.get(e.examId);
     const material = materialByQuiz.get(e.examId);
     return {
       examId: e.examId,
       title: e.title,
       // Without `mode` (older BE) the PQ-02 / MQ-06 match still tells the type.
-      kind: e.mode ? toKind(e.mode) : practice ? 'PRACTICE_EXAM' : material ? 'MATERIAL_QUIZ' : 'EXAM',
+      kind: e.mode
+        ? toKind(e.mode)
+        : practice
+          ? "PRACTICE_EXAM"
+          : material
+            ? "MATERIAL_QUIZ"
+            : "EXAM",
       courseId: e.courseId ?? null,
       courseTitle: e.courseTitle ?? null,
       maxScore: e.maxScore,
@@ -132,7 +156,7 @@ async function loadHistory(): Promise<HistoryRow[]> {
   });
   // Only exams taken at least once: a practice exam or material quiz that was generated but never
   // started stays out (material quizzes are still listed on My Materials).
-  return taken.filter(r => r.attemptCount > 0);
+  return taken.filter((r) => r.attemptCount > 0);
 }
 
 /**
@@ -146,23 +170,22 @@ export function MyExamsPage() {
   const [searchParams] = useSearchParams();
   const [page, setPage] = useState(1);
   const [reload, setReload] = useState(0);
-  const takeQuiet = useQuietRefresh(() => setReload(r => r + 1));
+  const takeQuiet = useQuietRefresh(() => setReload((r) => r + 1));
   const [history, setHistory] = useState<HistoryRow[]>([]);
   /** MC-01 enrollments: the left (CANCELLED) ones lock their rows, the others feed the quiz builders. */
   const [enrollments, setEnrollments] = useState<MyCourse[]>([]);
-  const [quizModal, setQuizModal] = useState<'material' | 'personal' | null>(null);
+  const [quizModal, setQuizModal] = useState<"material" | "personal" | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
-  const [search, setSearch] = useState('');
+  const [search, setSearch] = useState("");
   const [course, setCourse] = useState(ALL);
   const [kind, setKind] = useState(() => {
-    const type = searchParams.get('type') ?? '';
-    if ((PRACTICE_ALIASES as readonly string[]).includes(type)) return 'PRACTICE';
+    const type = searchParams.get("type") ?? "";
+    if ((PRACTICE_ALIASES as readonly string[]).includes(type)) return "PRACTICE";
     return type in KIND_LABEL || type === CODE_FILTER ? type : ALL;
   });
-  const [sort, setSort] = useState<SortKey>('recent');
-
+  const [sort, setSort] = useState<SortKey>("recent");
 
   useEffect(() => {
     let cancelled = false;
@@ -173,11 +196,11 @@ export function MyExamsPage() {
       setError(null);
     }
     loadHistory()
-      .then(res => {
+      .then((res) => {
         if (!cancelled) setHistory(res);
       })
-      .catch(err => {
-        if (!cancelled && !quiet) setError(getApiErrorMessage(err, 'Failed to load your exams.'));
+      .catch((err) => {
+        if (!cancelled && !quiet) setError(getApiErrorMessage(err, "Failed to load your exams."));
       })
       .finally(() => {
         if (!cancelled) setLoading(false);
@@ -193,7 +216,7 @@ export function MyExamsPage() {
     let cancelled = false;
     studentCourseService
       .getMyCourses({ page: 0, size: 100 })
-      .then(res => {
+      .then((res) => {
         if (!cancelled) setEnrollments(res.content);
       })
       .catch(() => {});
@@ -202,17 +225,30 @@ export function MyExamsPage() {
     };
   }, [reload]);
 
-  const myCourses = useMemo(() => enrollments.filter(c => c.status !== 'CANCELLED'), [enrollments]);
+  const myCourses = useMemo(
+    () => enrollments.filter((c) => c.status !== "CANCELLED"),
+    [enrollments],
+  );
   const rows = useMemo(() => {
-    const left = new Set(enrollments.filter(c => c.status === 'CANCELLED').map(c => c.courseId));
-    return left.size === 0 ? history : history.map(r => ({ ...r, courseLeft: r.courseId != null && left.has(r.courseId) }));
+    const left = new Set(
+      enrollments.filter((c) => c.status === "CANCELLED").map((c) => c.courseId),
+    );
+    return left.size === 0
+      ? history
+      : history.map((r) => ({ ...r, courseLeft: r.courseId != null && left.has(r.courseId) }));
   }, [history, enrollments]);
 
   const courseOptions = useMemo(() => {
-    const byId = new Map(rows.filter(r => r.courseId != null).map(r => [r.courseId as number, r.courseTitle ?? 'Untitled course']));
+    const byId = new Map(
+      rows
+        .filter((r) => r.courseId != null)
+        .map((r) => [r.courseId as number, r.courseTitle ?? "Untitled course"]),
+    );
     return [
-      { label: 'All courses', value: ALL },
-      ...[...byId].sort((a, b) => a[1].localeCompare(b[1])).map(([id, title]) => ({ label: title, value: String(id) })),
+      { label: "All courses", value: ALL },
+      ...[...byId]
+        .sort((a, b) => a[1].localeCompare(b[1]))
+        .map(([id, title]) => ({ label: title, value: String(id) })),
     ];
   }, [rows]);
 
@@ -221,18 +257,24 @@ export function MyExamsPage() {
     () =>
       sortRows(
         rows.filter(
-          r =>
+          (r) =>
             (course === ALL || String(r.courseId) === course) &&
             (kind === ALL ||
-              (kind === CODE_FILTER ? r.hasCode === true : kind === 'PRACTICE' ? isPractice(r.kind) : r.kind === kind)) &&
-            (!term || r.title.toLowerCase().includes(term) || (r.documentTitle ?? '').toLowerCase().includes(term)),
+              (kind === CODE_FILTER
+                ? r.hasCode === true
+                : kind === "PRACTICE"
+                  ? isPractice(r.kind)
+                  : r.kind === kind)) &&
+            (!term ||
+              r.title.toLowerCase().includes(term) ||
+              (r.documentTitle ?? "").toLowerCase().includes(term)),
         ),
         sort,
       ),
     [rows, course, kind, term, sort],
   );
   const pageItems = filtered.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE);
-  const filtersActive = term !== '' || course !== ALL || kind !== ALL || sort !== 'recent';
+  const filtersActive = term !== "" || course !== ALL || kind !== ALL || sort !== "recent";
 
   const withPageReset =
     <T,>(setter: (v: T) => void) =>
@@ -241,10 +283,10 @@ export function MyExamsPage() {
       setPage(1);
     };
   const clearFilters = () => {
-    setSearch('');
+    setSearch("");
     setCourse(ALL);
     setKind(ALL);
-    setSort('recent');
+    setSort("recent");
     setPage(1);
   };
 
@@ -255,10 +297,10 @@ export function MyExamsPage() {
 
   const columns: TableColumn[] = [
     {
-      key: 'title',
-      label: 'Exam',
-      className: 'min-w-[16rem]',
-      render: r => {
+      key: "title",
+      label: "Exam",
+      className: "min-w-[16rem]",
+      render: (r) => {
         const row = asRow(r);
         return (
           <div className="min-w-0">
@@ -293,9 +335,9 @@ export function MyExamsPage() {
       },
     },
     {
-      key: 'kind',
-      label: 'Type',
-      render: r => {
+      key: "kind",
+      label: "Type",
+      render: (r) => {
         const row = asRow(r);
         return (
           <Badge variant={KIND_BADGE[row.kind]} size="sm" className="whitespace-nowrap">
@@ -305,9 +347,9 @@ export function MyExamsPage() {
       },
     },
     {
-      key: 'courseTitle',
-      label: 'Course',
-      render: r => {
+      key: "courseTitle",
+      label: "Course",
+      render: (r) => {
         const row = asRow(r);
         return row.courseId != null && row.courseTitle ? (
           <div className="min-w-0">
@@ -331,18 +373,22 @@ export function MyExamsPage() {
       },
     },
     {
-      key: 'attemptCount',
-      label: 'Attempts',
-      width: '96px',
-      render: r => <span className="font-medium text-content">{asRow(r).attemptCount}</span>,
+      key: "attemptCount",
+      label: "Attempts",
+      width: "96px",
+      render: (r) => <span className="font-medium text-content">{asRow(r).attemptCount}</span>,
     },
     {
-      key: 'bestScore',
-      label: 'Best score',
-      width: '120px',
-      render: r => {
+      key: "bestScore",
+      label: "Best score",
+      width: "120px",
+      render: (r) => {
         const row = asRow(r);
-        return <span className="whitespace-nowrap font-medium text-content">{formatScore(row.bestScore, row.maxScore)}</span>;
+        return (
+          <span className="whitespace-nowrap font-medium text-content">
+            {formatScore(row.bestScore, row.maxScore)}
+          </span>
+        );
       },
     },
   ];
@@ -354,10 +400,18 @@ export function MyExamsPage() {
         subtitle="Simulation exams, practice exams and AI-generated quizzes — with your best score on each."
         action={
           <div className="flex w-full flex-wrap items-center gap-2 sm:w-auto">
-            <Button variant="outline" icon={<Icon.Zap className="w-4 h-4" />} onClick={() => setQuizModal('personal')}>
+            <Button
+              variant="outline"
+              icon={<Icon.Zap className="w-4 h-4" />}
+              onClick={() => setQuizModal("personal")}
+            >
               Create Practice Exam
             </Button>
-            <Button variant="outline" icon={<Icon.Brain className="w-4 h-4" />} onClick={() => setQuizModal('material')}>
+            <Button
+              variant="outline"
+              icon={<Icon.Brain className="w-4 h-4" />}
+              onClick={() => setQuizModal("material")}
+            >
               AI Quiz Generator
             </Button>
           </div>
@@ -371,14 +425,18 @@ export function MyExamsPage() {
             placeholder="Search exams…"
             aria-label="Search exams"
             value={search}
-            onChange={e => withPageReset(setSearch)(e.target.value)}
+            onChange={(e) => withPageReset(setSearch)(e.target.value)}
           />
           <Select
             aria-label="Filter by exam type"
             value={kind}
             onChange={withPageReset(setKind)}
             // "Coding exam" only once the BE marks exams with CODE questions (or it is preselected by ?type=CODE).
-            options={rows.some(r => r.hasCode) || kind === CODE_FILTER ? [...KIND_OPTIONS, CODE_OPTION] : KIND_OPTIONS}
+            options={
+              rows.some((r) => r.hasCode) || kind === CODE_FILTER
+                ? [...KIND_OPTIONS, CODE_OPTION]
+                : KIND_OPTIONS
+            }
             className="w-full sm:w-44 lg:w-auto lg:min-w-0 lg:flex-1"
           />
           <SearchableSelect
@@ -394,7 +452,7 @@ export function MyExamsPage() {
           <Select
             aria-label="Sort exams"
             value={sort}
-            onChange={withPageReset(v => setSort(v as SortKey))}
+            onChange={withPageReset((v) => setSort(v as SortKey))}
             options={SORT_OPTIONS}
             className="w-full sm:w-52 lg:w-auto lg:min-w-0 lg:flex-1"
           />
@@ -413,14 +471,16 @@ export function MyExamsPage() {
       {loading ? (
         <ListSkeleton />
       ) : error ? (
-        <LoadError message={error} onRetry={() => setReload(r => r + 1)} />
+        <LoadError message={error} onRetry={() => setReload((r) => r + 1)} />
       ) : rows.length === 0 ? (
         <div className="card">
           <EmptyState
             icon={<Icon.ClipboardList className="w-7 h-7" />}
             title="No exams taken yet"
             message="Open one of your courses to start an exam, or create a practice exam above."
-            action={<Button onClick={() => navigate(ROUTES.studentCourses)}>Go to My Courses</Button>}
+            action={
+              <Button onClick={() => navigate(ROUTES.studentCourses)}>Go to My Courses</Button>
+            }
           />
         </div>
       ) : filtered.length === 0 ? (
@@ -448,9 +508,16 @@ export function MyExamsPage() {
         </div>
       )}
 
-      <SmartPracticeModal open={quizModal === 'personal'} onClose={() => setQuizModal(null)} courses={myCourses} />
-      <MaterialQuizModal open={quizModal === 'material'} onClose={() => setQuizModal(null)} courses={myCourses} />
-
+      <SmartPracticeModal
+        open={quizModal === "personal"}
+        onClose={() => setQuizModal(null)}
+        courses={myCourses}
+      />
+      <MaterialQuizModal
+        open={quizModal === "material"}
+        onClose={() => setQuizModal(null)}
+        courses={myCourses}
+      />
     </div>
   );
 }

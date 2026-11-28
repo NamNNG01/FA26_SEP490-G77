@@ -1,8 +1,17 @@
-import { Suspense, lazy, useCallback, useRef, useState, type CSSProperties, type KeyboardEvent, type PointerEvent } from 'react';
-import { Button } from '@/components/ui/Button';
-import { Skeleton } from '@/components/ui/Skeleton';
-import { Icon } from '@/assets/icons';
-import { getApiErrorMessage } from '@/utils/apiError';
+import {
+  Suspense,
+  lazy,
+  useCallback,
+  useRef,
+  useState,
+  type CSSProperties,
+  type KeyboardEvent,
+  type PointerEvent,
+} from "react";
+import { Button } from "@/components/ui/Button";
+import { Skeleton } from "@/components/ui/Skeleton";
+import { Icon } from "@/assets/icons";
+import { getApiErrorMessage } from "@/utils/apiError";
 import {
   SOURCE_CODE_MAX_BYTES,
   studentCodeExamService,
@@ -11,24 +20,24 @@ import {
   type CodeQuestion,
   type CodeRunResult,
   type CodeSubmitAnswer,
-} from '@/services/studentCodeExam.service';
-import type { AnswerResponse, AttemptQuestion } from '@/services/studentAttempt.service';
-import { QuestionText } from '../QuestionAnswerInput';
-import { CodeTerminal, type TerminalTab } from './CodeTerminal';
-import { byteLength } from './codeSize';
+} from "@/services/studentCodeExam.service";
+import type { AnswerResponse, AttemptQuestion } from "@/services/studentAttempt.service";
+import { QuestionText } from "../QuestionAnswerInput";
+import { CodeTerminal, type TerminalTab } from "./CodeTerminal";
+import { byteLength } from "./codeSize";
 
-const CodeEditor = lazy(() => import('./CodeEditor'));
+const CodeEditor = lazy(() => import("./CodeEditor"));
 
 const TERMINAL_MIN = 80;
 const TERMINAL_COLLAPSED = 32;
 const TERMINAL_MAX_RATIO = 0.7;
 const TERMINAL_DEFAULT = 180;
-const TERMINAL_HEIGHT_KEY = 'code-terminal-height';
+const TERMINAL_HEIGHT_KEY = "code-terminal-height";
 /** Question panel width, in % of the workspace (md and up). */
 const QUESTION_MIN = 15;
 const QUESTION_MAX = 60;
 const QUESTION_DEFAULT = 25;
-const QUESTION_WIDTH_KEY = 'code-question-width';
+const QUESTION_WIDTH_KEY = "code-question-width";
 
 function storedQuestionWidth(): number {
   try {
@@ -50,9 +59,9 @@ function questionLanguage(
   loadingMeta: boolean,
   languages: CodeLanguageInfo[],
 ): CodeLanguage {
-  if (meta) return meta.languages?.[0] ?? saved ?? languages[0]?.id ?? 'JAVA';
-  if (loadingMeta) return '';
-  return saved || languages[0]?.id || 'JAVA';
+  if (meta) return meta.languages?.[0] ?? saved ?? languages[0]?.id ?? "JAVA";
+  if (loadingMeta) return "";
+  return saved || languages[0]?.id || "JAVA";
 }
 
 function storedTerminalHeight(): number {
@@ -75,7 +84,9 @@ export function currentCodeAnswer(
 ): CodeSubmitAnswer | null {
   const text = response?.text;
   if (!text?.trim()) return null;
-  const lang = meta ? (meta.languages?.[0] ?? response?.language ?? '') : (response?.language ?? '');
+  const lang = meta
+    ? (meta.languages?.[0] ?? response?.language ?? "")
+    : (response?.language ?? "");
   return { questionId, language: lang, sourceCode: text };
 }
 
@@ -103,14 +114,14 @@ export function CodeQuestionWorkspace({
   readOnly?: boolean;
 }) {
   const language = questionLanguage(meta, value?.language, loadingMeta, languages);
-  const languageName = languages.find(l => l.id === language)?.name ?? language;
+  const languageName = languages.find((l) => l.id === language)?.name ?? language;
   /** CD-03 loaded but the question has no language: nothing to run or grade in. */
-  const noLanguage = !loadingMeta && language === '';
+  const noLanguage = !loadingMeta && language === "";
 
   // Code the student typed; until then the editor shows the template, which is not an answer.
   // In function mode that is only their function: the BE puts the hidden driver around it.
   const [typed, setTyped] = useState<string | null>(() => value?.text ?? null);
-  const source = typed ?? meta?.codeTemplate ?? '';
+  const source = typed ?? meta?.codeTemplate ?? "";
 
   // The language goes with the code, so a reload and CD-05 use the one it was written in.
   const changeSource = (text: string) => {
@@ -121,25 +132,32 @@ export function CodeQuestionWorkspace({
   // Run (CD-04)
   // Starts on the sample input until the student types their own.
   const [stdinTyped, setStdin] = useState<string | null>(null);
-  const stdin = stdinTyped ?? meta?.sampleInput ?? '';
-  const [tab, setTab] = useState<TerminalTab>('Output');
+  const stdin = stdinTyped ?? meta?.sampleInput ?? "";
+  const [tab, setTab] = useState<TerminalTab>("Output");
   const [running, setRunning] = useState(false);
   const [result, setResult] = useState<CodeRunResult | null>(null);
   const [runError, setRunError] = useState<string | null>(null);
   const tooLarge = byteLength(source) > SOURCE_CODE_MAX_BYTES;
-  const canRun = !running && !tooLarge && source.trim() !== '' && language !== '';
+  const canRun = !running && !tooLarge && source.trim() !== "" && language !== "";
 
   const run = useCallback(async () => {
     if (!canRun) return;
     setRunning(true);
-    setTab('Output');
+    setTab("Output");
     setRunError(null);
     setCollapsed(false);
     try {
-      setResult(await studentCodeExamService.run({ questionId: question.questionId, language, sourceCode: source, stdin }));
+      setResult(
+        await studentCodeExamService.run({
+          questionId: question.questionId,
+          language,
+          sourceCode: source,
+          stdin,
+        }),
+      );
     } catch (err) {
       setResult(null);
-      setRunError(getApiErrorMessage(err, 'Failed to run your code.'));
+      setRunError(getApiErrorMessage(err, "Failed to run your code."));
     } finally {
       setRunning(false);
     }
@@ -174,10 +192,10 @@ export function CodeQuestionWorkspace({
     }
   };
   const onSplitterKey = (e: KeyboardEvent<HTMLDivElement>) => {
-    if (e.key !== 'ArrowUp' && e.key !== 'ArrowDown') return;
+    if (e.key !== "ArrowUp" && e.key !== "ArrowDown") return;
     e.preventDefault();
     setCollapsed(false);
-    setHeight(h => Math.max(TERMINAL_MIN, h + (e.key === 'ArrowUp' ? 20 : -20)));
+    setHeight((h) => Math.max(TERMINAL_MIN, h + (e.key === "ArrowUp" ? 20 : -20)));
   };
 
   // Question / editor splitter
@@ -212,9 +230,9 @@ export function CodeQuestionWorkspace({
     saveWidth(latestWidth.current);
   };
   const onWidthKey = (e: KeyboardEvent<HTMLDivElement>) => {
-    if (e.key !== 'ArrowLeft' && e.key !== 'ArrowRight') return;
+    if (e.key !== "ArrowLeft" && e.key !== "ArrowRight") return;
     e.preventDefault();
-    const next = clampWidth(questionWidth + (e.key === 'ArrowRight' ? 2 : -2));
+    const next = clampWidth(questionWidth + (e.key === "ArrowRight" ? 2 : -2));
     setQuestionWidth(next);
     saveWidth(next);
   };
@@ -223,7 +241,7 @@ export function CodeQuestionWorkspace({
     <div
       ref={rowRef}
       className="flex flex-col gap-3 md:h-full md:min-h-0 md:flex-row md:gap-0"
-      style={{ '--question-width': `${questionWidth}%` } as CSSProperties}
+      style={{ "--question-width": `${questionWidth}%` } as CSSProperties}
     >
       {/* Question */}
       <section className="card min-h-0 overflow-auto p-4 space-y-4 md:w-[var(--question-width)] md:flex-shrink-0">
@@ -255,14 +273,19 @@ export function CodeQuestionWorkspace({
       </div>
 
       {/* Editor + terminal */}
-      <section ref={columnRef} className="card flex h-[75vh] min-h-0 min-w-0 flex-col overflow-hidden p-0 md:h-auto md:flex-1">
+      <section
+        ref={columnRef}
+        className="card flex h-[75vh] min-h-0 min-w-0 flex-col overflow-hidden p-0 md:h-auto md:flex-1"
+      >
         <div className="flex flex-shrink-0 items-center gap-2 border-b border-line-soft px-3 py-2">
           {language ? (
             <span className="inline-flex h-8 items-center rounded-[8px] border border-line-soft bg-surface-alt px-3 text-xs text-content-soft">
               Language:&nbsp;<span className="font-semibold text-content">{languageName}</span>
             </span>
           ) : noLanguage ? (
-            <span className="text-xs text-danger">This question has no language set, so it cannot be run.</span>
+            <span className="text-xs text-danger">
+              This question has no language set, so it cannot be run.
+            </span>
           ) : (
             <Skeleton className="h-8 w-32" />
           )}
@@ -282,14 +305,21 @@ export function CodeQuestionWorkspace({
 
         {meta?.functionMode && (
           <p className="flex-shrink-0 border-b border-line-soft bg-surface-alt px-3 py-1.5 text-xs text-content-soft">
-            The input is read for you and passed to your function, and what it returns is printed. Write only the
-            function — don&apos;t read the input or print the result yourself.
+            The input is read for you and passed to your function, and what it returns is printed.
+            Write only the function — don&apos;t read the input or print the result yourself.
           </p>
         )}
         <div className="min-h-[260px] flex-1">
           <Suspense fallback={<Skeleton className="h-full w-full" />}>
             {language ? (
-              <CodeEditor key={language} language={language} value={source} onChange={changeSource} onRun={() => void run()} readOnly={readOnly} />
+              <CodeEditor
+                key={language}
+                language={language}
+                value={source}
+                onChange={changeSource}
+                onRun={() => void run()}
+                readOnly={readOnly}
+              />
             ) : (
               <Skeleton className="h-full w-full" />
             )}
@@ -305,14 +335,17 @@ export function CodeQuestionWorkspace({
           onPointerDown={onPointerDown}
           onPointerMove={onPointerMove}
           onPointerUp={onPointerUp}
-          onDoubleClick={() => setCollapsed(c => !c)}
+          onDoubleClick={() => setCollapsed((c) => !c)}
           onKeyDown={onSplitterKey}
           className="h-1.5 flex-shrink-0 cursor-row-resize touch-none border-t border-line-soft bg-surface-alt hover:bg-primary/30 focus-visible:bg-primary/40 focus-visible:outline-none"
         />
-        <div className="flex-shrink-0 overflow-hidden" style={{ height: collapsed ? TERMINAL_COLLAPSED : height }}>
+        <div
+          className="flex-shrink-0 overflow-hidden"
+          style={{ height: collapsed ? TERMINAL_COLLAPSED : height }}
+        >
           <CodeTerminal
             tab={tab}
-            onTabChange={t => {
+            onTabChange={(t) => {
               setTab(t);
               setCollapsed(false);
             }}
@@ -332,9 +365,13 @@ function SampleBlock({ label, text }: { label: string; text: string | null }) {
   if (text == null) return null;
   return (
     <div>
-      <h3 className="mb-1 text-2xs font-semibold uppercase tracking-wide text-content-subtle">{label}</h3>
+      <h3 className="mb-1 text-2xs font-semibold uppercase tracking-wide text-content-subtle">
+        {label}
+      </h3>
       {/* Drag the corner to make it taller or shorter. */}
-      <pre className="min-h-[2.5rem] max-h-[60vh] resize-y overflow-auto whitespace-pre-wrap break-words rounded-[6px] border border-line-soft bg-surface-alt p-2 font-mono text-xs text-content">{text}</pre>
+      <pre className="min-h-[2.5rem] max-h-[60vh] resize-y overflow-auto whitespace-pre-wrap break-words rounded-[6px] border border-line-soft bg-surface-alt p-2 font-mono text-xs text-content">
+        {text}
+      </pre>
     </div>
   );
 }

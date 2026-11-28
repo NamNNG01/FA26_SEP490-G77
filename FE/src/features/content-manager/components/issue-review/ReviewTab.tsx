@@ -12,9 +12,7 @@ const fieldCls =
   "rounded-lg border border-line bg-surface p-3 text-sm text-content focus:outline-none focus:ring-2 focus:ring-brand-600/20 focus:border-brand-600";
 
 const studentName = (report: any) =>
-  report.student?.fullName ||
-  report.studentName ||
-  `Student #${report.userId ?? "—"}`;
+  report.student?.fullName || report.studentName || `Student #${report.userId ?? "—"}`;
 
 /** What the ticket needs next, in one place, so the manager never has to guess the workflow. */
 function NextStep({ review }: { review: IssueReview }) {
@@ -40,8 +38,7 @@ function NextStep({ review }: { review: IssueReview }) {
         </p>
         <label className="mt-3 grid gap-1.5 text-sm font-medium text-content-secondary">
           <span>
-            Review note{" "}
-            <span className="font-normal text-content-subtle">(optional)</span>
+            Review note <span className="font-normal text-content-subtle">(optional)</span>
           </span>
           <textarea
             rows={2}
@@ -100,8 +97,8 @@ function NextStep({ review }: { review: IssueReview }) {
         This ticket is {issueLabel(status).toLowerCase()}
       </h3>
       <p className="mt-1 text-sm text-content-secondary">
-        No further actions are available. Regrade jobs and history stay open on
-        the Insights and history tab.
+        No further actions are available. Regrade jobs and history stay open on the Insights and
+        history tab.
       </p>
     </section>
   );
@@ -113,9 +110,7 @@ function ReportCard({ report }: { report: any }) {
     <article className="rounded-xl border border-line p-4">
       <div className="flex flex-wrap items-start justify-between gap-2 text-xs text-content-secondary">
         <span className="font-medium text-content">{name}</span>
-        <time>
-          {report.createdAt ? new Date(report.createdAt).toLocaleString() : ""}
-        </time>
+        <time>{report.createdAt ? new Date(report.createdAt).toLocaleString() : ""}</time>
       </div>
       <div className="mt-2 flex flex-wrap gap-1.5">
         <Badge size="sm" variant="default">
@@ -138,17 +133,13 @@ function ReportCard({ report }: { report: any }) {
       {report.context?.selectedOptions?.length > 0 && (
         <p className="mt-2 text-sm text-content-secondary">
           Student selected:{" "}
-          {report.context.selectedOptions
-            .map((option: any) => option.optionText)
-            .join(", ")}
+          {report.context.selectedOptions.map((option: any) => option.optionText).join(", ")}
         </p>
       )}
       {report.suggestedOptions?.length > 0 && (
         <p className="mt-1 text-sm text-content-secondary">
           Suggested option:{" "}
-          {report.suggestedOptions
-            .map((option: any) => option.optionText)
-            .join(", ")}
+          {report.suggestedOptions.map((option: any) => option.optionText).join(", ")}
         </p>
       )}
       {report.suggestedAnswer && (
@@ -158,10 +149,7 @@ function ReportCard({ report }: { report: any }) {
       )}
       {report.attachmentUrl && (
         <div className="mt-3">
-          <ImageViewer
-            src={report.attachmentUrl}
-            alt={`Attachment from ${name}`}
-          />
+          <ImageViewer src={report.attachmentUrl} alt={`Attachment from ${name}`} />
         </div>
       )}
     </article>
@@ -179,14 +167,8 @@ export function ReviewTab({ review }: { review: IssueReview }) {
     <div className="space-y-5">
       <NextStep review={review} />
       <div className="grid gap-5 xl:grid-cols-2">
-        <section
-          aria-labelledby="reported-question"
-          className="min-w-0 space-y-3"
-        >
-          <h3
-            id="reported-question"
-            className="text-sm font-semibold text-content"
-          >
+        <section aria-labelledby="reported-question" className="min-w-0 space-y-3">
+          <h3 id="reported-question" className="text-sm font-semibold text-content">
             Reported question
           </h3>
           <div className="rounded-xl border border-line bg-surface-muted p-4">
@@ -222,10 +204,7 @@ export function ReviewTab({ review }: { review: IssueReview }) {
           className="min-w-0 space-y-3 sticky top-4 self-start"
         >
           <div className="flex flex-wrap items-center justify-between gap-2">
-            <h3
-              id="student-reports"
-              className="text-sm font-semibold text-content"
-            >
+            <h3 id="student-reports" className="text-sm font-semibold text-content">
               Student reports{" "}
               <span className="font-normal text-content-subtle">
                 ({reports.length || detail.reportCount || 0})
@@ -246,14 +225,8 @@ export function ReviewTab({ review }: { review: IssueReview }) {
             </p>
           )}
           {reports.length > REPORTS_SHOWN && (
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => setShowAll((current) => !current)}
-            >
-              {showAll
-                ? "Show fewer reports"
-                : `Show all ${reports.length} reports`}
+            <Button variant="outline" size="sm" onClick={() => setShowAll((current) => !current)}>
+              {showAll ? "Show fewer reports" : `Show all ${reports.length} reports`}
             </Button>
           )}
         </section>

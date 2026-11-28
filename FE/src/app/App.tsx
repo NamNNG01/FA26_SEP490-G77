@@ -1,8 +1,8 @@
-import React from 'react';
-import { ThemeProvider } from '@/theme/ThemeProvider';
-import { AuthProvider } from '@/auth/authContext';
-import { ToastHost } from '@/components/ui/ToastHost';
-import { AppContent } from './AppContent';
+import React from "react";
+import { ThemeProvider } from "@/theme/ThemeProvider";
+import { AuthProvider } from "@/auth/authContext";
+import { ToastHost } from "@/components/ui/ToastHost";
+import { AppContent } from "./AppContent";
 
 /**
  * Application root.

@@ -1,6 +1,6 @@
-import { api } from './api';
-import type { ApiResponse } from '@/types/api';
-import type { UserResponse } from '@/types/auth';
+import { api } from "./api";
+import type { ApiResponse } from "@/types/api";
+import type { UserResponse } from "@/types/auth";
 
 /**
  * UserService
@@ -26,14 +26,14 @@ export const FULL_NAME_MAX_LENGTH = 100;
 
 export const userService = {
   async getCurrentUser(): Promise<UserResponse> {
-    const body = await api.get<ApiResponse<UserResponse>>('/users/me');
+    const body = await api.get<ApiResponse<UserResponse>>("/users/me");
     return body.data;
   },
 
   async updateProfile(request: UpdateProfileRequest): Promise<UserResponse> {
     const body = await api.request<ApiResponse<UserResponse>>({
-      method: 'put',
-      url: '/users/me',
+      method: "put",
+      url: "/users/me",
       data: request,
     });
     return body.data;

@@ -1,4 +1,4 @@
-import type { ExamDifficulty, ExamType, PublicExam } from './mockPublicExams';
+import type { ExamDifficulty, ExamType, PublicExam } from "./mockPublicExams";
 
 /**
  * Question fixtures for the exam detail page.
@@ -12,27 +12,29 @@ import type { ExamDifficulty, ExamType, PublicExam } from './mockPublicExams';
  * card advertises — see `sampleSizeFor()`.
  */
 
-export type QuestionType = 'mcq' | 'true-false' | 'fill-blank' | 'matching' | 'ordering' | 'essay';
+export type QuestionType = "mcq" | "true-false" | "fill-blank" | "matching" | "ordering" | "essay";
 
 /** Which question types each exam format is allowed to use. */
 export const ALLOWED_TYPES: Record<ExamType, QuestionType[]> = {
-  objective: ['mcq', 'true-false', 'fill-blank', 'matching', 'ordering'],
-  essay: ['essay'],
+  objective: ["mcq", "true-false", "fill-blank", "matching", "ordering"],
+  essay: ["essay"],
 };
 
 export const QUESTION_TYPE_LABEL: Record<QuestionType, string> = {
-  mcq: 'Multiple Choice',
-  'true-false': 'True / False',
-  'fill-blank': 'Fill in the Blank',
-  matching: 'Matching',
-  ordering: 'Ordering',
-  essay: 'Essay',
+  mcq: "Multiple Choice",
+  "true-false": "True / False",
+  "fill-blank": "Fill in the Blank",
+  matching: "Matching",
+  ordering: "Ordering",
+  essay: "Essay",
 };
 
-export const QUESTION_TYPE_OPTIONS = (Object.keys(QUESTION_TYPE_LABEL) as QuestionType[]).map(type => ({
-  label: QUESTION_TYPE_LABEL[type],
-  value: type,
-}));
+export const QUESTION_TYPE_OPTIONS = (Object.keys(QUESTION_TYPE_LABEL) as QuestionType[]).map(
+  (type) => ({
+    label: QUESTION_TYPE_LABEL[type],
+    value: type,
+  }),
+);
 
 export interface QuestionGroup {
   id: string;
@@ -99,35 +101,51 @@ with no planned downtime. Compliance requires that every request be encrypted in
 rotated without rebuilding images.`;
 
 const MCQ_STEMS = [
-  'Which approach best meets the no-downtime requirement during the cutover?',
-  'Which configuration keeps secrets rotatable without rebuilding container images?',
-  'What is the most appropriate way to absorb the 400 rps peak during the batch window?',
-  'Which design keeps the two regions consistent without introducing a split-brain failure mode?',
+  "Which approach best meets the no-downtime requirement during the cutover?",
+  "Which configuration keeps secrets rotatable without rebuilding container images?",
+  "What is the most appropriate way to absorb the 400 rps peak during the batch window?",
+  "Which design keeps the two regions consistent without introducing a split-brain failure mode?",
 ];
 
 const TF_STEMS = [
-  'Requests between the two regions must be encrypted in transit.',
-  'Rebuilding every image is required in order to rotate a database password.',
-  'A rolling update can complete before any traffic is shifted to the new architecture.',
+  "Requests between the two regions must be encrypted in transit.",
+  "Rebuilding every image is required in order to rotate a database password.",
+  "A rolling update can complete before any traffic is shifted to the new architecture.",
 ];
 
 const BLANK_STEMS = [
-  'Complete the sentence: secrets are mounted into the container at runtime from ______.',
-  'Complete the sentence: the load balancer health check interval is configured to ______ seconds.',
+  "Complete the sentence: secrets are mounted into the container at runtime from ______.",
+  "Complete the sentence: the load balancer health check interval is configured to ______ seconds.",
 ];
 
-const MATCHING_LEFT = ['Rolling update', 'Blue/green deploy', 'Canary release', ' recreate strategy'];
-const MATCHING_RIGHT = ['Replace pods in batches', 'Two identical environments, switch traffic', 'Route a small share of traffic first', 'Restart the pod only on failure'];
+const MATCHING_LEFT = [
+  "Rolling update",
+  "Blue/green deploy",
+  "Canary release",
+  " recreate strategy",
+];
+const MATCHING_RIGHT = [
+  "Replace pods in batches",
+  "Two identical environments, switch traffic",
+  "Route a small share of traffic first",
+  "Restart the pod only on failure",
+];
 
-const ORDERING_ITEMS = ['Provision storage', 'Deploy the application image', 'Run database migrations', 'Warm the cache', 'Shift production traffic'];
+const ORDERING_ITEMS = [
+  "Provision storage",
+  "Deploy the application image",
+  "Run database migrations",
+  "Warm the cache",
+  "Shift production traffic",
+];
 
 const ESSAY_STEMS = [
-  'Describe, in detail, the migration plan you would propose and justify each phase.',
-  'Explain how you would configure the platform to satisfy the compliance requirements above.',
+  "Describe, in detail, the migration plan you would propose and justify each phase.",
+  "Explain how you would configure the platform to satisfy the compliance requirements above.",
 ];
 
 /** Per-item difficulty cycles off the seed so the mix is varied but stable. */
-const DIFFICULTIES: ExamDifficulty[] = ['Easy', 'Medium', 'Hard'];
+const DIFFICULTIES: ExamDifficulty[] = ["Easy", "Medium", "Hard"];
 
 /**
  * Deterministic sample set for an exam. Seeded from the exam id so the same
@@ -136,15 +154,15 @@ const DIFFICULTIES: ExamDifficulty[] = ['Easy', 'Medium', 'Hard'];
  */
 export function questionsFor(exam: PublicExam): ExamQuestionSet {
   const seed = [...exam.id].reduce((acc, ch) => acc + ch.charCodeAt(0), 0);
-  const pick = <T,>(items: T[], i: number): T => items[(seed + i) % items.length]!;
+  const pick = <T>(items: T[], i: number): T => items[(seed + i) % items.length]!;
   const size = sampleSizeFor(exam);
   const ids = exam.questions;
 
-  if (exam.examType === 'essay') {
+  if (exam.examType === "essay") {
     const groups: QuestionGroup[] = [];
     const questions: ExamQuestion[] = Array.from({ length: size }, (_, i) => ({
       id: `${exam.id}-Q${i + 1}`,
-      type: 'essay' as const,
+      type: "essay" as const,
       difficulty: DIFFICULTIES[(seed + i) % DIFFICULTIES.length]!,
       points: 20,
       text: `${pick(ESSAY_STEMS, i)} (Question ${i + 1} of ${ids})`,
@@ -155,57 +173,98 @@ export function questionsFor(exam: PublicExam): ExamQuestionSet {
   // Objective — the first two items share a passage, so the group concept is
   // always exercised. The mix then covers every allowed type at least once.
   const groupId = `${exam.id}-G1`;
-  const groups: QuestionGroup[] = [{ id: groupId, title: 'Shared scenario', passage: PASSAGE }];
+  const groups: QuestionGroup[] = [{ id: groupId, title: "Shared scenario", passage: PASSAGE }];
   /** The two opening items read the shared passage. */
   const groupOf = (i: number) => (i < 2 ? { groupId } : {});
 
   const questions: ExamQuestion[] = [];
   for (let i = 0; i < size; i++) {
     const id = `${exam.id}-Q${i + 1}`;
-    const type: QuestionType = (['mcq', 'true-false', 'matching', 'fill-blank', 'ordering'] as QuestionType[])[i] ?? 'mcq';
+    const type: QuestionType =
+      (["mcq", "true-false", "matching", "fill-blank", "ordering"] as QuestionType[])[i] ?? "mcq";
 
-    if (type === 'mcq') {
+    if (type === "mcq") {
       questions.push({
-        id, type, difficulty: DIFFICULTIES[(2 + seed + i) % DIFFICULTIES.length]!, points: 2, ...groupOf(i),
+        id,
+        type,
+        difficulty: DIFFICULTIES[(2 + seed + i) % DIFFICULTIES.length]!,
+        points: 2,
+        ...groupOf(i),
         text: `${pick(MCQ_STEMS, i)} (Question ${i + 1} of ${ids})`,
         options: [
-          { label: 'A', text: 'Shift traffic gradually and keep both stacks serving until cutover completes', isCorrect: true },
-          { label: 'B', text: 'Take the whole platform offline for the duration of the migration', isCorrect: false },
-          { label: 'C', text: 'Migrate each service independently with no coordination window', isCorrect: false },
-          { label: 'D', text: 'Replicate the monolith to both regions before any change is made', isCorrect: false },
+          {
+            label: "A",
+            text: "Shift traffic gradually and keep both stacks serving until cutover completes",
+            isCorrect: true,
+          },
+          {
+            label: "B",
+            text: "Take the whole platform offline for the duration of the migration",
+            isCorrect: false,
+          },
+          {
+            label: "C",
+            text: "Migrate each service independently with no coordination window",
+            isCorrect: false,
+          },
+          {
+            label: "D",
+            text: "Replicate the monolith to both regions before any change is made",
+            isCorrect: false,
+          },
         ],
       });
-    } else if (type === 'true-false') {
+    } else if (type === "true-false") {
       questions.push({
-        id, type, difficulty: DIFFICULTIES[(1 + seed + i) % DIFFICULTIES.length]!, points: 1, ...groupOf(i),
+        id,
+        type,
+        difficulty: DIFFICULTIES[(1 + seed + i) % DIFFICULTIES.length]!,
+        points: 1,
+        ...groupOf(i),
         text: `${pick(TF_STEMS, i)} True or false. (Question ${i + 1} of ${ids})`,
         options: [
-          { label: 'A', text: 'True', isCorrect: true },
-          { label: 'B', text: 'False', isCorrect: false },
+          { label: "A", text: "True", isCorrect: true },
+          { label: "B", text: "False", isCorrect: false },
         ],
       });
-    } else if (type === 'matching') {
+    } else if (type === "matching") {
       questions.push({
-        id, type, difficulty: DIFFICULTIES[(4 + seed + i) % DIFFICULTIES.length]!, points: 4, ...groupOf(i),
+        id,
+        type,
+        difficulty: DIFFICULTIES[(4 + seed + i) % DIFFICULTIES.length]!,
+        points: 4,
+        ...groupOf(i),
         text: `Match each deployment strategy to its description. (Question ${i + 1} of ${ids})`,
         pairs: MATCHING_LEFT.map((left, j) => ({ left, right: MATCHING_RIGHT[j]! })),
       });
-    } else if (type === 'fill-blank') {
+    } else if (type === "fill-blank") {
       questions.push({
-        id, type, difficulty: DIFFICULTIES[(2 + seed + i) % DIFFICULTIES.length]!, points: 2, ...groupOf(i),
+        id,
+        type,
+        difficulty: DIFFICULTIES[(2 + seed + i) % DIFFICULTIES.length]!,
+        points: 2,
+        ...groupOf(i),
         text: `${pick(BLANK_STEMS, i)} (Question ${i + 1} of ${ids})`,
         options: [
-          { label: 'A', text: 'a Kubernetes Secret mounted as an environment variable', isCorrect: true },
-          { label: 'B', text: 'a value compiled into the image at build time', isCorrect: false },
-          { label: 'C', text: 'a plain-text file committed to the repository', isCorrect: false },
+          {
+            label: "A",
+            text: "a Kubernetes Secret mounted as an environment variable",
+            isCorrect: true,
+          },
+          { label: "B", text: "a value compiled into the image at build time", isCorrect: false },
+          { label: "C", text: "a plain-text file committed to the repository", isCorrect: false },
         ],
-        answer: 'a Kubernetes Secret mounted as an environment variable',
+        answer: "a Kubernetes Secret mounted as an environment variable",
       });
     } else {
       questions.push({
-        id, type, difficulty: DIFFICULTIES[(3 + seed + i) % DIFFICULTIES.length]!, points: 3, ...groupOf(i),
+        id,
+        type,
+        difficulty: DIFFICULTIES[(3 + seed + i) % DIFFICULTIES.length]!,
+        points: 3,
+        ...groupOf(i),
         text: `Put these deployment steps in the correct order. (Question ${i + 1} of ${ids})`,
-        ordering: ORDERING_ITEMS.map(text => ({ text })),
+        ordering: ORDERING_ITEMS.map((text) => ({ text })),
       });
     }
   }

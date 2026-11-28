@@ -1,7 +1,7 @@
-import React, { useRef } from 'react';
-import { Button } from '@/components/ui/Button';
-import { Icon } from '@/assets/icons';
-import { IMAGE_ACCEPT, imageFileError } from '@/services/upload.service';
+import React, { useRef } from "react";
+import { Button } from "@/components/ui/Button";
+import { Icon } from "@/assets/icons";
+import { IMAGE_ACCEPT, imageFileError } from "@/services/upload.service";
 
 /** A button that opens the image picker; invalid files are reported through onError and never reach onPick. */
 export function ImagePickButton({
@@ -9,9 +9,9 @@ export function ImagePickButton({
   onError,
   loading,
   disabled,
-  children = 'Upload image',
-  variant = 'outline',
-  size = 'sm',
+  children = "Upload image",
+  variant = "outline",
+  size = "sm",
   className,
 }: {
   onPick: (file: File) => void;
@@ -19,8 +19,8 @@ export function ImagePickButton({
   loading?: boolean;
   disabled?: boolean;
   children?: React.ReactNode;
-  variant?: React.ComponentProps<typeof Button>['variant'];
-  size?: React.ComponentProps<typeof Button>['size'];
+  variant?: React.ComponentProps<typeof Button>["variant"];
+  size?: React.ComponentProps<typeof Button>["size"];
   className?: string;
 }) {
   const input = useRef<HTMLInputElement>(null);
@@ -33,7 +33,7 @@ export function ImagePickButton({
         className="hidden"
         onChange={(e) => {
           const file = e.target.files?.[0];
-          e.target.value = '';
+          e.target.value = "";
           if (!file) return;
           const error = imageFileError(file);
           if (error) onError(error);

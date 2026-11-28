@@ -191,10 +191,7 @@ export function studentModulePracticePath(
 
 /** Result of one Module Practice session (MP-08) — e.g. '/student/practice/sessions/5/result'. */
 export function studentPracticeResultPath(sessionId: number | string): string {
-  return ROUTES.studentPracticeResult.replace(
-    ":sessionId",
-    encodeURIComponent(String(sessionId)),
-  );
+  return ROUTES.studentPracticeResult.replace(":sessionId", encodeURIComponent(String(sessionId)));
 }
 
 /** Take-exam screen for an attempt already started — e.g. '/student/exam?attemptId=7'. */
@@ -234,16 +231,16 @@ export function managerQuestionDuplicatePath(id: number | string): string {
 
 /** New Questions pre-opened with a location, new group builder, or an existing group. */
 export function managerQuestionCreateWithContextPath(opts?: {
-  context?: 'new-group';
+  context?: "new-group";
   groupId?: number | string;
   courseId?: number | string | null;
   moduleId?: number | string | null;
 }): string {
   const qs = new URLSearchParams();
-  if (opts?.context) qs.set('context', opts.context);
-  if (opts?.groupId != null) qs.set('groupId', String(opts.groupId));
-  if (opts?.courseId != null) qs.set('courseId', String(opts.courseId));
-  if (opts?.moduleId != null) qs.set('moduleId', String(opts.moduleId));
+  if (opts?.context) qs.set("context", opts.context);
+  if (opts?.groupId != null) qs.set("groupId", String(opts.groupId));
+  if (opts?.courseId != null) qs.set("courseId", String(opts.courseId));
+  if (opts?.moduleId != null) qs.set("moduleId", String(opts.moduleId));
   const s = qs.toString();
   return s ? `${ROUTES.managerQuestionCreate}?${s}` : ROUTES.managerQuestionCreate;
 }
@@ -294,19 +291,14 @@ export function managerPublicExamPath(id: string): string {
  * bounced into the /student tree. Everyone else (students, admins) uses the
  * student path.
  */
-export function publicExamPathFor(
-  roleCode: string | null | undefined,
-  id: string,
-): string {
+export function publicExamPathFor(roleCode: string | null | undefined, id: string): string {
   return roleCode === Role.COURSE_MANAGER || roleCode === Role.ADMIN
     ? managerPublicExamPath(id)
     : publicExamPath(id);
 }
 
 /** List URL for the signed-in role — the "back" target for the detail page. */
-export function publicExamListPathFor(
-  roleCode: string | null | undefined,
-): string {
+export function publicExamListPathFor(roleCode: string | null | undefined): string {
   return roleCode === Role.COURSE_MANAGER || roleCode === Role.ADMIN
     ? ROUTES.managerPracticeExams
     : ROUTES.studentPublicExam;
@@ -499,8 +491,6 @@ export const menuByRole: Record<string, MenuItem[]> = {
  * Menu items for the given backend role code — a single map lookup.
  * Unknown/missing roles get an empty list (no menu leaks).
  */
-export function getMenuForRole(
-  roleCode: string | null | undefined,
-): MenuItem[] {
+export function getMenuForRole(roleCode: string | null | undefined): MenuItem[] {
   return (roleCode && menuByRole[roleCode]) || [];
 }

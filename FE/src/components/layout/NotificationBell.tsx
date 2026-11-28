@@ -1,20 +1,20 @@
-import React, { useEffect, useRef, useState } from 'react';
-import { useLocation, useNavigate } from 'react-router';
-import { useAuth } from '@/auth/authContext';
-import { ROUTES } from '@/app/routes';
-import { Icon } from '@/assets/icons';
-import { Role } from '@/utils/permissions';
-import { Skeleton } from '@/components/ui/Skeleton';
-import { useToast } from '@/components/ui/ToastHost';
-import { getApiErrorMessage } from '@/utils/apiError';
-import { NotificationItem, notificationTarget } from '@/components/notifications/NotificationItem';
+import React, { useEffect, useRef, useState } from "react";
+import { useLocation, useNavigate } from "react-router";
+import { useAuth } from "@/auth/authContext";
+import { ROUTES } from "@/app/routes";
+import { Icon } from "@/assets/icons";
+import { Role } from "@/utils/permissions";
+import { Skeleton } from "@/components/ui/Skeleton";
+import { useToast } from "@/components/ui/ToastHost";
+import { getApiErrorMessage } from "@/utils/apiError";
+import { NotificationItem, notificationTarget } from "@/components/notifications/NotificationItem";
 import {
   markNotificationRead,
   setUnreadCount,
   studentNotificationService,
   useUnreadNotificationCount,
   type StudentNotification,
-} from '@/services/studentNotification.service';
+} from "@/services/studentNotification.service";
 
 /** Rows shown in the dropdown; the rest live on the Notifications page. */
 const PREVIEW_SIZE = 10;
@@ -35,7 +35,7 @@ export function NotificationBell() {
   const { user } = useAuth();
   const isStudent = user?.role === Role.STUDENT;
   const isManager = user?.role === Role.COURSE_MANAGER;
-  const unread = useUnreadNotificationCount(isStudent || isManager ? user?.userId ?? null : null);
+  const unread = useUnreadNotificationCount(isStudent || isManager ? (user?.userId ?? null) : null);
   const navigate = useNavigate();
   const location = useLocation();
   const toast = useToast();
@@ -55,13 +55,13 @@ export function NotificationBell() {
       if (rootRef.current && !rootRef.current.contains(e.target as Node)) setOpen(false);
     };
     const onKey = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') setOpen(false);
+      if (e.key === "Escape") setOpen(false);
     };
-    document.addEventListener('pointerdown', onPointerDown);
-    document.addEventListener('keydown', onKey);
+    document.addEventListener("pointerdown", onPointerDown);
+    document.addEventListener("keydown", onKey);
     return () => {
-      document.removeEventListener('pointerdown', onPointerDown);
-      document.removeEventListener('keydown', onKey);
+      document.removeEventListener("pointerdown", onPointerDown);
+      document.removeEventListener("keydown", onKey);
     };
   }, [open]);
 
@@ -78,19 +78,21 @@ export function NotificationBell() {
     let cancelled = false;
     studentNotificationService
       .list({ unreadOnly: true, page: 0, size: 1 })
-      .then(inbox => {
+      .then((inbox) => {
         const n = inbox.content[0];
         if (cancelled || !n) return;
         const target = notificationTarget(n);
-        const show = n.type?.endsWith('_FAILED') ? toast.warning : toast.info;
-        show(n.body || '', {
+        const show = n.type?.endsWith("_FAILED") ? toast.warning : toast.info;
+        show(n.body || "", {
           title: n.title,
           duration: 10000,
-          action: target ? { label: 'Open', onClick: () => handleItem(n) } : undefined,
+          action: target ? { label: "Open", onClick: () => handleItem(n) } : undefined,
         });
       })
       .catch(() => {});
-    return () => { cancelled = true; };
+    return () => {
+      cancelled = true;
+    };
     // eslint-disable-next-line react-hooks/exhaustive-deps -- reacts to the polled count only
   }, [unread, isManager]);
 
@@ -101,20 +103,28 @@ export function NotificationBell() {
     setError(null);
     studentNotificationService
       .list({ page: 0, size: PREVIEW_SIZE })
-      .then(inbox => {
+      .then((inbox) => {
         if (cancelled) return;
         setItems(inbox.content);
         setUnreadCount(inbox.unreadCount);
       })
-      .catch(err => { if (!cancelled) setError(getApiErrorMessage(err, 'Could not load notifications.')); });
-    return () => { cancelled = true; };
+      .catch((err) => {
+        if (!cancelled) setError(getApiErrorMessage(err, "Could not load notifications."));
+      });
+    return () => {
+      cancelled = true;
+    };
   }, [open]);
 
   if (!isStudent && !isManager) return null;
 
   function handleItem(n: StudentNotification) {
     markNotificationRead(n);
-    setItems(prev => prev?.map(i => (i.notificationId === n.notificationId ? { ...i, isRead: true } : i)) ?? prev);
+    setItems(
+      (prev) =>
+        prev?.map((i) => (i.notificationId === n.notificationId ? { ...i, isRead: true } : i)) ??
+        prev,
+    );
     const target = notificationTarget(n);
     if (target) {
       setOpen(false);
@@ -127,31 +137,34 @@ export function NotificationBell() {
     try {
       const res = await studentNotificationService.markAllRead();
       setUnreadCount(res.unreadCount);
-      setItems(prev => prev?.map(i => ({ ...i, isRead: true })) ?? prev);
+      setItems((prev) => prev?.map((i) => ({ ...i, isRead: true })) ?? prev);
     } catch (err) {
-      toast.error(getApiErrorMessage(err, 'Could not mark notifications as read.'));
+      toast.error(getApiErrorMessage(err, "Could not mark notifications as read."));
     } finally {
       setMarkingAll(false);
     }
   }
 
   function onPanelKeyDown(e: React.KeyboardEvent) {
-    if (e.key !== 'ArrowDown' && e.key !== 'ArrowUp') return;
+    if (e.key !== "ArrowDown" && e.key !== "ArrowUp") return;
     e.preventDefault();
-    const rows = Array.from(panelRef.current?.querySelectorAll<HTMLButtonElement>('[data-menu-item]') ?? []);
-    const idx = rows.findIndex(el => el === document.activeElement);
-    const next = e.key === 'ArrowDown' ? (idx + 1) % rows.length : (idx - 1 + rows.length) % rows.length;
+    const rows = Array.from(
+      panelRef.current?.querySelectorAll<HTMLButtonElement>("[data-menu-item]") ?? [],
+    );
+    const idx = rows.findIndex((el) => el === document.activeElement);
+    const next =
+      e.key === "ArrowDown" ? (idx + 1) % rows.length : (idx - 1 + rows.length) % rows.length;
     rows[next]?.focus();
   }
 
-  const badge = unread > 99 ? '99+' : String(unread);
+  const badge = unread > 99 ? "99+" : String(unread);
 
   return (
     <div ref={rootRef} className="relative">
       <button
         type="button"
-        onClick={() => setOpen(o => !o)}
-        aria-label={unread > 0 ? `Notifications, ${unread} unread` : 'Notifications'}
+        onClick={() => setOpen((o) => !o)}
+        aria-label={unread > 0 ? `Notifications, ${unread} unread` : "Notifications"}
         aria-haspopup="dialog"
         aria-expanded={open}
         className="relative flex h-9 w-9 items-center justify-center rounded-[10px] cursor-pointer text-content-soft hover:bg-accent hover:text-foreground transition-colors duration-150 focus:outline-none focus:ring-2 focus:ring-primary/30"
@@ -208,20 +221,32 @@ export function NotificationBell() {
                 <p className="text-sm text-content-soft">You have no notifications yet.</p>
               </div>
             ) : (
-              items.map(n => <NotificationItem key={n.notificationId} notification={n} onClick={handleItem} compact />)
+              items.map((n) => (
+                <NotificationItem
+                  key={n.notificationId}
+                  notification={n}
+                  onClick={handleItem}
+                  compact
+                />
+              ))
             )}
           </div>
 
-          {isStudent && <div className="border-t border-line p-1">
-            <button
-              type="button"
-              data-menu-item
-              onClick={() => { setOpen(false); navigate(ROUTES.studentNotifications); }}
-              className="w-full rounded-[8px] px-3 py-2 text-center text-sm font-medium text-primary hover:bg-accent cursor-pointer transition-colors duration-150"
-            >
-              See all notifications
-            </button>
-          </div>}
+          {isStudent && (
+            <div className="border-t border-line p-1">
+              <button
+                type="button"
+                data-menu-item
+                onClick={() => {
+                  setOpen(false);
+                  navigate(ROUTES.studentNotifications);
+                }}
+                className="w-full rounded-[8px] px-3 py-2 text-center text-sm font-medium text-primary hover:bg-accent cursor-pointer transition-colors duration-150"
+              >
+                See all notifications
+              </button>
+            </div>
+          )}
         </div>
       )}
     </div>

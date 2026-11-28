@@ -1,7 +1,10 @@
-import React from 'react';
-import { Icon } from '@/assets/icons';
+import React from "react";
+import { Icon } from "@/assets/icons";
 
-export function SearchInput({ className = '', ...props }: React.InputHTMLAttributes<HTMLInputElement> & { className?: string }) {
+export function SearchInput({
+  className = "",
+  ...props
+}: React.InputHTMLAttributes<HTMLInputElement> & { className?: string }) {
   return (
     <div className={`relative flex items-center ${className}`}>
       <Icon.Search className="absolute left-3 w-4 h-4 text-content-subtle" />

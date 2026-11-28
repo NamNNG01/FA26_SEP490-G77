@@ -1,6 +1,6 @@
-import type { AnswerResponse, AttemptQuestion } from '@/services/studentAttempt.service';
-import type { DeckMode } from '@/services/studentDeck.service';
-import type { CardContent } from './flashcardUi';
+import type { AnswerResponse, AttemptQuestion } from "@/services/studentAttempt.service";
+import type { DeckMode } from "@/services/studentDeck.service";
+import type { CardContent } from "./flashcardUi";
 
 /** A card as Learn / Test need it: its content and its id. */
 export type QuizCard = CardContent & { cardId: number };
@@ -24,14 +24,14 @@ export interface QuizQuestion {
  * text ignores case and extra spaces.
  */
 export function answerKey(card: CardContent, mode: DeckMode): string {
-  if (mode === 'CODE_SNIPPET') return (card.codeBody?.trim() || card.backText?.trim()) ?? '';
-  if (mode === 'CODE_OUTPUT') return card.backText?.trim() ?? '';
-  return (card.backText ?? '').normalize('NFC').replace(/\s+/g, ' ').trim().toLowerCase();
+  if (mode === "CODE_SNIPPET") return (card.codeBody?.trim() || card.backText?.trim()) ?? "";
+  if (mode === "CODE_OUTPUT") return card.backText?.trim() ?? "";
+  return (card.backText ?? "").normalize("NFC").replace(/\s+/g, " ").trim().toLowerCase();
 }
 
 /** Cards that can be asked: a back with text (a FLASHCARD back that is only a picture is left out). */
 export function usableCards<T extends CardContent>(cards: T[], mode: DeckMode): T[] {
-  return cards.filter(c => answerKey(c, mode) !== '');
+  return cards.filter((c) => answerKey(c, mode) !== "");
 }
 
 export function shuffle<T>(items: readonly T[]): T[] {
@@ -47,13 +47,18 @@ export function shuffle<T>(items: readonly T[]): T[] {
  * The question for `card`: its back plus up to MAX_CHOICES - 1 backs of other cards of `pool`, none
  * equal to the right one or to each other, in random order. `questionId` keys the question on screen.
  */
-export function buildQuestion(card: QuizCard, pool: readonly QuizCard[], mode: DeckMode, questionId: number): QuizQuestion {
+export function buildQuestion(
+  card: QuizCard,
+  pool: readonly QuizCard[],
+  mode: DeckMode,
+  questionId: number,
+): QuizQuestion {
   const seen = new Set([answerKey(card, mode)]);
   const wrong: QuizCard[] = [];
   for (const other of shuffle(pool)) {
     if (wrong.length >= MAX_CHOICES - 1) break;
     const key = answerKey(other, mode);
-    if (other.cardId === card.cardId || key === '' || seen.has(key)) continue;
+    if (other.cardId === card.cardId || key === "" || seen.has(key)) continue;
     seen.add(key);
     wrong.push(other);
   }
@@ -64,9 +69,13 @@ export function buildQuestion(card: QuizCard, pool: readonly QuizCard[], mode: D
     question: {
       questionId,
       orderIndex: questionId,
-      questionType: 'SINGLE_CHOICE',
-      content: mode === 'CODE_OUTPUT' ? card.codeBody || card.frontText : card.frontText,
-      options: choices.map(c => ({ optionId: c.cardId, optionText: c.backText, isCorrectAnswer: null })),
+      questionType: "SINGLE_CHOICE",
+      content: mode === "CODE_OUTPUT" ? card.codeBody || card.frontText : card.frontText,
+      options: choices.map((c) => ({
+        optionId: c.cardId,
+        optionText: c.backText,
+        isCorrectAnswer: null,
+      })),
       matching: null,
       maxPoints: 1,
       answerSpace: null,

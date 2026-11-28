@@ -1,5 +1,5 @@
-import { useLayoutEffect, useRef } from 'react';
-import { useLocation } from 'react-router';
+import { useLayoutEffect, useRef } from "react";
+import { useLocation } from "react-router";
 
 /**
  * Scrolls a layout's scroll container back to the top when the route path changes.

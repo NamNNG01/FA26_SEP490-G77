@@ -1,8 +1,8 @@
-import React from 'react';
-import { Outlet } from 'react-router';
-import { PublicNavbar } from '@/features/landing/components/PublicNavbar';
-import { PublicFooter } from '@/features/landing/components/PublicFooter';
-import { useScrollTopOnRouteChange } from '@/hooks/useScrollTopOnRouteChange';
+import React from "react";
+import { Outlet } from "react-router";
+import { PublicNavbar } from "@/features/landing/components/PublicNavbar";
+import { PublicFooter } from "@/features/landing/components/PublicFooter";
+import { useScrollTopOnRouteChange } from "@/hooks/useScrollTopOnRouteChange";
 
 /**
  * PublicLayout

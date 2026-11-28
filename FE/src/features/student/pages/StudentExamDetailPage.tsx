@@ -22,16 +22,16 @@ export function StudentExamDetailPage() {
   const navigate = useNavigate();
   const validId = Number.isFinite(examId) && examId > 0;
   // Cached: opened again, the page shows the last reading at once and reads again behind it.
-  const query = useCachedQuery<{ exam: StudentExamDetail; activeAttempt: StudentActiveAttempt | null }>(
-    validId ? examDetailCacheKey(examId) : null,
-    async () => {
-      const [exam, activeAttempt] = await Promise.all([
-        studentLearningService.getExam(examId),
-        studentLearningService.getActiveAttempt(examId),
-      ]);
-      return { exam, activeAttempt };
-    },
-  );
+  const query = useCachedQuery<{
+    exam: StudentExamDetail;
+    activeAttempt: StudentActiveAttempt | null;
+  }>(validId ? examDetailCacheKey(examId) : null, async () => {
+    const [exam, activeAttempt] = await Promise.all([
+      studentLearningService.getExam(examId),
+      studentLearningService.getActiveAttempt(examId),
+    ]);
+    return { exam, activeAttempt };
+  });
   const exam = query.data?.exam ?? null;
   const activeAttempt = query.data?.activeAttempt ?? null;
   const { loading } = query;
@@ -71,10 +71,8 @@ export function StudentExamDetailPage() {
       </Container>
     );
 
-  const activeAttemptId =
-    activeAttempt?.attemptId ?? exam.actions.activeAttemptId;
-  const continueAttempt =
-    activeAttemptId !== null && activeAttemptId !== undefined;
+  const activeAttemptId = activeAttempt?.attemptId ?? exam.actions.activeAttemptId;
+  const continueAttempt = activeAttemptId !== null && activeAttemptId !== undefined;
   const canStart = exam.actions.canStart && !continueAttempt;
   const lastSubmitted = exam.myStats.lastSubmittedAt
     ? new Date(exam.myStats.lastSubmittedAt).toLocaleDateString(undefined, {
@@ -93,10 +91,7 @@ export function StudentExamDetailPage() {
   return (
     <>
       <section className="relative isolate overflow-hidden border-b border-line-soft bg-gradient-to-br from-primary-light via-surface-alt to-surface-alt">
-        <div
-          aria-hidden="true"
-          className="pointer-events-none absolute inset-0"
-        >
+        <div aria-hidden="true" className="pointer-events-none absolute inset-0">
           <div className="absolute inset-0 bg-[url('/images/exam_taking.png')] bg-cover bg-center opacity-50" />
           <div className="absolute inset-0 bg-gradient-to-r from-surface-alt via-surface-alt/75 to-transparent" />
           <div
@@ -110,9 +105,7 @@ export function StudentExamDetailPage() {
         <Container className="relative py-8 sm:py-11">
           <button
             type="button"
-            onClick={() =>
-              navigate(`/student/courses/${exam.courseId}?tab=exams`)
-            }
+            onClick={() => navigate(`/student/courses/${exam.courseId}?tab=exams`)}
             className="inline-flex items-center gap-2 text-sm font-medium text-content-soft hover:text-brand-ink"
           >
             <Icon.ChevronLeft className="h-4 w-4" />
@@ -139,16 +132,13 @@ export function StudentExamDetailPage() {
                     <span className="h-2 w-2 rounded-full bg-warning" />
                     Exam in progress
                   </span>
-                  <h2 className="mt-3 text-lg font-semibold text-content">
-                    Welcome back
-                  </h2>
+                  <h2 className="mt-3 text-lg font-semibold text-content">Welcome back</h2>
                   <p className="mt-1 text-sm leading-relaxed text-content-soft">
                     Your answers are saved. Continue where you left off.
                   </p>
                   {activeAttempt?.deadlineAt && (
                     <p className="mt-3 text-xs text-content-subtle">
-                      Time ends{" "}
-                      {new Date(activeAttempt.deadlineAt).toLocaleString()}
+                      Time ends {new Date(activeAttempt.deadlineAt).toLocaleString()}
                     </p>
                   )}
                   <button
@@ -162,12 +152,8 @@ export function StudentExamDetailPage() {
                 </>
               ) : canStart ? (
                 <>
-                  <p className="text-sm font-medium text-content-subtle">
-                    Ready when you are
-                  </p>
-                  <h2 className="mt-1 text-xl font-bold text-content">
-                    You’ve got this
-                  </h2>
+                  <p className="text-sm font-medium text-content-subtle">Ready when you are</p>
+                  <h2 className="mt-1 text-xl font-bold text-content">You’ve got this</h2>
                   <p className="mt-2 text-sm leading-relaxed text-content-soft">
                     Find a quiet moment and give this exam your full attention.
                   </p>
@@ -236,9 +222,7 @@ export function StudentExamDetailPage() {
           <div className="mx-auto mt-5 max-w-4xl rounded-2xl border border-line-soft bg-surface p-5 shadow-sm">
             <div className="flex flex-wrap items-center justify-between gap-3">
               <div>
-                <p className="text-sm font-semibold text-content">
-                  Your progress so far
-                </p>
+                <p className="text-sm font-semibold text-content">Your progress so far</p>
                 <p className="mt-1 text-sm text-content-soft">
                   {lastSubmitted
                     ? `Last completed ${lastSubmitted}`
@@ -262,15 +246,7 @@ export function StudentExamDetailPage() {
   );
 }
 
-function ExamFact({
-  icon,
-  value,
-  label,
-}: {
-  icon: React.ReactNode;
-  value: string;
-  label: string;
-}) {
+function ExamFact({ icon, value, label }: { icon: React.ReactNode; value: string; label: string }) {
   return (
     <div className="rounded-2xl border border-line-soft bg-surface p-5 shadow-sm">
       <span className="text-brand-ink">{icon}</span>
@@ -297,9 +273,7 @@ function ExamState({
         <Icon.ClipboardList className="h-7 w-7" />
       </span>
       <h2 className="mt-4 text-xl font-semibold text-content">{title}</h2>
-      <p className="mt-2 text-sm leading-relaxed text-content-soft">
-        {message}
-      </p>
+      <p className="mt-2 text-sm leading-relaxed text-content-soft">{message}</p>
       <div className="mt-5 flex justify-center gap-2">
         {onBack && (
           <button

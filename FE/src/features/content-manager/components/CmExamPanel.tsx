@@ -1,10 +1,10 @@
-import React, { useMemo } from 'react';
-import { Table, type TableColumn } from '@/components/ui/Table';
-import { Badge, Chip } from '@/components/ui/Badge';
-import { Button } from '@/components/ui/Button';
-import { DashboardError } from '@/components/common/DashboardState';
-import type { CmExamStat } from '@/services/cmDashboard.types';
-import { CM_MIN_ATTEMPTS, CM_PASS_THRESHOLD_PERCENT } from '@/services/cmDashboard.types';
+import React, { useMemo } from "react";
+import { Table, type TableColumn } from "@/components/ui/Table";
+import { Badge, Chip } from "@/components/ui/Badge";
+import { Button } from "@/components/ui/Button";
+import { DashboardError } from "@/components/common/DashboardState";
+import type { CmExamStat } from "@/services/cmDashboard.types";
+import { CM_MIN_ATTEMPTS, CM_PASS_THRESHOLD_PERCENT } from "@/services/cmDashboard.types";
 import {
   MetricCell,
   Panel,
@@ -14,14 +14,23 @@ import {
   fmtPct,
   fmtScore,
   passRateTone,
-} from './cmDashboardUi';
+} from "./cmDashboardUi";
 
 /**
  * "Exam performance". Rows arrive already sorted by the API (lowest pass
  * rate first, exams under 5 attempts last); filtering by course keeps that
  * order.
  */
-export function CmExamPanel({ exams, loading, error, onRetry, courseOptions, selectedCourseId, onSelectCourse, onViewAll }: {
+export function CmExamPanel({
+  exams,
+  loading,
+  error,
+  onRetry,
+  courseOptions,
+  selectedCourseId,
+  onSelectCourse,
+  onViewAll,
+}: {
   exams: CmExamStat[] | null;
   loading: boolean;
   error: string | null;
@@ -40,44 +49,68 @@ export function CmExamPanel({ exams, loading, error, onRetry, courseOptions, sel
 
   const columns: TableColumn[] = [
     {
-      key: 'title',
-      label: 'Exam name',
+      key: "title",
+      label: "Exam name",
       render: (row) => {
         const e = of(row);
         return (
           <div className="flex items-center gap-2 min-w-0">
-            <span className="truncate font-medium text-foreground" title={e.title}>{e.title}</span>
-            {e.status === 'ARCHIVED' && <Badge variant="default" className="flex-shrink-0">Archived</Badge>}
-            {e.status === 'DRAFT' && <Badge variant="warning" className="flex-shrink-0">Draft</Badge>}
+            <span className="truncate font-medium text-foreground" title={e.title}>
+              {e.title}
+            </span>
+            {e.status === "ARCHIVED" && (
+              <Badge variant="default" className="flex-shrink-0">
+                Archived
+              </Badge>
+            )}
+            {e.status === "DRAFT" && (
+              <Badge variant="warning" className="flex-shrink-0">
+                Draft
+              </Badge>
+            )}
           </div>
         );
       },
     },
     {
-      key: 'courseTitle',
-      label: 'Course',
-      render: (row) => <span className="block truncate max-w-[160px]" title={of(row).courseTitle}>{of(row).courseTitle}</span>,
+      key: "courseTitle",
+      label: "Course",
+      render: (row) => (
+        <span className="block truncate max-w-[160px]" title={of(row).courseTitle}>
+          {of(row).courseTitle}
+        </span>
+      ),
     },
-    { key: 'submittedAttempts', label: 'Submissions', render: (row) => of(row).submittedAttempts },
+    { key: "submittedAttempts", label: "Submissions", render: (row) => of(row).submittedAttempts },
     {
-      key: 'avgScore',
-      label: 'Avg score',
+      key: "avgScore",
+      label: "Avg score",
       overflowVisible: true,
-      render: (row) => <MetricCell text={fmtScore(of(row).avgScore)} attempts={of(row).submittedAttempts} />,
+      render: (row) => (
+        <MetricCell text={fmtScore(of(row).avgScore)} attempts={of(row).submittedAttempts} />
+      ),
     },
     {
-      key: 'passRate',
-      label: 'Pass rate',
+      key: "passRate",
+      label: "Pass rate",
       overflowVisible: true,
       render: (row) => {
         const e = of(row);
-        return <MetricCell text={fmtPct(e.passRate)} attempts={e.submittedAttempts} tone={passRateTone(e.passRate)} />;
+        return (
+          <MetricCell
+            text={fmtPct(e.passRate)}
+            attempts={e.submittedAttempts}
+            tone={passRateTone(e.passRate)}
+          />
+        );
       },
     },
     {
-      key: 'avgDurationMinutes',
-      label: 'Avg time',
-      render: (row) => <span className="whitespace-nowrap">{fmtMinutes(of(row).avgDurationMinutes)}</span>,
+      key: "avgDurationMinutes",
+      label: "Avg time",
+      render: (row) => (
+        <span className="whitespace-nowrap">{fmtMinutes(of(row).avgDurationMinutes)}</span>
+      ),
     },
   ];
 
@@ -108,15 +141,19 @@ export function CmExamPanel({ exams, loading, error, onRetry, courseOptions, sel
         <DashboardError bare message={error} onRetry={onRetry} />
       ) : rows.length === 0 ? (
         <PanelEmpty
-          message={selectedTitle ? `You have no exams in “${selectedTitle}”.` : 'You have not created any exams yet.'}
+          message={
+            selectedTitle
+              ? `You have no exams in “${selectedTitle}”.`
+              : "You have not created any exams yet."
+          }
         />
       ) : (
         <>
           <p className="px-5 pt-3 text-xs text-muted-foreground">
-            Pass rate = share of graded attempts scoring ≥ {CM_PASS_THRESHOLD_PERCENT}% of max points · lowest first ·
-            exams with fewer than {CM_MIN_ATTEMPTS} submissions listed last.
+            Pass rate = share of graded attempts scoring ≥ {CM_PASS_THRESHOLD_PERCENT}% of max
+            points · lowest first · exams with fewer than {CM_MIN_ATTEMPTS} submissions listed last.
           </p>
-          <Table columns={columns} data={rows} unit="exam" resetKey={selectedCourseId ?? 'all'} />
+          <Table columns={columns} data={rows} unit="exam" resetKey={selectedCourseId ?? "all"} />
         </>
       )}
     </Panel>

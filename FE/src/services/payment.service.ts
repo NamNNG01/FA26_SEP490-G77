@@ -1,6 +1,6 @@
-import { api } from './api';
-import type { ApiResponse } from '@/types/api';
-import type { PageResponse } from './course.service';
+import { api } from "./api";
+import type { ApiResponse } from "@/types/api";
+import type { PageResponse } from "./course.service";
 
 /**
  * PaymentService — PayOS payments of courses and plans (spec §17, StudentPaymentController).
@@ -18,8 +18,8 @@ import type { PageResponse } from './course.service';
  * already owned or a checkout still in progress.
  */
 
-export type PaymentType = 'COURSE' | 'SUBSCRIPTION';
-export type PaymentStatus = 'PENDING' | 'SUCCEEDED' | 'FAILED' | 'EXPIRED' | 'CANCELLED';
+export type PaymentType = "COURSE" | "SUBSCRIPTION";
+export type PaymentStatus = "PENDING" | "SUCCEEDED" | "FAILED" | "EXPIRED" | "CANCELLED";
 
 /** What is being bought — exactly one of courseId / planId goes to PY-01 and PY-05. */
 export type PaymentTarget = { courseId: number } | { planId: number };
@@ -71,28 +71,29 @@ export interface PaymentHistoryItem {
 
 export const PAYMENT_POLL_MS = 3000;
 
-export const isPaymentFinal = (status: PaymentStatus) => status !== 'PENDING';
+export const isPaymentFinal = (status: PaymentStatus) => status !== "PENDING";
 
 export function formatVnd(amount: number | null | undefined): string {
-  if (amount == null) return '—';
-  return `${Number(amount).toLocaleString('vi-VN')} ₫`;
+  if (amount == null) return "—";
+  return `${Number(amount).toLocaleString("vi-VN")} ₫`;
 }
 
 /** Formats the backend's minimum-order discount message with the same VND style as checkout totals. */
 export function formatDiscountErrorMessage(message: string): string {
   return message.replace(
     /(Order amount is below minimum discount requirement\s*\()([+-]?\d+(?:\.\d+)?)(\))/i,
-    (_match, before: string, amount: string, after: string) => `${before}${formatVnd(Number(amount))}${after}`,
+    (_match, before: string, amount: string, after: string) =>
+      `${before}${formatVnd(Number(amount))}${after}`,
   );
 }
 
 const targetQuery = (target: PaymentTarget) =>
-  'courseId' in target ? `courseId=${target.courseId}` : `planId=${target.planId}`;
+  "courseId" in target ? `courseId=${target.courseId}` : `planId=${target.planId}`;
 
 export const paymentService = {
   async checkout(target: PaymentTarget, discountCode?: string): Promise<PaymentCheckout> {
     const code = discountCode?.trim();
-    const res = await api.post<ApiResponse<PaymentCheckout>>('/student/payments/checkout', {
+    const res = await api.post<ApiResponse<PaymentCheckout>>("/student/payments/checkout", {
       ...target,
       ...(code ? { discountCode: code } : {}),
     });
@@ -100,16 +101,23 @@ export const paymentService = {
   },
 
   async cancel(orderCode: string): Promise<void> {
-    await api.request<ApiResponse<unknown>>({ method: 'delete', url: `/student/payments/${encodeURIComponent(orderCode)}` });
+    await api.request<ApiResponse<unknown>>({
+      method: "delete",
+      url: `/student/payments/${encodeURIComponent(orderCode)}`,
+    });
   },
 
   async getStatus(orderCode: string): Promise<PaymentState> {
-    const res = await api.get<ApiResponse<PaymentState>>(`/student/payments/${encodeURIComponent(orderCode)}/status`);
+    const res = await api.get<ApiResponse<PaymentState>>(
+      `/student/payments/${encodeURIComponent(orderCode)}/status`,
+    );
     return res.data;
   },
 
   async getLatestCourseCheckout(courseId: number): Promise<PaymentState | null> {
-    const res = await api.get<ApiResponse<PaymentState | null>>(`/student/payments/courses/${courseId}/latest`);
+    const res = await api.get<ApiResponse<PaymentState | null>>(
+      `/student/payments/courses/${courseId}/latest`,
+    );
     return res.data ?? null;
   },
 
@@ -121,7 +129,9 @@ export const paymentService = {
   },
 
   async getHistory(page = 0, size = 10): Promise<PageResponse<PaymentHistoryItem>> {
-    const res = await api.get<ApiResponse<PageResponse<PaymentHistoryItem>>>(`/student/payments/history?page=${page}&size=${size}`);
+    const res = await api.get<ApiResponse<PageResponse<PaymentHistoryItem>>>(
+      `/student/payments/history?page=${page}&size=${size}`,
+    );
     return res.data;
   },
 };
@@ -137,10 +147,14 @@ export interface PendingPayment {
   title: string;
 }
 
-const PENDING_KEY = 'prepexam.pendingPayment';
+const PENDING_KEY = "prepexam.pendingPayment";
 
 export function rememberPendingPayment(payment: PendingPayment) {
-  try { sessionStorage.setItem(PENDING_KEY, JSON.stringify(payment)); } catch { /* storage unavailable */ }
+  try {
+    sessionStorage.setItem(PENDING_KEY, JSON.stringify(payment));
+  } catch {
+    /* storage unavailable */
+  }
 }
 
 export function readPendingPayment(): PendingPayment | null {
@@ -153,5 +167,9 @@ export function readPendingPayment(): PendingPayment | null {
 }
 
 export function forgetPendingPayment() {
-  try { sessionStorage.removeItem(PENDING_KEY); } catch { /* storage unavailable */ }
+  try {
+    sessionStorage.removeItem(PENDING_KEY);
+  } catch {
+    /* storage unavailable */
+  }
 }

@@ -1,22 +1,29 @@
-import { useEffect, useRef, useState, type ReactNode } from 'react';
-import { useNavigate, useParams, useSearchParams } from 'react-router';
-import { Icon } from '@/assets/icons';
-import { ROUTES, coursePath, studentCoursePath } from '@/app/routes';
-import { Container } from '@/features/landing/components/Container';
-import { Breadcrumb } from '@/components/ui/Breadcrumb';
-import { Badge } from '@/components/ui/Badge';
-import { CTAButton } from '@/features/landing/components/CTAButton';
-import { useAuth } from '@/auth/authContext';
-import { Role } from '@/utils/permissions';
-import { getApiErrorMessage } from '@/utils/apiError';
-import { registerPathFor } from '@/hooks/useRequireAuth';
-import { studentCourseService, type CourseModuleSummary, type StudentCourseDetail } from '@/services/studentCourse.service';
-import { CourseCatalogCard } from '../components/CourseCatalogCard';
-import { CourseLogo, formatPrice } from '../components/CourseLogo';
-import { useCatalogCourses } from '../hooks/usePublicCatalog';
-import { Button } from '@/components/ui/Button';
-import { useToast } from '@/components/ui/ToastHost';
-import { PaymentCheckoutModal, type PaymentItem } from '@/features/payment/components/PaymentCheckoutModal';
+import { useEffect, useRef, useState, type ReactNode } from "react";
+import { useNavigate, useParams, useSearchParams } from "react-router";
+import { Icon } from "@/assets/icons";
+import { ROUTES, coursePath, studentCoursePath } from "@/app/routes";
+import { Container } from "@/features/landing/components/Container";
+import { Breadcrumb } from "@/components/ui/Breadcrumb";
+import { Badge } from "@/components/ui/Badge";
+import { CTAButton } from "@/features/landing/components/CTAButton";
+import { useAuth } from "@/auth/authContext";
+import { Role } from "@/utils/permissions";
+import { getApiErrorMessage } from "@/utils/apiError";
+import { registerPathFor } from "@/hooks/useRequireAuth";
+import {
+  studentCourseService,
+  type CourseModuleSummary,
+  type StudentCourseDetail,
+} from "@/services/studentCourse.service";
+import { CourseCatalogCard } from "../components/CourseCatalogCard";
+import { CourseLogo, formatPrice } from "../components/CourseLogo";
+import { useCatalogCourses } from "../hooks/usePublicCatalog";
+import { Button } from "@/components/ui/Button";
+import { useToast } from "@/components/ui/ToastHost";
+import {
+  PaymentCheckoutModal,
+  type PaymentItem,
+} from "@/features/payment/components/PaymentCheckoutModal";
 
 /**
  * PublicCourseDetailPage  (/courses/:courseId)
@@ -36,7 +43,7 @@ import { PaymentCheckoutModal, type PaymentItem } from '@/features/payment/compo
  * PrepExam is a preparation platform, so the page never promises a certificate.
  */
 export function PublicCourseDetailPage() {
-  const { courseId = '' } = useParams<{ courseId: string }>();
+  const { courseId = "" } = useParams<{ courseId: string }>();
   const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
   const { isAuthenticated, user } = useAuth();
@@ -65,7 +72,7 @@ export function PublicCourseDetailPage() {
         if (cancelled) return;
         const status = (err as { response?: { status?: number } })?.response?.status;
         if (status === 404 || status === 400) setNotFound(true);
-        else setError(getApiErrorMessage(err, 'Failed to load the course.'));
+        else setError(getApiErrorMessage(err, "Failed to load the course."));
       })
       .finally(() => {
         if (!cancelled) setLoading(false);
@@ -77,7 +84,7 @@ export function PublicCourseDetailPage() {
 
   // Back from sign-up / sign-in with `?checkout=1`: resume the purchase once, then drop the flag
   // so a refresh does not reopen the checkout.
-  const wantsCheckout = searchParams.get(CHECKOUT_PARAM) === '1';
+  const wantsCheckout = searchParams.get(CHECKOUT_PARAM) === "1";
   const checkoutResumed = useRef(false);
   useEffect(() => {
     if (!wantsCheckout || loading || !course || checkoutResumed.current) return;
@@ -103,9 +110,12 @@ export function PublicCourseDetailPage() {
           <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-[14px] bg-primary-light">
             <Icon.Search className="h-6 w-6 text-brand-ink" />
           </div>
-          <h1 className="mt-5 text-xl font-bold text-content">{error ? 'Could not load the course' : 'Course not found'}</h1>
+          <h1 className="mt-5 text-xl font-bold text-content">
+            {error ? "Could not load the course" : "Course not found"}
+          </h1>
           <p className="mt-2 text-base leading-relaxed text-content-soft">
-            {error ?? 'We couldn’t find that course. Browse the catalog to see everything available right now.'}
+            {error ??
+              "We couldn’t find that course. Browse the catalog to see everything available right now."}
           </p>
           <CTAButton label="Browse Courses" to={ROUTES.courses} className="mt-6" withArrow />
         </div>
@@ -116,7 +126,7 @@ export function PublicCourseDetailPage() {
   const price = formatPrice(course.price);
   const isFree = !Number(course.price ?? 0);
   const enrollment = course.enrollment;
-  const isEnrolled = Boolean(enrollment?.isEnrolled || enrollment?.status === 'COMPLETED');
+  const isEnrolled = Boolean(enrollment?.isEnrolled || enrollment?.status === "COMPLETED");
   const isStudent = user?.role === Role.STUDENT;
 
   /**
@@ -148,7 +158,7 @@ export function PublicCourseDetailPage() {
     try {
       const state = await studentCourseService.getEnrollment(course.courseId);
       // EN-03 only counts ACTIVE as enrolled; a COMPLETED course is still owned — never sell it again.
-      if (state.isEnrolled || state.status === 'COMPLETED') {
+      if (state.isEnrolled || state.status === "COMPLETED") {
         navigate(studentCoursePath(course.courseId));
         return;
       }
@@ -160,7 +170,7 @@ export function PublicCourseDetailPage() {
       }
       setBuying(coursePaymentItem(course));
     } catch (err) {
-      toast.error(getApiErrorMessage(err, 'Could not enroll in the course.'));
+      toast.error(getApiErrorMessage(err, "Could not enroll in the course."));
     } finally {
       setEnrolling(false);
     }
@@ -175,25 +185,41 @@ export function PublicCourseDetailPage() {
 
   const stats = [
     ...(course.stats.questionCount != null
-      ? [{ label: plural(course.stats.questionCount, 'question'), icon: <Icon.HelpCircle className="h-3.5 w-3.5" /> }]
+      ? [
+          {
+            label: plural(course.stats.questionCount, "question"),
+            icon: <Icon.HelpCircle className="h-3.5 w-3.5" />,
+          },
+        ]
       : []),
-    { label: plural(course.stats.publishedExamCount, 'mock exam'), icon: <Icon.ClipboardList className="h-3.5 w-3.5" /> },
-    { label: plural(course.stats.deckCount, 'flashcard deck'), icon: <Icon.Layers className="h-3.5 w-3.5" /> },
-    { label: plural(modules.length, 'module'), icon: <Icon.Folder className="h-3.5 w-3.5" /> },
+    {
+      label: plural(course.stats.publishedExamCount, "mock exam"),
+      icon: <Icon.ClipboardList className="h-3.5 w-3.5" />,
+    },
+    {
+      label: plural(course.stats.deckCount, "flashcard deck"),
+      icon: <Icon.Layers className="h-3.5 w-3.5" />,
+    },
+    { label: plural(modules.length, "module"), icon: <Icon.Folder className="h-3.5 w-3.5" /> },
   ];
 
   const header = (
     <>
       <Breadcrumb
         items={[
-          { label: 'Home', onClick: () => navigate(ROUTES.landing) },
-          { label: 'Courses', onClick: () => navigate(ROUTES.courses) },
+          { label: "Home", onClick: () => navigate(ROUTES.landing) },
+          { label: "Courses", onClick: () => navigate(ROUTES.courses) },
           { label: course.title },
         ]}
       />
 
       <div className="mt-4 flex flex-col gap-5 sm:flex-row sm:items-start">
-        <CourseLogo title={course.title} thumbnailUrl={course.thumbnailUrl} size={56} className="rounded-[14px]" />
+        <CourseLogo
+          title={course.title}
+          thumbnailUrl={course.thumbnailUrl}
+          size={56}
+          className="rounded-[14px]"
+        />
 
         <div className="min-w-0 flex-1">
           <div className="flex flex-wrap items-center gap-2.5">
@@ -203,7 +229,7 @@ export function PublicCourseDetailPage() {
             {enrollment?.isEnrolled && <Badge variant="success">Enrolled</Badge>}
           </div>
           <p className="mt-1.5 text-base text-content-soft">
-            {course.category?.name ?? 'Uncategorized'}
+            {course.category?.name ?? "Uncategorized"}
             {course.manager && <> · by {course.manager.fullName}</>}
           </p>
           <ul className="mt-2 flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-content-subtle">
@@ -227,85 +253,96 @@ export function PublicCourseDetailPage() {
   const body = (
     <>
       <div className="grid grid-cols-1 gap-[clamp(1.5rem,3vw,2.5rem)] lg:grid-cols-[minmax(0,7fr)_minmax(0,3fr)]">
-          {/* Main column — 70 % */}
-          <section className="min-w-0">
-            <h2 className="text-lg font-bold text-content">Course modules</h2>
-            {modules.length > 0 ? (
-              <ol className="mt-3 card divide-y divide-line overflow-hidden">
-                {modules.map((m, i) => (
-                  <ModuleRow key={m.moduleId} module={m} index={i + 1} />
-                ))}
-              </ol>
+        {/* Main column — 70 % */}
+        <section className="min-w-0">
+          <h2 className="text-lg font-bold text-content">Course modules</h2>
+          {modules.length > 0 ? (
+            <ol className="mt-3 card divide-y divide-line overflow-hidden">
+              {modules.map((m, i) => (
+                <ModuleRow key={m.moduleId} module={m} index={i + 1} />
+              ))}
+            </ol>
+          ) : (
+            <p className="mt-3 text-base text-content-soft">Modules are being prepared.</p>
+          )}
+        </section>
+
+        {/* Action sidebar — 30 % */}
+        <aside className="min-w-0">
+          <div className="card sticky top-6 p-5">
+            {isEnrolled ? (
+              <p className="inline-flex items-center gap-1.5 text-base font-semibold text-success">
+                <Icon.CheckCircle className="h-5 w-5" />
+                Enrolled
+              </p>
             ) : (
-              <p className="mt-3 text-base text-content-soft">Modules are being prepared.</p>
+              <p
+                className={`text-xl font-bold ${price === "Free" ? "text-success" : "text-brand-ink"}`}
+              >
+                {price}
+              </p>
             )}
-          </section>
 
-          {/* Action sidebar — 30 % */}
-          <aside className="min-w-0">
-            <div className="card sticky top-6 p-5">
-              {isEnrolled ? (
-                <p className="inline-flex items-center gap-1.5 text-base font-semibold text-success">
-                  <Icon.CheckCircle className="h-5 w-5" />
-                  Enrolled
-                </p>
+            <div className="mt-4 space-y-2">
+              {!isAuthenticated ? (
+                <CTAButton
+                  label={isFree ? "Enroll for free" : "Buy course"}
+                  onClick={() =>
+                    navigate(registerPathFor(`${coursePath(course.courseId)}?${CHECKOUT_PARAM}=1`))
+                  }
+                  className="w-full"
+                  withArrow
+                />
+              ) : enrollment?.isEnrolled && isStudent ? (
+                <CTAButton
+                  label="Go to course"
+                  onClick={() => navigate(studentCoursePath(course.courseId))}
+                  className="w-full"
+                  withArrow
+                />
+              ) : isStudent && isFree ? (
+                <Button size="lg" className="w-full" loading={enrolling} onClick={handleJoin}>
+                  Enroll for free
+                </Button>
+              ) : isStudent ? (
+                <Button size="lg" className="w-full" loading={enrolling} onClick={handleJoin}>
+                  Buy course
+                </Button>
               ) : (
-                <p className={`text-xl font-bold ${price === 'Free' ? 'text-success' : 'text-brand-ink'}`}>{price}</p>
+                <button
+                  type="button"
+                  disabled
+                  className="inline-flex h-11 w-full cursor-not-allowed items-center justify-center rounded-[10px] bg-surface-muted px-4 text-sm font-semibold text-content-subtle"
+                >
+                  Enrollment is for students
+                </button>
               )}
-
-              <div className="mt-4 space-y-2">
-                {!isAuthenticated ? (
-                  <CTAButton
-                    label={isFree ? 'Enroll for free' : 'Buy course'}
-                    onClick={() => navigate(registerPathFor(`${coursePath(course.courseId)}?${CHECKOUT_PARAM}=1`))}
-                    className="w-full"
-                    withArrow
-                  />
-                ) : enrollment?.isEnrolled && isStudent ? (
-                  <CTAButton
-                    label="Go to course"
-                    onClick={() => navigate(studentCoursePath(course.courseId))}
-                    className="w-full"
-                    withArrow
-                  />
-                ) : isStudent && isFree ? (
-                  <Button size="lg" className="w-full" loading={enrolling} onClick={handleJoin}>
-                    Enroll for free
-                  </Button>
-                ) : isStudent ? (
-                  <Button size="lg" className="w-full" loading={enrolling} onClick={handleJoin}>
-                    Buy course
-                  </Button>
-                ) : (
-                  <button
-                    type="button"
-                    disabled
-                    className="inline-flex h-11 w-full cursor-not-allowed items-center justify-center rounded-[10px] bg-surface-muted px-4 text-sm font-semibold text-content-subtle"
-                  >
-                    Enrollment is for students
-                  </button>
-                )}
-              </div>
-
-              <ul className="mt-4 space-y-2 border-t border-line-soft pt-4">
-                {!isAuthenticated && (
-                  <li className="flex items-start gap-2 text-xs leading-relaxed text-content-soft">
-                    <Icon.Lock className="mt-0.5 h-3.5 w-3.5 flex-shrink-0 text-content-subtle" />
-                    Create a free account (or sign in) first — you’ll come straight back here to finish enrolling.
-                  </li>
-                )}
-                <li className="flex items-start gap-2 text-xs leading-relaxed text-content-soft">
-                  <Icon.Info className="mt-0.5 h-3.5 w-3.5 flex-shrink-0 text-content-subtle" />
-                  PrepExam is a preparation platform. It does not issue certificates — you take the official exam with
-                  the exam provider.
-                </li>
-              </ul>
             </div>
-          </aside>
+
+            <ul className="mt-4 space-y-2 border-t border-line-soft pt-4">
+              {!isAuthenticated && (
+                <li className="flex items-start gap-2 text-xs leading-relaxed text-content-soft">
+                  <Icon.Lock className="mt-0.5 h-3.5 w-3.5 flex-shrink-0 text-content-subtle" />
+                  Create a free account (or sign in) first — you’ll come straight back here to
+                  finish enrolling.
+                </li>
+              )}
+              <li className="flex items-start gap-2 text-xs leading-relaxed text-content-soft">
+                <Icon.Info className="mt-0.5 h-3.5 w-3.5 flex-shrink-0 text-content-subtle" />
+                PrepExam is a preparation platform. It does not issue certificates — you take the
+                official exam with the exam provider.
+              </li>
+            </ul>
+          </div>
+        </aside>
       </div>
 
       {course.category?.categoryId != null && (
-        <RelatedCourses categoryId={course.category.categoryId} categoryName={course.category.name} excludeId={course.courseId} />
+        <RelatedCourses
+          categoryId={course.category.categoryId}
+          categoryName={course.category.name}
+          excludeId={course.courseId}
+        />
       )}
     </>
   );
@@ -314,7 +351,9 @@ export function PublicCourseDetailPage() {
     <>
       {inDashboard ? (
         <div>
-          <div className="border-b border-line-soft pb-[clamp(1.25rem,2.5vw,1.75rem)]">{header}</div>
+          <div className="border-b border-line-soft pb-[clamp(1.25rem,2.5vw,1.75rem)]">
+            {header}
+          </div>
           <div className="pt-[clamp(1.25rem,2.5vw,1.75rem)]">{body}</div>
         </div>
       ) : (
@@ -332,7 +371,7 @@ export function PublicCourseDetailPage() {
 }
 
 /** Query flag of a purchase started as a guest: `/courses/12?checkout=1`. */
-const CHECKOUT_PARAM = 'checkout';
+const CHECKOUT_PARAM = "checkout";
 
 /** A module with at least one question, exam, or flashcard deck. Without the counts (an older BE) it is kept. */
 function hasContent(m: CourseModuleSummary): boolean {
@@ -341,7 +380,7 @@ function hasContent(m: CourseModuleSummary): boolean {
 }
 
 function plural(count: number, noun: string): string {
-  return `${count} ${noun}${count === 1 ? '' : 's'}`;
+  return `${count} ${noun}${count === 1 ? "" : "s"}`;
 }
 
 /** One module — expands to its description and its question / exam / flashcard deck counts. */
@@ -349,9 +388,18 @@ function ModuleRow({ module, index }: { module: CourseModuleSummary; index: numb
   const [open, setOpen] = useState(false);
   const panelId = `module-${module.moduleId}`;
   const counts = [
-    module.questionCount != null && { icon: <Icon.HelpCircle className="h-4 w-4" />, label: plural(module.questionCount, 'question') },
-    module.examCount != null && { icon: <Icon.ClipboardList className="h-4 w-4" />, label: plural(module.examCount, 'mock exam') },
-    module.deckCount != null && { icon: <Icon.Layers className="h-4 w-4" />, label: plural(module.deckCount, 'flashcard deck') },
+    module.questionCount != null && {
+      icon: <Icon.HelpCircle className="h-4 w-4" />,
+      label: plural(module.questionCount, "question"),
+    },
+    module.examCount != null && {
+      icon: <Icon.ClipboardList className="h-4 w-4" />,
+      label: plural(module.examCount, "mock exam"),
+    },
+    module.deckCount != null && {
+      icon: <Icon.Layers className="h-4 w-4" />,
+      label: plural(module.deckCount, "flashcard deck"),
+    },
   ].filter(Boolean) as { icon: ReactNode; label: string }[];
 
   return (
@@ -366,18 +414,22 @@ function ModuleRow({ module, index }: { module: CourseModuleSummary; index: numb
         <span className="flex h-7 w-7 flex-shrink-0 items-center justify-center rounded-full bg-surface-muted text-xs font-semibold text-content-secondary">
           {index}
         </span>
-        <span className="min-w-0 flex-1 text-base font-medium text-content-secondary">{module.title}</span>
+        <span className="min-w-0 flex-1 text-base font-medium text-content-secondary">
+          {module.title}
+        </span>
         {module.questionCount != null && (
           <span className="flex-shrink-0 text-xs text-content-subtle">
-            {plural(module.questionCount, 'question')}
+            {plural(module.questionCount, "question")}
           </span>
         )}
-        <Icon.ChevronDown className={`h-4 w-4 flex-shrink-0 text-content-subtle transition-transform ${open ? 'rotate-180' : ''}`} />
+        <Icon.ChevronDown
+          className={`h-4 w-4 flex-shrink-0 text-content-subtle transition-transform ${open ? "rotate-180" : ""}`}
+        />
       </button>
       {open && (
         <div id={panelId} className="space-y-3 px-4 pb-4 pl-14">
           <p className="text-sm leading-relaxed whitespace-pre-line text-content-soft">
-            {module.description?.trim() || 'No description for this module yet.'}
+            {module.description?.trim() || "No description for this module yet."}
           </p>
           {counts.length > 0 && (
             <ul className="flex flex-wrap gap-x-5 gap-y-1 text-sm text-content-secondary">
@@ -398,7 +450,7 @@ function ModuleRow({ module, index }: { module: CourseModuleSummary; index: numb
 function coursePaymentItem(course: StudentCourseDetail): PaymentItem {
   return {
     target: { courseId: course.courseId },
-    type: 'COURSE',
+    type: "COURSE",
     refId: course.courseId,
     title: course.title,
     subtitle: course.category?.name,
@@ -407,7 +459,15 @@ function coursePaymentItem(course: StudentCourseDetail): PaymentItem {
 }
 
 /** Up to three other courses of the same category (CL-01). */
-function RelatedCourses({ categoryId, categoryName, excludeId }: { categoryId: number; categoryName: string; excludeId: number }) {
+function RelatedCourses({
+  categoryId,
+  categoryName,
+  excludeId,
+}: {
+  categoryId: number;
+  categoryName: string;
+  excludeId: number;
+}) {
   const { data } = useCatalogCourses({ categoryId, size: 4 });
   const related = (data?.content ?? []).filter((c) => c.courseId !== excludeId).slice(0, 3);
   if (related.length === 0) return null;

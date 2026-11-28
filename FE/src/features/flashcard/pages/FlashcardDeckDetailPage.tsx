@@ -1,16 +1,16 @@
-import { useEffect, useState } from 'react';
-import { useNavigate, useParams } from 'react-router';
-import { Button } from '@/components/ui/Button';
-import { Breadcrumb } from '@/components/ui/Breadcrumb';
-import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
-import { Alert } from '@/components/ui/Alert';
-import { useToast } from '@/components/ui/ToastHost';
-import { UnsavedChangesModal } from '@/components/common/UnsavedChangesModal';
-import { useUnsavedChangesGuard } from '@/hooks/useUnsavedChangesGuard';
-import { Icon } from '@/assets/icons';
-import { FlashcardImportModal } from '@/features/student/components/flashcards/FlashcardImportModal';
-import { ROUTES } from '@/app/routes';
-import { deckService, type Deck, type DeckUpdateRequest } from '@/services/deck.service';
+import { useEffect, useState } from "react";
+import { useNavigate, useParams } from "react-router";
+import { Button } from "@/components/ui/Button";
+import { Breadcrumb } from "@/components/ui/Breadcrumb";
+import { ConfirmDialog } from "@/components/ui/ConfirmDialog";
+import { Alert } from "@/components/ui/Alert";
+import { useToast } from "@/components/ui/ToastHost";
+import { UnsavedChangesModal } from "@/components/common/UnsavedChangesModal";
+import { useUnsavedChangesGuard } from "@/hooks/useUnsavedChangesGuard";
+import { Icon } from "@/assets/icons";
+import { FlashcardImportModal } from "@/features/student/components/flashcards/FlashcardImportModal";
+import { ROUTES } from "@/app/routes";
+import { deckService, type Deck, type DeckUpdateRequest } from "@/services/deck.service";
 import {
   CardEditorPanel,
   CardList,
@@ -26,23 +26,25 @@ import {
   NO_MODULE,
   type DeckInfo,
   type DeckInfoErrors,
-} from '../components/DeckEditor';
+} from "../components/DeckEditor";
 
 const toInfo = (d: Deck): DeckInfo => ({
   title: d.title,
   courseId: d.courseId == null ? NO_COURSE : String(d.courseId),
   moduleId: d.moduleId == null ? NO_MODULE : String(d.moduleId),
   isPublic: d.isPublic,
-  description: d.description ?? '',
+  description: d.description ?? "",
 });
 
 /** Only the fields that changed — F-04 leaves omitted fields untouched. */
 function diff(saved: DeckInfo, draft: DeckInfo): DeckUpdateRequest {
   const patch: DeckUpdateRequest = {};
   if (draft.title.trim() !== saved.title) patch.title = draft.title.trim();
-  if (draft.courseId !== saved.courseId && draft.courseId !== NO_COURSE) patch.courseId = Number(draft.courseId);
+  if (draft.courseId !== saved.courseId && draft.courseId !== NO_COURSE)
+    patch.courseId = Number(draft.courseId);
   // 0 = no module. F-04 clears the module on a course change, so a module picked with the new course is sent too.
-  if (draft.moduleId !== saved.moduleId) patch.moduleId = draft.moduleId === NO_MODULE ? 0 : Number(draft.moduleId);
+  if (draft.moduleId !== saved.moduleId)
+    patch.moduleId = draft.moduleId === NO_MODULE ? 0 : Number(draft.moduleId);
   if (draft.isPublic !== saved.isPublic) patch.isPublic = draft.isPublic;
   if (draft.description.trim() !== saved.description) patch.description = draft.description.trim();
   return patch;
@@ -56,7 +58,7 @@ function diff(saved: DeckInfo, draft: DeckInfo): DeckUpdateRequest {
  * (F-05). Card edits use the manager card endpoints (F-06..F-08).
  */
 export function FlashcardDeckDetailPage() {
-  const { deckId = '' } = useParams<{ deckId: string }>();
+  const { deckId = "" } = useParams<{ deckId: string }>();
   const navigate = useNavigate();
   const toast = useToast();
   const { courses, loading: coursesLoading } = useManagedCourses();
@@ -77,11 +79,26 @@ export function FlashcardDeckDetailPage() {
     let cancelled = false;
     setLoading(true);
     setLoadError(null);
-    deckService.getDeck(deckId)
-      .then(d => { if (!cancelled) { setDeck(d); setDraft(toInfo(d)); } })
-      .catch(err => { if (!cancelled) setLoadError(errorMessage(err, 'This flashcard deck does not exist or has been removed.')); })
-      .finally(() => { if (!cancelled) setLoading(false); });
-    return () => { cancelled = true; };
+    deckService
+      .getDeck(deckId)
+      .then((d) => {
+        if (!cancelled) {
+          setDeck(d);
+          setDraft(toInfo(d));
+        }
+      })
+      .catch((err) => {
+        if (!cancelled)
+          setLoadError(
+            errorMessage(err, "This flashcard deck does not exist or has been removed."),
+          );
+      })
+      .finally(() => {
+        if (!cancelled) setLoading(false);
+      });
+    return () => {
+      cancelled = true;
+    };
   }, [deckId]);
 
   const saved = deck ? toInfo(deck) : null;
@@ -91,14 +108,28 @@ export function FlashcardDeckDetailPage() {
   // so the list, order and card count always match the server.
   const cards = (deck?.cards ?? []).map(toEditableCard);
   const refreshDeck = async () => setDeck(await deckService.getDeck(deckId));
-  const editor = useCardEditor(cards, {
-    add: async (frontText, backText, images) => { await deckService.createCard(deckId, { frontText, backText, ...images }); await refreshDeck(); },
-    update: async (card, frontText, backText, images) => {
-      await deckService.updateCard(card.id, { frontText: frontText || null, backText: backText || null, ...images });
-      await refreshDeck();
+  const editor = useCardEditor(
+    cards,
+    {
+      add: async (frontText, backText, images) => {
+        await deckService.createCard(deckId, { frontText, backText, ...images });
+        await refreshDeck();
+      },
+      update: async (card, frontText, backText, images) => {
+        await deckService.updateCard(card.id, {
+          frontText: frontText || null,
+          backText: backText || null,
+          ...images,
+        });
+        await refreshDeck();
+      },
+      remove: async (card) => {
+        await deckService.deleteCard(card.id);
+        await refreshDeck();
+      },
     },
-    remove: async card => { await deckService.deleteCard(card.id); await refreshDeck(); },
-  }, { confirmRemove: true });
+    { confirmRemove: true },
+  );
 
   const { blocker, leave } = useUnsavedChangesGuard(dirty || editor.hasInput);
 
@@ -121,8 +152,12 @@ export function FlashcardDeckDetailPage() {
         <div className="card mx-auto max-w-md px-6 py-14 text-center">
           <Icon.Layers className="w-10 h-10 mx-auto text-content-faint" />
           <h2 className="mt-4 text-xl font-bold text-content">Deck not available</h2>
-          <p className="mt-1 text-sm text-content-soft">{loadError ?? 'This flashcard deck does not exist or has been removed.'}</p>
-          <Button className="mt-6" onClick={backToList}>Back to Flashcards</Button>
+          <p className="mt-1 text-sm text-content-soft">
+            {loadError ?? "This flashcard deck does not exist or has been removed."}
+          </p>
+          <Button className="mt-6" onClick={backToList}>
+            Back to Flashcards
+          </Button>
         </div>
       </div>
     );
@@ -135,10 +170,10 @@ export function FlashcardDeckDetailPage() {
   };
 
   const updateDraft = (patch: Partial<DeckInfo>) => {
-    setDraft(prev => (prev ? { ...prev, ...patch } : prev));
-    setInfoErrors(prev => {
+    setDraft((prev) => (prev ? { ...prev, ...patch } : prev));
+    setInfoErrors((prev) => {
       const next = { ...prev };
-      (Object.keys(patch) as (keyof DeckInfoErrors)[]).forEach(k => delete next[k]);
+      (Object.keys(patch) as (keyof DeckInfoErrors)[]).forEach((k) => delete next[k]);
       return next;
     });
   };
@@ -150,8 +185,10 @@ export function FlashcardDeckDetailPage() {
     if (Object.keys(errors).length > 0) return;
     setSaving(true);
     setSaveError(null);
-    const renamedOrMoved = draft.title.trim().toLowerCase() !== saved.title.trim().toLowerCase() || draft.courseId !== saved.courseId;
-    if (renamedOrMoved && await hasDuplicateTitle(draft.title, draft.courseId, deck.deckId)) {
+    const renamedOrMoved =
+      draft.title.trim().toLowerCase() !== saved.title.trim().toLowerCase() ||
+      draft.courseId !== saved.courseId;
+    if (renamedOrMoved && (await hasDuplicateTitle(draft.title, draft.courseId, deck.deckId))) {
       setInfoErrors({ title: DUPLICATE_TITLE_MESSAGE });
       setSaving(false);
       return;
@@ -162,7 +199,7 @@ export function FlashcardDeckDetailPage() {
       setDraft(toInfo(updated));
       toast.success(`"${updated.title}" saved.`);
     } catch (err) {
-      setSaveError(errorMessage(err, 'Could not save the deck. Please try again.'));
+      setSaveError(errorMessage(err, "Could not save the deck. Please try again."));
     } finally {
       setSaving(false);
     }
@@ -175,22 +212,25 @@ export function FlashcardDeckDetailPage() {
       toast.success(`"${deck.title}" deleted.`);
       leave(backToList);
     } catch (err) {
-      toast.error(errorMessage(err, 'Could not delete the deck.'));
+      toast.error(errorMessage(err, "Could not delete the deck."));
       setDeleting(false);
       setConfirmDelete(false);
     }
   };
 
   // The deck's current course may not be in the caller's list (e.g. assigned course left out by paging); keep it selectable.
-  const courseOptions = courses.map(c => ({ id: String(c.courseId), title: c.title }));
-  if (deck.courseId != null && !courseOptions.some(c => c.id === String(deck.courseId))) {
-    courseOptions.unshift({ id: String(deck.courseId), title: deck.courseName ?? `Course #${deck.courseId}` });
+  const courseOptions = courses.map((c) => ({ id: String(c.courseId), title: c.title }));
+  if (deck.courseId != null && !courseOptions.some((c) => c.id === String(deck.courseId))) {
+    courseOptions.unshift({
+      id: String(deck.courseId),
+      title: deck.courseName ?? `Course #${deck.courseId}`,
+    });
   }
 
   return (
     <div className="p-8 space-y-5">
       <div className="space-y-2">
-        <Breadcrumb items={[{ label: 'Flashcards', onClick: backToList }, { label: deck.title }]} />
+        <Breadcrumb items={[{ label: "Flashcards", onClick: backToList }, { label: deck.title }]} />
         <div className="min-w-0">
           <h2 className="text-xl font-bold text-content">Flashcard Detail</h2>
           <p className="text-sm text-content-soft mt-0.5">
@@ -204,26 +244,57 @@ export function FlashcardDeckDetailPage() {
         <div className="space-y-5 min-w-0">
           <section className="card p-5 space-y-4" aria-labelledby="deck-overview-title">
             <div className="flex flex-wrap items-center justify-between gap-3">
-              <h3 id="deck-overview-title" className="text-lg font-semibold text-content">Deck Information</h3>
+              <h3 id="deck-overview-title" className="text-lg font-semibold text-content">
+                Deck Information
+              </h3>
               <div className="flex items-center gap-2">
-                <Button variant="outline" size="sm" icon={<Icon.Upload className="h-4 w-4" />} onClick={() => setImportOpen(true)} disabled={dirty || editor.hasInput || saving}>Import file</Button>
-                {dirty && <Button variant="ghost" size="sm" onClick={discardChanges} disabled={saving}>Discard changes</Button>}
+                <Button
+                  variant="outline"
+                  size="sm"
+                  icon={<Icon.Upload className="h-4 w-4" />}
+                  onClick={() => setImportOpen(true)}
+                  disabled={dirty || editor.hasInput || saving}
+                >
+                  Import file
+                </Button>
+                {dirty && (
+                  <Button variant="ghost" size="sm" onClick={discardChanges} disabled={saving}>
+                    Discard changes
+                  </Button>
+                )}
               </div>
             </div>
             {saveError && <Alert type="error" message={saveError} />}
             {/* Always editable — Save sends only the changed fields. */}
-            <DeckInfoFields idPrefix="deck" value={draft ?? saved} errors={infoErrors} onChange={updateDraft}
-              courses={courseOptions} coursesLoading={coursesLoading}
+            <DeckInfoFields
+              idPrefix="deck"
+              value={draft ?? saved}
+              errors={infoErrors}
+              onChange={updateDraft}
+              courses={courseOptions}
+              coursesLoading={coursesLoading}
               // A deck can move between courses but never back to "no course".
-              allowNoCourse={deck.courseId == null} />
+              allowNoCourse={deck.courseId == null}
+            />
             <div className="flex flex-wrap items-center justify-end gap-2 border-t border-line-soft pt-4">
-              <Button variant="danger" icon={<Icon.Trash className="w-4 h-4" />} onClick={() => setConfirmDelete(true)} disabled={saving}>
+              <Button
+                variant="danger"
+                icon={<Icon.Trash className="w-4 h-4" />}
+                onClick={() => setConfirmDelete(true)}
+                disabled={saving}
+              >
                 Delete
               </Button>
               {/* Back to the list — unsaved changes are confirmed first (UnsavedChangesModal). */}
-              <Button variant="outline" onClick={backToList} disabled={saving}>Cancel</Button>
-              <Button icon={<Icon.Check className="w-4 h-4" />} onClick={handleSave} disabled={!dirty || saving}>
-                {saving ? 'Saving…' : 'Save'}
+              <Button variant="outline" onClick={backToList} disabled={saving}>
+                Cancel
+              </Button>
+              <Button
+                icon={<Icon.Check className="w-4 h-4" />}
+                onClick={handleSave}
+                disabled={!dirty || saving}
+              >
+                {saving ? "Saving…" : "Save"}
               </Button>
             </div>
           </section>
@@ -231,8 +302,12 @@ export function FlashcardDeckDetailPage() {
           <CardList cards={cards} editor={editor} />
         </div>
 
-        <CardEditorPanel editor={editor} idPrefix="card" className="lg:sticky lg:top-4"
-          footnote="Each card is saved as soon as you add, update or delete it." />
+        <CardEditorPanel
+          editor={editor}
+          idPrefix="card"
+          className="lg:sticky lg:top-4"
+          footnote="Each card is saved as soon as you add, update or delete it."
+        />
       </div>
 
       <ConfirmDialog
@@ -242,16 +317,31 @@ export function FlashcardDeckDetailPage() {
         loading={deleting}
         tone="danger"
         title="Delete deck?"
-        description={<>
-          <span className="font-semibold text-content">"{deck.title}"</span> and its {deck.cardCount} card{deck.cardCount === 1 ? '' : 's'} will
-          be permanently deleted, together with every learner's progress on them. This cannot be undone.
-        </>}
+        description={
+          <>
+            <span className="font-semibold text-content">"{deck.title}"</span> and its{" "}
+            {deck.cardCount} card{deck.cardCount === 1 ? "" : "s"} will be permanently deleted,
+            together with every learner's progress on them. This cannot be undone.
+          </>
+        }
         confirmLabel="Delete"
       />
 
-      {importOpen && <FlashcardImportModal deckId={deck.deckId} deckTitle={deck.title} onClose={() => setImportOpen(false)} onImported={() => { void refreshDeck(); }} />}
+      {importOpen && (
+        <FlashcardImportModal
+          deckId={deck.deckId}
+          deckTitle={deck.title}
+          onClose={() => setImportOpen(false)}
+          onImported={() => {
+            void refreshDeck();
+          }}
+        />
+      )}
 
-      <UnsavedChangesModal blocker={blocker} message="You have unsaved changes to this deck. If you leave now, they will be lost." />
+      <UnsavedChangesModal
+        blocker={blocker}
+        message="You have unsaved changes to this deck. If you leave now, they will be lost."
+      />
     </div>
   );
 }

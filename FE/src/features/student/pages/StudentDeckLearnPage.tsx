@@ -1,15 +1,15 @@
-import React, { useCallback, useEffect, useRef, useState } from 'react';
-import { useNavigate, useParams } from 'react-router';
-import { Button } from '@/components/ui/Button';
-import { Spinner } from '@/components/ui/Spinner';
-import { useToast } from '@/components/ui/ToastHost';
-import { Icon } from '@/assets/icons';
-import { getApiErrorMessage } from '@/utils/apiError';
-import { studentDeckPath, studentDeckTestPath } from '@/app/routes';
-import { studentDeckService, type DeckMode } from '@/services/studentDeck.service';
-import type { AnswerResponse } from '@/services/studentAttempt.service';
-import { QuestionAnswerInput } from '../components/QuestionAnswerInput';
-import { CardFace } from '../components/flashcards/flashcardUi';
+import React, { useCallback, useEffect, useRef, useState } from "react";
+import { useNavigate, useParams } from "react-router";
+import { Button } from "@/components/ui/Button";
+import { Spinner } from "@/components/ui/Spinner";
+import { useToast } from "@/components/ui/ToastHost";
+import { Icon } from "@/assets/icons";
+import { getApiErrorMessage } from "@/utils/apiError";
+import { studentDeckPath, studentDeckTestPath } from "@/app/routes";
+import { studentDeckService, type DeckMode } from "@/services/studentDeck.service";
+import type { AnswerResponse } from "@/services/studentAttempt.service";
+import { QuestionAnswerInput } from "../components/QuestionAnswerInput";
+import { CardFace } from "../components/flashcards/flashcardUi";
 import {
   LEARN_ROUND_SIZE,
   MIN_QUIZ_CARDS,
@@ -18,8 +18,14 @@ import {
   usableCards,
   type QuizCard,
   type QuizQuestion,
-} from '../components/flashcards/flashcardQuiz';
-import { FullScreenMessage, QuizHeader, QuizPrompt, SkippedNote, choiceRenderer } from '../components/flashcards/QuizParts';
+} from "../components/flashcards/flashcardQuiz";
+import {
+  FullScreenMessage,
+  QuizHeader,
+  QuizPrompt,
+  SkippedNote,
+  choiceRenderer,
+} from "../components/flashcards/QuizParts";
 
 interface Loaded {
   sessionId: string;
@@ -44,7 +50,7 @@ interface Round {
  * in a later round, until every card is answered right. Picks are checked at once on this screen.
  */
 export function StudentDeckLearnPage() {
-  const { deckId = '' } = useParams<{ deckId: string }>();
+  const { deckId = "" } = useParams<{ deckId: string }>();
   return <LearnScreen key={deckId} deckId={Number(deckId)} />;
 }
 
@@ -77,7 +83,11 @@ function LearnScreen({ deckId }: { deckId: number }) {
     if (!sessionId || closed.current) return null;
     closed.current = true;
     activeSessionId.current = null;
-    return studentDeckService.finishSession(sessionId, [...knownRef.current], [...missedRef.current]);
+    return studentDeckService.finishSession(
+      sessionId,
+      [...knownRef.current],
+      [...missedRef.current],
+    );
   }, []);
   /** "Learn again" after a finished run: the next session learns every card, known or not. */
   const learnEveryCard = useRef(false);
@@ -87,8 +97,8 @@ function LearnScreen({ deckId }: { deckId: number }) {
     setLoaded(null);
     setLoadError(null);
     studentDeckService
-      .startSession(deckId, 0, 'PRACTICE')
-      .then(s => {
+      .startSession(deckId, 0, "PRACTICE")
+      .then((s) => {
         if (cancelled) {
           // StrictMode / early unmount: close the orphaned session immediately.
           studentDeckService.finishSession(s.sessionId, [], []).catch(() => {});
@@ -102,11 +112,13 @@ function LearnScreen({ deckId }: { deckId: number }) {
           title: s.deckTitle,
           mode: s.deckMode,
           pool,
-          knownAtStart: new Set(s.cards.filter(c => c.status === 'KNOWN').map(c => c.cardId)),
+          knownAtStart: new Set(s.cards.filter((c) => c.status === "KNOWN").map((c) => c.cardId)),
           skipped: s.cards.length - pool.length,
         });
       })
-      .catch(err => !cancelled && setLoadError(getApiErrorMessage(err, 'Could not open this deck.')));
+      .catch(
+        (err) => !cancelled && setLoadError(getApiErrorMessage(err, "Could not open this deck.")),
+      );
     return () => {
       cancelled = true;
       closeActiveSession()?.catch(() => {});
@@ -118,7 +130,9 @@ function LearnScreen({ deckId }: { deckId: number }) {
       if (!loaded) return;
       setRound({
         number,
-        questions: cards.slice(0, LEARN_ROUND_SIZE).map(c => buildQuestion(c, loaded.pool, loaded.mode, ++questionSeq.current)),
+        questions: cards
+          .slice(0, LEARN_ROUND_SIZE)
+          .map((c) => buildQuestion(c, loaded.pool, loaded.mode, ++questionSeq.current)),
         answers: {},
       });
       setCurrent(0);
@@ -142,7 +156,9 @@ function LearnScreen({ deckId }: { deckId: number }) {
   useEffect(() => {
     if (!loaded) return;
     if (loaded.pool.length < MIN_QUIZ_CARDS) return;
-    const open = learnEveryCard.current ? loaded.pool : loaded.pool.filter(c => !loaded.knownAtStart.has(c.cardId));
+    const open = learnEveryCard.current
+      ? loaded.pool
+      : loaded.pool.filter((c) => !loaded.knownAtStart.has(c.cardId));
     learnEveryCard.current = false;
     if (open.length > 0) startRun(open);
   }, [loaded, startRun]);
@@ -155,9 +171,9 @@ function LearnScreen({ deckId }: { deckId: number }) {
     return studentDeckService.finishSession(loaded.sessionId, [...known], [...missed]);
   }, [loaded, known, missed]);
 
-  const save = (cardId: number, status: 'KNOWN' | 'WRONG') =>
-    studentDeckService.writeProgress(cardId, { status }).catch(err => {
-      toast.error(getApiErrorMessage(err, 'Could not save your progress on this card.'));
+  const save = (cardId: number, status: "KNOWN" | "WRONG") =>
+    studentDeckService.writeProgress(cardId, { status }).catch((err) => {
+      toast.error(getApiErrorMessage(err, "Could not save your progress on this card."));
     });
 
   const pick = (response: AnswerResponse) => {
@@ -166,18 +182,20 @@ function LearnScreen({ deckId }: { deckId: number }) {
     if (round.answers[q.question.questionId]) return;
     setRound({ ...round, answers: { ...round.answers, [q.question.questionId]: response } });
     if (isCorrect(q, response)) {
-      setKnown(prev => new Set(prev).add(q.card.cardId));
-      void save(q.card.cardId, 'KNOWN');
+      setKnown((prev) => new Set(prev).add(q.card.cardId));
+      void save(q.card.cardId, "KNOWN");
     } else {
-      setMissed(prev => new Set(prev).add(q.card.cardId));
-      void save(q.card.cardId, 'WRONG');
+      setMissed((prev) => new Set(prev).add(q.card.cardId));
+      void save(q.card.cardId, "WRONG");
     }
   };
 
   /** The cards after this round: the ones not asked yet, then the ones answered wrong. */
   const nextQueue = (): QuizCard[] => {
     if (!round) return queue;
-    const wrong = round.questions.filter(q => !isCorrect(q, round.answers[q.question.questionId])).map(q => q.card);
+    const wrong = round.questions
+      .filter((q) => !isCorrect(q, round.answers[q.question.questionId]))
+      .map((q) => q.card);
     return [...queue.slice(round.questions.length), ...wrong];
   };
 
@@ -194,7 +212,7 @@ function LearnScreen({ deckId }: { deckId: number }) {
     try {
       await closeSession();
     } catch (err) {
-      toast.error(getApiErrorMessage(err, 'Could not close this study session.'));
+      toast.error(getApiErrorMessage(err, "Could not close this study session."));
     } finally {
       setFinishing(false);
       setFinished(true);
@@ -214,7 +232,10 @@ function LearnScreen({ deckId }: { deckId: number }) {
           <Button variant="outline" onClick={() => navigate(studentDeckPath(deckId))}>
             Back to deck
           </Button>
-          <Button icon={<Icon.RefreshCw className="w-4 h-4" />} onClick={() => setReload(r => r + 1)}>
+          <Button
+            icon={<Icon.RefreshCw className="w-4 h-4" />}
+            onClick={() => setReload((r) => r + 1)}
+          >
             Retry
           </Button>
         </div>
@@ -232,7 +253,9 @@ function LearnScreen({ deckId }: { deckId: number }) {
   if (loaded.pool.length < MIN_QUIZ_CARDS) {
     return (
       <FullScreenMessage>
-        <p className="text-base text-content">Learn needs at least {MIN_QUIZ_CARDS} cards with a text back.</p>
+        <p className="text-base text-content">
+          Learn needs at least {MIN_QUIZ_CARDS} cards with a text back.
+        </p>
         <SkippedNote count={loaded.skipped} />
         <Button variant="outline" onClick={exit}>
           Back to deck
@@ -241,7 +264,8 @@ function LearnScreen({ deckId }: { deckId: number }) {
     );
   }
 
-  const allKnownAtStart = !finished && !round && loaded.pool.every(c => loaded.knownAtStart.has(c.cardId));
+  const allKnownAtStart =
+    !finished && !round && loaded.pool.every((c) => loaded.knownAtStart.has(c.cardId));
   if (!finished && !round && !allKnownAtStart) {
     // The first round is being set up.
     return (
@@ -255,10 +279,12 @@ function LearnScreen({ deckId }: { deckId: number }) {
     return (
       <FullScreenMessage>
         <Icon.Trophy className="w-12 h-12 text-warning" />
-        <h1 className="text-xl font-bold text-content">{allKnownAtStart ? 'You already know every card' : 'Nice work — every card learned!'}</h1>
+        <h1 className="text-xl font-bold text-content">
+          {allKnownAtStart ? "You already know every card" : "Nice work — every card learned!"}
+        </h1>
         {!allKnownAtStart && (
           <p className="text-sm text-content-soft">
-            {runTotal} card{runTotal === 1 ? '' : 's'} learned · {missed.size} needed another try
+            {runTotal} card{runTotal === 1 ? "" : "s"} learned · {missed.size} needed another try
           </p>
         )}
         <div className="flex flex-wrap justify-center gap-2">
@@ -284,13 +310,13 @@ function LearnScreen({ deckId }: { deckId: number }) {
                 setRound(null);
                 setLoaded(null);
                 learnEveryCard.current = true;
-                setReload(r => r + 1);
+                setReload((r) => r + 1);
                 return;
               }
               startRun(loaded.pool);
             }}
           >
-            {finished ? 'Learn again' : 'Learn all again'}
+            {finished ? "Learn again" : "Learn all again"}
           </Button>
         </div>
       </FullScreenMessage>
@@ -301,7 +327,9 @@ function LearnScreen({ deckId }: { deckId: number }) {
   const answer = round.answers[q.question.questionId] ?? null;
   const answered = answer != null;
   const isLast = current === round.questions.length - 1;
-  const roundCorrect = round.questions.filter(x => isCorrect(x, round.answers[x.question.questionId])).length;
+  const roundCorrect = round.questions.filter((x) =>
+    isCorrect(x, round.answers[x.question.questionId]),
+  ).length;
 
   return (
     <div className="h-[100dvh] flex flex-col bg-surface-alt">
@@ -314,7 +342,10 @@ function LearnScreen({ deckId }: { deckId: number }) {
         </Button>
       </QuizHeader>
 
-      <nav aria-label="Learn progress" className="bg-surface border-b border-line-soft px-[clamp(0.75rem,2vw,1.5rem)] py-3 flex-shrink-0">
+      <nav
+        aria-label="Learn progress"
+        className="bg-surface border-b border-line-soft px-[clamp(0.75rem,2vw,1.5rem)] py-3 flex-shrink-0"
+      >
         <div className="flex items-center justify-between gap-3 mb-2 text-xs">
           <span className="font-semibold text-content">Round {round.number}</span>
           <span className="text-content-subtle">
@@ -324,8 +355,17 @@ function LearnScreen({ deckId }: { deckId: number }) {
         <ol className="flex gap-1">
           {round.questions.map((x, i) => {
             const a = round.answers[x.question.questionId];
-            const tone = !showResults && i === current ? 'bg-brand-600' : !a ? 'bg-line' : isCorrect(x, a) ? 'bg-success-solid' : 'bg-danger-solid';
-            return <li key={x.question.questionId} className={`h-2 flex-1 rounded-[2px] ${tone}`} />;
+            const tone =
+              !showResults && i === current
+                ? "bg-brand-600"
+                : !a
+                  ? "bg-line"
+                  : isCorrect(x, a)
+                    ? "bg-success-solid"
+                    : "bg-danger-solid";
+            return (
+              <li key={x.question.questionId} className={`h-2 flex-1 rounded-[2px] ${tone}`} />
+            );
           })}
         </ol>
       </nav>
@@ -338,20 +378,36 @@ function LearnScreen({ deckId }: { deckId: number }) {
                 <h2 className="text-lg font-bold text-content">Round {round.number} done</h2>
                 <p className="text-sm text-content-soft">
                   {roundCorrect} of {round.questions.length} right
-                  {roundCorrect < round.questions.length ? ' — the missed cards come back in a later round.' : '.'}
+                  {roundCorrect < round.questions.length
+                    ? " — the missed cards come back in a later round."
+                    : "."}
                 </p>
               </div>
-              <Button iconRight={<Icon.ChevronRight className="w-4 h-4" />} loading={finishing} disabled={finishing} onClick={() => void continueLearning()}>
-                {nextQueue().length > 0 ? 'Continue' : 'Finish'}
+              <Button
+                iconRight={<Icon.ChevronRight className="w-4 h-4" />}
+                loading={finishing}
+                disabled={finishing}
+                onClick={() => void continueLearning()}
+              >
+                {nextQueue().length > 0 ? "Continue" : "Finish"}
               </Button>
             </div>
             <ul className="space-y-2">
-              {round.questions.map(x => {
+              {round.questions.map((x) => {
                 const ok = isCorrect(x, round.answers[x.question.questionId]);
                 return (
-                  <li key={x.question.questionId} className="card p-4 flex flex-col sm:flex-row gap-3 sm:items-start">
-                    <span className={`flex-shrink-0 ${ok ? 'text-success-strong' : 'text-danger-strong'}`}>
-                      {ok ? <Icon.CheckCircle className="w-5 h-5" /> : <Icon.XCircle className="w-5 h-5" />}
+                  <li
+                    key={x.question.questionId}
+                    className="card p-4 flex flex-col sm:flex-row gap-3 sm:items-start"
+                  >
+                    <span
+                      className={`flex-shrink-0 ${ok ? "text-success-strong" : "text-danger-strong"}`}
+                    >
+                      {ok ? (
+                        <Icon.CheckCircle className="w-5 h-5" />
+                      ) : (
+                        <Icon.XCircle className="w-5 h-5" />
+                      )}
                     </span>
                     <div className="flex-1 min-w-0 grid gap-3 sm:grid-cols-2">
                       <CardFace card={x.card} mode={loaded.mode} side="front" />
@@ -366,7 +422,9 @@ function LearnScreen({ deckId }: { deckId: number }) {
           <div className="w-full space-y-5">
             {round.number === 1 && current === 0 && <SkippedNote count={loaded.skipped} />}
             <div className="flex items-center gap-2">
-              <h2 className="text-sm font-semibold text-content uppercase tracking-wide">Question {current + 1}</h2>
+              <h2 className="text-sm font-semibold text-content uppercase tracking-wide">
+                Question {current + 1}
+              </h2>
               <span className="ml-auto text-xs text-content-subtle">
                 {current + 1} / {round.questions.length}
               </span>
@@ -385,16 +443,16 @@ function LearnScreen({ deckId }: { deckId: number }) {
               <p className="text-xs text-content-subtle">
                 {answered
                   ? isCorrect(q, answer)
-                    ? 'Correct — this card is learned.'
-                    : 'Not quite — this card comes back in a later round.'
-                  : 'Pick an answer — it is checked right away.'}
+                    ? "Correct — this card is learned."
+                    : "Not quite — this card comes back in a later round."
+                  : "Pick an answer — it is checked right away."}
               </p>
               {answered && (
                 <Button
                   iconRight={<Icon.ChevronRight className="w-4 h-4" />}
                   onClick={() => (isLast ? setShowResults(true) : setCurrent(current + 1))}
                 >
-                  {isLast ? `See round ${round.number} results` : 'Next question'}
+                  {isLast ? `See round ${round.number} results` : "Next question"}
                 </Button>
               )}
             </div>

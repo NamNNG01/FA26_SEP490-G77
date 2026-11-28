@@ -5,12 +5,12 @@ import React, {
   useRef,
   useState,
   type ReactNode,
-} from 'react';
-import axios from 'axios';
-import { authService } from '@/services/auth.service';
-import { userService } from '@/services/user.service';
-import { ROUTES } from '@/app/routes';
-import { Role } from '@/utils/permissions';
+} from "react";
+import axios from "axios";
+import { authService } from "@/services/auth.service";
+import { userService } from "@/services/user.service";
+import { ROUTES } from "@/app/routes";
+import { Role } from "@/utils/permissions";
 import {
   clearAuth,
   getAccessToken,
@@ -19,10 +19,10 @@ import {
   onExternalAuthChange,
   saveAuth,
   saveUser,
-} from './storage';
-import { onSessionExpired } from './sessionExpired';
-import { clearQueryCache } from '@/hooks/useCachedQuery';
-import type { LoginResponse, UserResponse } from '@/types/auth';
+} from "./storage";
+import { onSessionExpired } from "./sessionExpired";
+import { clearQueryCache } from "@/hooks/useCachedQuery";
+import type { LoginResponse, UserResponse } from "@/types/auth";
 
 export interface AuthState {
   user: UserResponse | null;
@@ -87,7 +87,7 @@ function sessionStillValid(stored: UserResponse, server: UserResponse): boolean 
     stored.email === server.email &&
     stored.role === server.role &&
     stored.status === server.status &&
-    server.status === 'ACTIVE'
+    server.status === "ACTIVE"
   );
 }
 
@@ -202,7 +202,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   useEffect(() => {
     return onExternalAuthChange((change) => {
-      if (change === 'signedOut') {
+      if (change === "signedOut") {
         if (userIdRef.current !== null) clearLocalSession(true);
         return;
       }
@@ -225,7 +225,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   // authenticated.
   function startSession(data: LoginResponse | null | undefined): UserResponse {
     if (!data?.accessToken || !data.user) {
-      throw new Error('Login failed');
+      throw new Error("Login failed");
     }
 
     // A new session starts with an empty page cache (useCachedQuery).
@@ -271,8 +271,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     if (revokeRemote && refreshToken) {
       try {
         await authService.logout(refreshToken);
-      } catch {
-      }
+      } catch {}
     }
     clearLocalSession();
   }
@@ -315,6 +314,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
 export function useAuth(): AuthContextValue {
   const ctx = useContext(AuthContext);
-  if (!ctx) throw new Error('useAuth must be used within an AuthProvider');
+  if (!ctx) throw new Error("useAuth must be used within an AuthProvider");
   return ctx;
 }

@@ -1,6 +1,6 @@
-import { useEffect, useState } from 'react';
-import { dashboardService, type StudentRecentCourse } from '@/services/dashboard.service';
-import { Role } from '@/utils/permissions';
+import { useEffect, useState } from "react";
+import { dashboardService, type StudentRecentCourse } from "@/services/dashboard.service";
+import { Role } from "@/utils/permissions";
 
 export interface ProfileStat {
   label: string;
@@ -31,7 +31,7 @@ const EMPTY: ProfileOverview = { stats: [], inProgress: [], finished: [], tracks
 export function useProfileOverview(role: string | undefined) {
   const [data, setData] = useState<ProfileOverview>(EMPTY);
   const [loading, setLoading] = useState(true);
-  const [error, setError] = useState('');
+  const [error, setError] = useState("");
 
   useEffect(() => {
     let cancelled = false;
@@ -42,10 +42,10 @@ export function useProfileOverview(role: string | undefined) {
         const courses = recentCourses ?? [];
         return {
           stats: [
-            { label: 'Enrolled Courses', value: String(summary.enrolledCourses) },
-            { label: 'Completed Courses', value: String(summary.completedCourses) },
-            { label: 'Exam Attempts', value: String(summary.totalAttempts) },
-            { label: 'Average Score', value: `${Math.round(summary.averageScore * 10) / 10}%` },
+            { label: "Enrolled Courses", value: String(summary.enrolledCourses) },
+            { label: "Completed Courses", value: String(summary.completedCourses) },
+            { label: "Exam Attempts", value: String(summary.totalAttempts) },
+            { label: "Average Score", value: `${Math.round(summary.averageScore * 10) / 10}%` },
           ],
           inProgress: courses.filter((c) => (c.progress ?? 0) < 100),
           finished: courses.filter((c) => (c.progress ?? 0) >= 100),
@@ -57,10 +57,10 @@ export function useProfileOverview(role: string | undefined) {
         return {
           ...EMPTY,
           stats: [
-            { label: 'Total Courses', value: String(summary.totalCourses) },
-            { label: 'Published', value: String(summary.publishedCourses) },
-            { label: 'Drafts', value: String(summary.draftCourses) },
-            { label: 'Students', value: String(summary.totalStudents) },
+            { label: "Total Courses", value: String(summary.totalCourses) },
+            { label: "Published", value: String(summary.publishedCourses) },
+            { label: "Drafts", value: String(summary.draftCourses) },
+            { label: "Students", value: String(summary.totalStudents) },
           ],
         };
       }
@@ -69,10 +69,10 @@ export function useProfileOverview(role: string | undefined) {
         return {
           ...EMPTY,
           stats: [
-            { label: 'Total Users', value: String(summary.totalUsers) },
-            { label: 'Students', value: String(summary.totalStudents) },
-            { label: 'Courses', value: String(summary.totalCourses) },
-            { label: 'Exams', value: String(summary.totalExams) },
+            { label: "Total Users", value: String(summary.totalUsers) },
+            { label: "Students", value: String(summary.totalStudents) },
+            { label: "Courses", value: String(summary.totalCourses) },
+            { label: "Exams", value: String(summary.totalExams) },
           ],
         };
       }
@@ -80,14 +80,14 @@ export function useProfileOverview(role: string | undefined) {
     }
 
     setLoading(true);
-    setError('');
+    setError("");
     load()
       .then((next) => {
         if (!cancelled) setData(next);
       })
       .catch((err: unknown) => {
         if (!cancelled) {
-          setError(err instanceof Error ? err.message : 'Could not load your statistics.');
+          setError(err instanceof Error ? err.message : "Could not load your statistics.");
         }
       })
       .finally(() => {

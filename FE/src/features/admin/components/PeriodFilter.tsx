@@ -1,17 +1,17 @@
-import React, { useEffect } from 'react';
-import { Tabs } from '@/components/ui/Tabs';
-import { Select } from '@/components/ui/Select';
-import type { DashboardFilter, Granularity } from '@/services/adminDashboard.service';
-import { clampToDataStart, defaultFilter, toIsoDate } from '../utils/dashboardPeriods';
+import React, { useEffect } from "react";
+import { Tabs } from "@/components/ui/Tabs";
+import { Select } from "@/components/ui/Select";
+import type { DashboardFilter, Granularity } from "@/services/adminDashboard.service";
+import { clampToDataStart, defaultFilter, toIsoDate } from "../utils/dashboardPeriods";
 
 const GRANULARITY_TABS: { label: string; value: Granularity }[] = [
-  { label: 'Day', value: 'day' },
-  { label: 'Month', value: 'month' },
-  { label: 'Year', value: 'year' },
+  { label: "Day", value: "day" },
+  { label: "Month", value: "month" },
+  { label: "Year", value: "year" },
 ];
 
 const inputClass =
-  'h-9 px-3 rounded-[10px] border border-line bg-surface text-base text-content focus:outline-none focus:ring-2 focus:ring-brand-600/20 focus:border-brand-600 transition-all';
+  "h-9 px-3 rounded-[10px] border border-line bg-surface text-base text-content focus:outline-none focus:ring-2 focus:ring-brand-600/20 focus:border-brand-600 transition-all";
 
 /**
  * Two-step period picker: choose Day / Month / Year first, then a from–to
@@ -75,16 +75,28 @@ export function PeriodFilter({
         }}
       />
       <div className="flex items-center gap-2">
-        {value.granularity === 'year' ? (
+        {value.granularity === "year" ? (
           <>
-            <Select aria-label="From year" value={value.from} onChange={setFrom} options={years} className="w-24" />
+            <Select
+              aria-label="From year"
+              value={value.from}
+              onChange={setFrom}
+              options={years}
+              className="w-24"
+            />
             <span className="text-sm text-content-subtle">to</span>
-            <Select aria-label="To year" value={value.to} onChange={setTo} options={years} className="w-24" />
+            <Select
+              aria-label="To year"
+              value={value.to}
+              onChange={setTo}
+              options={years}
+              className="w-24"
+            />
           </>
         ) : (
           <>
             <input
-              type={value.granularity === 'day' ? 'date' : 'month'}
+              type={value.granularity === "day" ? "date" : "month"}
               aria-label="From"
               value={value.from}
               min={bounds.min}
@@ -94,7 +106,7 @@ export function PeriodFilter({
             />
             <span className="text-sm text-content-subtle">to</span>
             <input
-              type={value.granularity === 'day' ? 'date' : 'month'}
+              type={value.granularity === "day" ? "date" : "month"}
               aria-label="To"
               value={value.to}
               min={bounds.min}

@@ -1,5 +1,5 @@
-import React, { useState } from 'react';
-import { Icon } from '@/assets/icons';
+import React, { useState } from "react";
+import { Icon } from "@/assets/icons";
 
 export const DEFAULT_PAGE_SIZE = 10;
 
@@ -31,7 +31,10 @@ export interface PaginationState<T> {
  *   the last page), automatically moving the user to the previous valid page.
  * - Purely client-side: changing pages never reloads the page.
  */
-export function usePagination<T>(items: T[], { perPage = DEFAULT_PAGE_SIZE, resetKey, initialPage, onPageChange }: UsePaginationOptions = {}): PaginationState<T> {
+export function usePagination<T>(
+  items: T[],
+  { perPage = DEFAULT_PAGE_SIZE, resetKey, initialPage, onPageChange }: UsePaginationOptions = {},
+): PaginationState<T> {
   const total = items.length;
   const totalPages = Math.max(1, Math.ceil(total / perPage));
 
@@ -73,7 +76,7 @@ function buildPageList(page: number, totalPages: number): { key: string; page: n
     return Array.from({ length: totalPages }, (_, i) => ({ key: `p${i + 1}`, page: i + 1 }));
   }
   const wanted = new Set<number>([1, 2, page - 1, page, page + 1, totalPages - 1, totalPages]);
-  const sorted = [...wanted].filter(p => p >= 1 && p <= totalPages).sort((a, b) => a - b);
+  const sorted = [...wanted].filter((p) => p >= 1 && p <= totalPages).sort((a, b) => a - b);
   const list: { key: string; page: number | null }[] = [];
   let prev = 0;
   for (const p of sorted) {
@@ -94,31 +97,50 @@ export interface PaginationProps {
 }
 
 const navButtonClass =
-  'flex h-9 w-9 sm:h-8 sm:w-8 flex-shrink-0 items-center justify-center rounded-[8px] border border-line bg-surface text-content-secondary hover:bg-accent disabled:cursor-not-allowed disabled:opacity-40 transition-colors';
+  "flex h-9 w-9 sm:h-8 sm:w-8 flex-shrink-0 items-center justify-center rounded-[8px] border border-line bg-surface text-content-secondary hover:bg-accent disabled:cursor-not-allowed disabled:opacity-40 transition-colors";
 const pageButtonClass =
-  'flex h-9 w-9 sm:h-8 sm:w-8 flex-shrink-0 items-center justify-center rounded-[8px] text-sm font-medium transition-colors';
+  "flex h-9 w-9 sm:h-8 sm:w-8 flex-shrink-0 items-center justify-center rounded-[8px] text-sm font-medium transition-colors";
 
-export function Pagination({ page, total, perPage = DEFAULT_PAGE_SIZE, onChange, unit = 'items' }: PaginationProps) {
+export function Pagination({
+  page,
+  total,
+  perPage = DEFAULT_PAGE_SIZE,
+  onChange,
+  unit = "items",
+}: PaginationProps) {
   const totalPages = Math.max(1, Math.ceil(total / perPage));
   const start = total === 0 ? 0 : (page - 1) * perPage + 1;
   const end = Math.min(page * perPage, total);
-  const singularUnit = unit.endsWith('ies')
-    ? unit.slice(0, -3) + 'y'
-    : unit.endsWith('s') && !unit.endsWith('ss')
+  const singularUnit = unit.endsWith("ies")
+    ? unit.slice(0, -3) + "y"
+    : unit.endsWith("s") && !unit.endsWith("ss")
       ? unit.slice(0, -1)
       : unit;
   const displayedUnit = total === 1 ? singularUnit : unit;
 
   return (
-    <nav aria-label="Pagination" className="flex flex-wrap items-center justify-center gap-x-4 gap-y-2 px-3 py-3 sm:justify-between sm:px-4">
+    <nav
+      aria-label="Pagination"
+      className="flex flex-wrap items-center justify-center gap-x-4 gap-y-2 px-3 py-3 sm:justify-between sm:px-4"
+    >
       <p className="order-2 w-full text-center text-xs text-content-soft sm:order-1 sm:w-auto sm:text-left sm:text-sm">
-        Showing <span className="font-medium text-content-secondary">{start}&ndash;{end}</span> of{' '}
-        <span className="font-medium text-content-secondary">{total.toLocaleString()}</span> {displayedUnit}
+        Showing{" "}
+        <span className="font-medium text-content-secondary">
+          {start}&ndash;{end}
+        </span>{" "}
+        of <span className="font-medium text-content-secondary">{total.toLocaleString()}</span>{" "}
+        {displayedUnit}
       </p>
 
       {totalPages > 1 && (
         <div className="order-1 flex items-center gap-1 sm:order-2 sm:gap-1.5">
-          <button type="button" className={navButtonClass} onClick={() => onChange(page - 1)} disabled={page <= 1} aria-label="Previous page">
+          <button
+            type="button"
+            className={navButtonClass}
+            onClick={() => onChange(page - 1)}
+            disabled={page <= 1}
+            aria-label="Previous page"
+          >
             <Icon.ChevronLeft className="h-4 w-4" />
           </button>
 
@@ -129,25 +151,37 @@ export function Pagination({ page, total, perPage = DEFAULT_PAGE_SIZE, onChange,
 
           {/* Tablet / desktop: full page number buttons */}
           <div className="hidden items-center gap-1 sm:flex">
-            {buildPageList(page, totalPages).map(item =>
+            {buildPageList(page, totalPages).map((item) =>
               item.page === null ? (
-                <span key={item.key} className="select-none px-0.5 text-content-subtle" aria-hidden="true">&hellip;</span>
+                <span
+                  key={item.key}
+                  className="select-none px-0.5 text-content-subtle"
+                  aria-hidden="true"
+                >
+                  &hellip;
+                </span>
               ) : (
                 <button
                   key={item.key}
                   type="button"
                   onClick={() => onChange(item.page as number)}
-                  aria-current={item.page === page ? 'page' : undefined}
+                  aria-current={item.page === page ? "page" : undefined}
                   aria-label={`Page ${item.page}`}
-                  className={`${pageButtonClass} ${item.page === page ? 'bg-brand-600 text-white' : 'border border-line bg-surface text-content-secondary hover:bg-accent'}`}
+                  className={`${pageButtonClass} ${item.page === page ? "bg-brand-600 text-white" : "border border-line bg-surface text-content-secondary hover:bg-accent"}`}
                 >
                   {item.page}
                 </button>
-              )
+              ),
             )}
           </div>
 
-          <button type="button" className={navButtonClass} onClick={() => onChange(page + 1)} disabled={page >= totalPages} aria-label="Next page">
+          <button
+            type="button"
+            className={navButtonClass}
+            onClick={() => onChange(page + 1)}
+            disabled={page >= totalPages}
+            aria-label="Next page"
+          >
             <Icon.ChevronRight className="h-4 w-4" />
           </button>
         </div>

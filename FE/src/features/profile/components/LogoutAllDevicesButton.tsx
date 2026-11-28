@@ -1,12 +1,12 @@
-import React, { useState } from 'react';
-import { useNavigate } from 'react-router';
-import { useAuth } from '@/auth/authContext';
-import { ROUTES } from '@/app/routes';
-import { Button } from '@/components/ui/Button';
-import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
-import { Alert } from '@/components/ui/Alert';
-import { useToast } from '@/components/ui/ToastHost';
-import { Icon } from '@/assets/icons';
+import React, { useState } from "react";
+import { useNavigate } from "react-router";
+import { useAuth } from "@/auth/authContext";
+import { ROUTES } from "@/app/routes";
+import { Button } from "@/components/ui/Button";
+import { ConfirmDialog } from "@/components/ui/ConfirmDialog";
+import { Alert } from "@/components/ui/Alert";
+import { useToast } from "@/components/ui/ToastHost";
+import { Icon } from "@/assets/icons";
 
 /**
  * "Logout All Devices" button + confirmation dialog, backed by
@@ -16,17 +16,17 @@ import { Icon } from '@/assets/icons';
  * toast is shown (ToastHost is mounted above the router). On failure the
  * user stays logged in and the backend message is shown in the dialog.
  */
-export function LogoutAllDevicesButton({ className = '' }: { className?: string }) {
+export function LogoutAllDevicesButton({ className = "" }: { className?: string }) {
   const { logoutAll } = useAuth();
   const toast = useToast();
   const navigate = useNavigate();
 
   const [confirmOpen, setConfirmOpen] = useState(false);
   const [loading, setLoading] = useState(false);
-  const [error, setError] = useState('');
+  const [error, setError] = useState("");
 
   function openConfirm() {
-    setError('');
+    setError("");
     setConfirmOpen(true);
   }
 
@@ -37,17 +37,17 @@ export function LogoutAllDevicesButton({ className = '' }: { className?: string 
   async function handleConfirm() {
     if (loading) return; // prevent duplicate requests
     setLoading(true);
-    setError('');
+    setError("");
     try {
       await logoutAll();
       setConfirmOpen(false);
       navigate(ROUTES.login, { replace: true });
-      toast.success('You have been signed out from all devices.');
+      toast.success("You have been signed out from all devices.");
     } catch (err: unknown) {
       setError(
         err instanceof Error && err.message
           ? err.message
-          : 'Unable to log out from all devices. Please try again.',
+          : "Unable to log out from all devices. Please try again.",
       );
     } finally {
       setLoading(false);

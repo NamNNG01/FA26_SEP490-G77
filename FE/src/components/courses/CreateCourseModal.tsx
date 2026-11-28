@@ -1,24 +1,24 @@
-import React, { useEffect, useState } from 'react';
-import { Modal } from '@/components/ui/Modal';
-import { Button } from '@/components/ui/Button';
-import { Input } from '@/components/ui/Input';
-import { MoneyInput } from '@/components/ui/MoneyInput';
-import { COURSE_PRICE_MAX, coursePriceError } from '@/features/course/coursePrice';
-import { Dropdown } from '@/components/ui/Dropdown';
-import { Alert } from '@/components/ui/Alert';
-import { useToast } from '@/components/ui/ToastHost';
-import { Icon } from '@/assets/icons';
-import { api } from '@/services/api';
-import { apiFieldErrors, getApiErrorMessage } from '@/utils/apiError';
-import { focusFirstInvalidAfter } from '@/utils/focusFirstInvalid';
-import { CourseThumbnailField } from './CourseThumbnailField';
-import { uploadService } from '@/services/upload.service';
-import { useObjectUrl } from '@/utils/useObjectUrl';
+import React, { useEffect, useState } from "react";
+import { Modal } from "@/components/ui/Modal";
+import { Button } from "@/components/ui/Button";
+import { Input } from "@/components/ui/Input";
+import { MoneyInput } from "@/components/ui/MoneyInput";
+import { COURSE_PRICE_MAX, coursePriceError } from "@/features/course/coursePrice";
+import { Dropdown } from "@/components/ui/Dropdown";
+import { Alert } from "@/components/ui/Alert";
+import { useToast } from "@/components/ui/ToastHost";
+import { Icon } from "@/assets/icons";
+import { api } from "@/services/api";
+import { apiFieldErrors, getApiErrorMessage } from "@/utils/apiError";
+import { focusFirstInvalidAfter } from "@/utils/focusFirstInvalid";
+import { CourseThumbnailField } from "./CourseThumbnailField";
+import { uploadService } from "@/services/upload.service";
+import { useObjectUrl } from "@/utils/useObjectUrl";
 import {
   courseService,
   type CategoryResponse,
   type CourseDetailResponse,
-} from '@/services/course.service';
+} from "@/services/course.service";
 
 interface ManagerOption {
   id: number;
@@ -36,12 +36,12 @@ export function CreateCourseModal({
   onCreated: (course: CourseDetailResponse) => void;
 }) {
   const toast = useToast();
-  const [title, setTitle] = useState('');
-  const [categoryId, setCategoryId] = useState<string>('');
-  const [description, setDescription] = useState('');
+  const [title, setTitle] = useState("");
+  const [categoryId, setCategoryId] = useState<string>("");
+  const [description, setDescription] = useState("");
   const [thumbnail, setThumbnail] = useState<File | null>(null);
   const thumbnailPreview = useObjectUrl(thumbnail);
-  const [price, setPrice] = useState('0');
+  const [price, setPrice] = useState("0");
   const [managerIds, setManagerIds] = useState<string[]>([]);
   const [categories, setCategories] = useState<CategoryResponse[]>([]);
   const [managers, setManagers] = useState<ManagerOption[]>([]);
@@ -61,10 +61,10 @@ export function CreateCourseModal({
   useEffect(() => {
     if (!open) return;
 
-    setTitle('');
-    setDescription('');
+    setTitle("");
+    setDescription("");
     setThumbnail(null);
-    setPrice('0');
+    setPrice("0");
     setManagerIds([]);
     setErrors({});
     setSubmitError(null);
@@ -84,9 +84,9 @@ export function CreateCourseModal({
       })
       .catch((err) => {
         setCategories([]);
-        const message = getApiErrorMessage(err, 'Failed to load categories.');
+        const message = getApiErrorMessage(err, "Failed to load categories.");
         setCategoryLoadError(message);
-        toast.error(message, { title: 'Could not load categories', duration: null });
+        toast.error(message, { title: "Could not load categories", duration: null });
       })
       .finally(() => {
         setLoadingCategories(false);
@@ -96,15 +96,40 @@ export function CreateCourseModal({
     api
       .get<{
         data?:
-          | { content?: Array<{ userId?: number; id?: number; fullName?: string; name?: string; email?: string }> }
-          | Array<{ userId?: number; id?: number; fullName?: string; name?: string; email?: string }>;
-      }>('/admin/users?role=COURSE_MANAGER&status=ACTIVE')
+          | {
+              content?: Array<{
+                userId?: number;
+                id?: number;
+                fullName?: string;
+                name?: string;
+                email?: string;
+              }>;
+            }
+          | Array<{
+              userId?: number;
+              id?: number;
+              fullName?: string;
+              name?: string;
+              email?: string;
+            }>;
+      }>("/admin/users?role=COURSE_MANAGER&status=ACTIVE")
       .then((res) => {
         const payload = res.data;
-        let rawList: Array<{ userId?: number; id?: number; fullName?: string; name?: string; email?: string }> = [];
+        let rawList: Array<{
+          userId?: number;
+          id?: number;
+          fullName?: string;
+          name?: string;
+          email?: string;
+        }> = [];
         if (Array.isArray(payload)) {
           rawList = payload;
-        } else if (payload && typeof payload === 'object' && 'content' in payload && Array.isArray(payload.content)) {
+        } else if (
+          payload &&
+          typeof payload === "object" &&
+          "content" in payload &&
+          Array.isArray(payload.content)
+        ) {
           rawList = payload.content;
         }
         if (rawList.length > 0) {
@@ -112,8 +137,8 @@ export function CreateCourseModal({
             rawList.map((m) => ({
               id: Number(m.userId ?? m.id),
               name: m.fullName || m.name || `Manager #${m.userId ?? m.id}`,
-              email: m.email || '',
-            }))
+              email: m.email || "",
+            })),
           );
         } else {
           setManagers([]);
@@ -122,9 +147,9 @@ export function CreateCourseModal({
       })
       .catch((err) => {
         setManagers([]);
-        const message = getApiErrorMessage(err, 'Failed to load course managers.');
+        const message = getApiErrorMessage(err, "Failed to load course managers.");
         setManagerLoadError(message);
-        toast.error(message, { title: 'Could not load course managers', duration: null });
+        toast.error(message, { title: "Could not load course managers", duration: null });
       })
       .finally(() => setLoadingManagers(false));
   }, [open]);
@@ -136,14 +161,15 @@ export function CreateCourseModal({
   const handleSubmit = async () => {
     if (submitting) return;
 
-    const nextErrors: { title?: string; categoryId?: string; managerIds?: string; price?: string } = {};
-    if (!title.trim()) nextErrors.title = 'Course title is required.';
-    if (!categoryId) nextErrors.categoryId = 'Please select a category.';
+    const nextErrors: { title?: string; categoryId?: string; managerIds?: string; price?: string } =
+      {};
+    if (!title.trim()) nextErrors.title = "Course title is required.";
+    if (!categoryId) nextErrors.categoryId = "Please select a category.";
     const numPrice = Number(price);
     const priceError = coursePriceError(price);
     if (priceError) nextErrors.price = priceError;
     if (managerIds.length === 0) {
-      nextErrors.managerIds = 'Please select at least one course manager.';
+      nextErrors.managerIds = "Please select at least one course manager.";
     }
 
     setSubmitError(null);
@@ -169,17 +195,19 @@ export function CreateCourseModal({
         try {
           result = await uploadService.uploadCourseThumbnail(created.courseId, thumbnail);
         } catch (err) {
-          toast.warning(getApiErrorMessage(err, 'Course created, but the thumbnail could not be uploaded.'));
+          toast.warning(
+            getApiErrorMessage(err, "Course created, but the thumbnail could not be uploaded."),
+          );
         }
       }
       onCreated(result);
       onClose();
     } catch (err: unknown) {
-      const message = getApiErrorMessage(err, 'Failed to create course. Please try again.');
+      const message = getApiErrorMessage(err, "Failed to create course. Please try again.");
       setSubmitError(message);
       const fields = apiFieldErrors(err);
       const next: typeof errors = {};
-      for (const key of ['title', 'categoryId', 'price', 'managerIds'] as const) {
+      for (const key of ["title", "categoryId", "price", "managerIds"] as const) {
         if (fields[key]) next[key] = fields[key];
       }
       if (Object.keys(next).length) focusFirstInvalidAfter(() => setErrors(next));
@@ -192,14 +220,14 @@ export function CreateCourseModal({
   const selectedManagerObjs = managers.filter((m) => managerIds.includes(String(m.id)));
 
   const managerTriggerLabel = loadingManagers
-    ? 'Loading managers…'
+    ? "Loading managers…"
     : managerIds.length === 0
-    ? 'Select course managers…'
-    : managerIds.length === 1
-    ? selectedManagerObjs[0]
-      ? `${selectedManagerObjs[0].name}`
-      : 'Select course managers…'
-    : `${managerIds.length} managers selected`;
+      ? "Select course managers…"
+      : managerIds.length === 1
+        ? selectedManagerObjs[0]
+          ? `${selectedManagerObjs[0].name}`
+          : "Select course managers…"
+        : `${managerIds.length} managers selected`;
 
   return (
     <Modal
@@ -208,7 +236,9 @@ export function CreateCourseModal({
       title="Create New Course"
       description="Enter course details to set up a new course catalog entry. Newly created courses start as drafts."
       size="lg"
-      error={submitError && <Alert type="error" title="Course creation failed" message={submitError} />}
+      error={
+        submitError && <Alert type="error" title="Course creation failed" message={submitError} />
+      }
       footer={
         <>
           <Button variant="outline" onClick={handleClose} disabled={submitting}>
@@ -220,7 +250,7 @@ export function CreateCourseModal({
             disabled={submitting}
             icon={<Icon.Check className="w-4 h-4" />}
           >
-            {submitting ? 'Creating…' : 'Create Course'}
+            {submitting ? "Creating…" : "Create Course"}
           </Button>
         </>
       }
@@ -238,7 +268,10 @@ export function CreateCourseModal({
           required
           autoFocus
           value={title}
-          onChange={(e) => { setTitle(e.target.value); setErrors((prev) => ({ ...prev, title: undefined })); }}
+          onChange={(e) => {
+            setTitle(e.target.value);
+            setErrors((prev) => ({ ...prev, title: undefined }));
+          }}
           error={errors.title}
           placeholder="e.g. Python for Data Science"
         />
@@ -265,12 +298,16 @@ export function CreateCourseModal({
                   aria-invalid={errors.categoryId ? true : undefined}
                   className={`w-full flex items-center justify-between px-3 py-2 rounded-[10px] border bg-surface text-sm text-left transition-colors ${
                     errors.categoryId
-                      ? 'border-red-500 ring-1 ring-red-500'
-                      : 'border-[#E5E7EB] hover:border-[#9CA3AF]'
-                  } ${loadingCategories ? 'opacity-60 cursor-not-allowed' : ''}`}
+                      ? "border-red-500 ring-1 ring-red-500"
+                      : "border-[#E5E7EB] hover:border-[#9CA3AF]"
+                  } ${loadingCategories ? "opacity-60 cursor-not-allowed" : ""}`}
                 >
-                  <span className={selectedCategory ? 'text-content truncate' : 'text-[#9CA3AF]'}>
-                    {loadingCategories ? 'Loading categories…' : selectedCategory ? selectedCategory.name : 'Select category…'}
+                  <span className={selectedCategory ? "text-content truncate" : "text-[#9CA3AF]"}>
+                    {loadingCategories
+                      ? "Loading categories…"
+                      : selectedCategory
+                        ? selectedCategory.name
+                        : "Select category…"}
                   </span>
                   <Icon.ChevronDown className="w-4 h-4 text-[#9CA3AF] shrink-0 ml-2" />
                 </button>
@@ -284,7 +321,9 @@ export function CreateCourseModal({
                 },
               }))}
             />
-            {errors.categoryId && <p className="text-[12px] text-red-500 mt-1">{errors.categoryId}</p>}
+            {errors.categoryId && (
+              <p className="text-[12px] text-red-500 mt-1">{errors.categoryId}</p>
+            )}
           </div>
 
           <MoneyInput
@@ -292,7 +331,10 @@ export function CreateCourseModal({
             preserveNegativeSign
             max={COURSE_PRICE_MAX}
             value={price}
-            onValueChange={(v) => { setPrice(v); setErrors((prev) => ({ ...prev, price: undefined })); }}
+            onValueChange={(v) => {
+              setPrice(v);
+              setErrors((prev) => ({ ...prev, price: undefined }));
+            }}
             error={errors.price}
             hint="Set 0 for free course"
           />
@@ -318,11 +360,13 @@ export function CreateCourseModal({
                 aria-invalid={errors.managerIds ? true : undefined}
                 className={`w-full flex items-center justify-between px-3 py-2 rounded-[10px] border bg-surface text-sm text-left transition-colors ${
                   errors.managerIds
-                    ? 'border-red-500 ring-1 ring-red-500'
-                    : 'border-[#E5E7EB] hover:border-[#9CA3AF]'
-                } ${loadingManagers ? 'opacity-60 cursor-not-allowed' : ''}`}
+                    ? "border-red-500 ring-1 ring-red-500"
+                    : "border-[#E5E7EB] hover:border-[#9CA3AF]"
+                } ${loadingManagers ? "opacity-60 cursor-not-allowed" : ""}`}
               >
-                <span className={managerIds.length > 0 ? 'text-content truncate' : 'text-[#9CA3AF]'}>
+                <span
+                  className={managerIds.length > 0 ? "text-content truncate" : "text-[#9CA3AF]"}
+                >
                   {managerTriggerLabel}
                 </span>
                 <Icon.ChevronDown className="w-4 h-4 text-[#9CA3AF] shrink-0 ml-2" />
@@ -358,9 +402,12 @@ export function CreateCourseModal({
           )}
 
           <p className="text-[12px] text-[#6B7280] mt-1">
-            Assign one or more active course managers. The first selected becomes the primary manager.
+            Assign one or more active course managers. The first selected becomes the primary
+            manager.
           </p>
-          {errors.managerIds && <p className="text-[12px] text-red-500 mt-1">{errors.managerIds}</p>}
+          {errors.managerIds && (
+            <p className="text-[12px] text-red-500 mt-1">{errors.managerIds}</p>
+          )}
         </div>
 
         <CourseThumbnailField

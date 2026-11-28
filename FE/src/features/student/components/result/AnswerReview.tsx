@@ -1,10 +1,10 @@
-import React, { useState } from 'react';
-import { Badge } from '@/components/ui/Badge';
-import { Icon } from '@/assets/icons';
-import type { ResultQuestion } from '@/services/studentAttempt.service';
-import { DiagramReview } from './DiagramReview';
-import { isAnswered, optionLetter } from '../QuestionAnswerInput';
-import { studentCodeOf } from '@/utils/codeTemplate';
+import React, { useState } from "react";
+import { Badge } from "@/components/ui/Badge";
+import { Icon } from "@/assets/icons";
+import type { ResultQuestion } from "@/services/studentAttempt.service";
+import { DiagramReview } from "./DiagramReview";
+import { isAnswered, optionLetter } from "../QuestionAnswerInput";
+import { studentCodeOf } from "@/utils/codeTemplate";
 
 /**
  * The student's answer to one question set against its key, shared by the exam result (SA-05)
@@ -13,25 +13,46 @@ import { studentCodeOf } from '@/utils/codeTemplate';
  * reading, or the submitted diagram.
  * `hideVerdict` (an exam, not a practice): only what the student answered — no green / red, no key.
  */
-export function AnswerReview({ question, hideVerdict = false }: { question: ResultQuestion; hideVerdict?: boolean }) {
+export function AnswerReview({
+  question,
+  hideVerdict = false,
+}: {
+  question: ResultQuestion;
+  hideVerdict?: boolean;
+}) {
   // Without the key every row below renders unmarked.
   const q: ResultQuestion = hideVerdict
-    ? { ...question, correctAnswer: null, isCorrect: null, options: question.options?.map(o => ({ ...o, isCorrectAnswer: false })) ?? null }
+    ? {
+        ...question,
+        correctAnswer: null,
+        isCorrect: null,
+        options: question.options?.map((o) => ({ ...o, isCorrectAnswer: false })) ?? null,
+      }
     : question;
   const r = q.yourResponse;
   const answered = isAnswered(r);
 
-  if (q.options && (q.questionType === 'SINGLE_CHOICE' || q.questionType === 'MULTIPLE_CHOICE' || q.questionType === 'TRUE_FALSE')) {
+  if (
+    q.options &&
+    (q.questionType === "SINGLE_CHOICE" ||
+      q.questionType === "MULTIPLE_CHOICE" ||
+      q.questionType === "TRUE_FALSE")
+  ) {
     // Only what the student picked gets a filled row (green = right, red = wrong); a correct
     // option they did not pick is just outlined, so an unanswered question never looks answered.
     const picked = new Set(r?.selectedOptionIds ?? []);
-    const multi = q.questionType === 'MULTIPLE_CHOICE';
+    const multi = q.questionType === "MULTIPLE_CHOICE";
     return (
       <div className="space-y-2">
         {!answered && (
-          <p role="note" className="flex items-start gap-2 rounded-[10px] border border-warning-line bg-warning-light px-3 py-2 text-sm text-warning">
+          <p
+            role="note"
+            className="flex items-start gap-2 rounded-[10px] border border-warning-line bg-warning-light px-3 py-2 text-sm text-warning"
+          >
             <Icon.AlertCircle className="w-4 h-4 mt-0.5 flex-shrink-0" />
-            {hideVerdict ? "You didn't answer this question." : "You didn't answer this question — the correct answer is marked below."}
+            {hideVerdict
+              ? "You didn't answer this question."
+              : "You didn't answer this question — the correct answer is marked below."}
           </p>
         )}
         <ul className="space-y-2">
@@ -40,22 +61,27 @@ export function AnswerReview({ question, hideVerdict = false }: { question: Resu
             const right = opt.isCorrectAnswer === true;
             const cls = hideVerdict
               ? mine
-                ? 'border-content-secondary bg-surface-alt'
-                : 'border-line bg-surface'
+                ? "border-content-secondary bg-surface-alt"
+                : "border-line bg-surface"
               : mine
                 ? right
-                  ? 'border-success-solid bg-success-light'
-                  : 'border-danger-solid bg-danger-light'
+                  ? "border-success-solid bg-success-light"
+                  : "border-danger-solid bg-danger-light"
                 : right
-                  ? 'border-dashed border-success-solid bg-surface'
-                  : 'border-line bg-surface';
+                  ? "border-dashed border-success-solid bg-surface"
+                  : "border-line bg-surface";
             return (
-              <li key={opt.optionId} className={`flex items-start gap-3 p-3 rounded-[10px] border ${cls}`}>
+              <li
+                key={opt.optionId}
+                className={`flex items-start gap-3 p-3 rounded-[10px] border ${cls}`}
+              >
                 <SelectionMark multi={multi} checked={mine} />
                 <span className="w-6 h-6 rounded-full bg-surface-muted text-xs font-bold text-content-secondary flex items-center justify-center flex-shrink-0">
                   {optionLetter(i)}
                 </span>
-                <span className="flex-1 text-sm text-content-secondary break-words">{opt.optionText}</span>
+                <span className="flex-1 text-sm text-content-secondary break-words">
+                  {opt.optionText}
+                </span>
                 <span className="flex flex-wrap justify-end gap-1 flex-shrink-0">
                   {mine &&
                     (hideVerdict ? (
@@ -71,7 +97,9 @@ export function AnswerReview({ question, hideVerdict = false }: { question: Resu
                         <Icon.X className="w-3 h-3" /> Your answer
                       </Badge>
                     ))}
-                  {right && !mine && <span className="text-xs font-medium text-success">Correct answer</span>}
+                  {right && !mine && (
+                    <span className="text-xs font-medium text-success">Correct answer</span>
+                  )}
                 </span>
               </li>
             );
@@ -81,46 +109,56 @@ export function AnswerReview({ question, hideVerdict = false }: { question: Resu
     );
   }
 
-  if (q.questionType === 'ORDERING') return <OrderingReview question={q} />;
-  if (q.questionType === 'MATCHING') return <MatchingReview question={q} />;
-  if (q.questionType === 'FILL_BLANK') return <FillBlankReview question={q} />;
+  if (q.questionType === "ORDERING") return <OrderingReview question={q} />;
+  if (q.questionType === "MATCHING") return <MatchingReview question={q} />;
+  if (q.questionType === "FILL_BLANK") return <FillBlankReview question={q} />;
 
   // Diagram + essay: the diagram, then the written explanation below it.
-  if (answered && q.questionType === 'DIAGRAM_ESSAY') {
+  if (answered && q.questionType === "DIAGRAM_ESSAY") {
     return (
       <div className="space-y-3">
         <div>
-          <p className="text-xs font-semibold text-content-subtle uppercase tracking-wide mb-1">Your diagram</p>
+          <p className="text-xs font-semibold text-content-subtle uppercase tracking-wide mb-1">
+            Your diagram
+          </p>
           {r?.drawioXml?.trim() ? (
             <DiagramReview xml={r.drawioXml} />
           ) : (
-            <p className="rounded-[10px] border border-dashed border-line px-3 py-4 text-center text-sm text-content-subtle">No diagram drawn.</p>
+            <p className="rounded-[10px] border border-dashed border-line px-3 py-4 text-center text-sm text-content-subtle">
+              No diagram drawn.
+            </p>
           )}
         </div>
         {r?.text?.trim() ? (
           <WrittenAnswer text={r.text} code={false} />
         ) : (
-          <p className="rounded-[10px] border border-dashed border-line px-3 py-4 text-center text-sm text-content-subtle">No written explanation.</p>
+          <p className="rounded-[10px] border border-dashed border-line px-3 py-4 text-center text-sm text-content-subtle">
+            No written explanation.
+          </p>
         )}
       </div>
     );
   }
 
-  if (answered && q.questionType !== 'DIAGRAM') {
-    const isCode = q.questionType === 'CODE';
+  if (answered && q.questionType !== "DIAGRAM") {
+    const isCode = q.questionType === "CODE";
     // A function-mode answer is saved with the hidden driver around it; show only the student's code.
-    return <WrittenAnswer text={isCode ? studentCodeOf(r?.text ?? '') : r?.text ?? ''} code={isCode} />;
+    return (
+      <WrittenAnswer text={isCode ? studentCodeOf(r?.text ?? "") : (r?.text ?? "")} code={isCode} />
+    );
   }
 
   return (
     <div>
-      <p className="text-xs font-semibold text-content-subtle uppercase tracking-wide mb-1">Your answer</p>
+      <p className="text-xs font-semibold text-content-subtle uppercase tracking-wide mb-1">
+        Your answer
+      </p>
       {!answered ? (
         <p className="rounded-[10px] border border-dashed border-line px-3 py-6 text-center text-sm text-content-subtle">
           You did not answer this question.
         </p>
       ) : (
-        <DiagramReview xml={r?.drawioXml ?? ''} />
+        <DiagramReview xml={r?.drawioXml ?? ""} />
       )}
     </div>
   );
@@ -138,7 +176,7 @@ const FOLD_CHARS = 1500;
 function WrittenAnswer({ text, code }: { text: string; code: boolean }) {
   const [expanded, setExpanded] = useState(false);
   const [copied, setCopied] = useState(false);
-  const lines = text.replace(/\n+$/, '').split('\n');
+  const lines = text.replace(/\n+$/, "").split("\n");
   const words = text.trim().split(/\s+/).filter(Boolean).length;
   const long = lines.length > FOLD_LINES || text.length > FOLD_CHARS;
   const folded = long && !expanded;
@@ -156,38 +194,53 @@ function WrittenAnswer({ text, code }: { text: string; code: boolean }) {
   return (
     <div>
       <div className="flex items-center justify-between gap-2 mb-1.5">
-        <p className="text-xs font-semibold text-content-subtle uppercase tracking-wide">Your answer</p>
+        <p className="text-xs font-semibold text-content-subtle uppercase tracking-wide">
+          Your answer
+        </p>
         <span className="flex items-center gap-2 text-xs text-content-subtle">
-          {code ? `${lines.length} line${lines.length === 1 ? '' : 's'}` : `${words.toLocaleString('en-US')} word${words === 1 ? '' : 's'}`}
+          {code
+            ? `${lines.length} line${lines.length === 1 ? "" : "s"}`
+            : `${words.toLocaleString("en-US")} word${words === 1 ? "" : "s"}`}
           {code && (
             <button
               type="button"
               onClick={copy}
               className="inline-flex items-center gap-1 rounded-[6px] border border-line px-2 py-0.5 text-content-soft hover:bg-accent"
             >
-              {copied ? <Icon.Check className="w-3.5 h-3.5 text-success" /> : <Icon.Copy className="w-3.5 h-3.5" />}
-              {copied ? 'Copied' : 'Copy'}
+              {copied ? (
+                <Icon.Check className="w-3.5 h-3.5 text-success" />
+              ) : (
+                <Icon.Copy className="w-3.5 h-3.5" />
+              )}
+              {copied ? "Copied" : "Copy"}
             </button>
           )}
         </span>
       </div>
 
-      <div className={`relative rounded-[10px] border border-line bg-surface-alt ${folded ? 'max-h-[22rem] overflow-hidden' : ''}`}>
+      <div
+        className={`relative rounded-[10px] border border-line bg-surface-alt ${folded ? "max-h-[22rem] overflow-hidden" : ""}`}
+      >
         {code ? (
           <pre className="overflow-x-auto py-3 text-[13px] leading-6 font-mono text-content-secondary">
             <code className="grid grid-cols-[auto_minmax(0,1fr)]">
               {lines.map((line, i) => (
                 <React.Fragment key={i}>
-                  <span className="select-none text-right pl-3 pr-3 text-content-subtle border-r border-line" aria-hidden="true">
+                  <span
+                    className="select-none text-right pl-3 pr-3 text-content-subtle border-r border-line"
+                    aria-hidden="true"
+                  >
                     {i + 1}
                   </span>
-                  <span className="pl-3 pr-4 whitespace-pre">{line || ' '}</span>
+                  <span className="pl-3 pr-4 whitespace-pre">{line || " "}</span>
                 </React.Fragment>
               ))}
             </code>
           </pre>
         ) : (
-          <p className="px-4 py-3.5 text-[15px] leading-7 text-content whitespace-pre-wrap break-words">{text}</p>
+          <p className="px-4 py-3.5 text-[15px] leading-7 text-content whitespace-pre-wrap break-words">
+            {text}
+          </p>
         )}
         {folded && (
           <div className="pointer-events-none absolute inset-x-0 bottom-0 h-20 rounded-b-[10px] bg-gradient-to-t from-surface-alt to-transparent" />
@@ -195,9 +248,15 @@ function WrittenAnswer({ text, code }: { text: string; code: boolean }) {
       </div>
 
       {long && (
-        <button type="button" onClick={() => setExpanded(e => !e)} className="mt-2 inline-flex items-center gap-1 text-sm font-medium text-brand-ink hover:underline">
-          {expanded ? 'Collapse answer' : 'Show full answer'}
-          <Icon.ChevronDown className={`w-4 h-4 transition-transform ${expanded ? 'rotate-180' : ''}`} />
+        <button
+          type="button"
+          onClick={() => setExpanded((e) => !e)}
+          className="mt-2 inline-flex items-center gap-1 text-sm font-medium text-brand-ink hover:underline"
+        >
+          {expanded ? "Collapse answer" : "Show full answer"}
+          <Icon.ChevronDown
+            className={`w-4 h-4 transition-transform ${expanded ? "rotate-180" : ""}`}
+          />
         </button>
       )}
     </div>
@@ -208,13 +267,13 @@ function WrittenAnswer({ text, code }: { text: string; code: boolean }) {
 function SelectionMark({ multi, checked }: { multi: boolean; checked: boolean }) {
   return (
     <span
-      role={multi ? 'checkbox' : 'radio'}
+      role={multi ? "checkbox" : "radio"}
       aria-checked={checked}
       aria-disabled="true"
-      aria-label={checked ? 'Selected' : 'Not selected'}
+      aria-label={checked ? "Selected" : "Not selected"}
       className={`w-[18px] h-[18px] mt-[3px] flex items-center justify-center flex-shrink-0 border-2 ${
-        multi ? 'rounded-[4px]' : 'rounded-full'
-      } ${checked ? 'border-content-secondary bg-content-secondary' : 'border-content-subtle'}`}
+        multi ? "rounded-[4px]" : "rounded-full"
+      } ${checked ? "border-content-secondary bg-content-secondary" : "border-content-subtle"}`}
     >
       {checked &&
         (multi ? (
@@ -227,7 +286,7 @@ function SelectionMark({ multi, checked }: { multi: boolean; checked: boolean })
 }
 
 const same = (a: string | null | undefined, b: string | null | undefined) =>
-  (a ?? '').trim().toLowerCase() === (b ?? '').trim().toLowerCase();
+  (a ?? "").trim().toLowerCase() === (b ?? "").trim().toLowerCase();
 
 /**
  * One line of a multi-part answer with its own verdict: ✓ / ✗, my value, and
@@ -245,10 +304,18 @@ function MarkedRow({
   children: React.ReactNode;
   expected?: React.ReactNode;
 }) {
-  const cls = ok === true ? 'border-success-solid bg-success-light' : ok === false ? 'border-danger-solid bg-danger-light' : 'border-line bg-surface';
+  const cls =
+    ok === true
+      ? "border-success-solid bg-success-light"
+      : ok === false
+        ? "border-danger-solid bg-danger-light"
+        : "border-line bg-surface";
   return (
     <li className={`flex flex-wrap items-start gap-x-3 gap-y-1 p-3 rounded-[10px] border ${cls}`}>
-      <span className="flex-shrink-0 mt-0.5" aria-label={ok === true ? 'Correct' : ok === false ? 'Incorrect' : undefined}>
+      <span
+        className="flex-shrink-0 mt-0.5"
+        aria-label={ok === true ? "Correct" : ok === false ? "Incorrect" : undefined}
+      >
         {ok === true ? (
           <Icon.CheckCircle className="w-4 h-4 text-success" />
         ) : ok === false ? (
@@ -257,11 +324,17 @@ function MarkedRow({
           <span className="block w-4 h-4" />
         )}
       </span>
-      <span className="text-xs font-semibold text-content-subtle mt-0.5 flex-shrink-0">{prefix}</span>
-      <span className="flex-1 min-w-[8rem] text-sm text-content-secondary break-words">{children}</span>
+      <span className="text-xs font-semibold text-content-subtle mt-0.5 flex-shrink-0">
+        {prefix}
+      </span>
+      <span className="flex-1 min-w-[8rem] text-sm text-content-secondary break-words">
+        {children}
+      </span>
       {ok === false && expected != null && (
         <span className="w-full sm:w-auto pl-7 sm:pl-0 text-sm text-success-strong break-words">
-          <span className="text-xs font-semibold uppercase tracking-wide text-content-subtle mr-1">Correct:</span>
+          <span className="text-xs font-semibold uppercase tracking-wide text-content-subtle mr-1">
+            Correct:
+          </span>
           {expected}
         </span>
       )}
@@ -270,17 +343,22 @@ function MarkedRow({
 }
 
 function ReviewHeading() {
-  return <p className="text-xs font-semibold text-content-subtle uppercase tracking-wide mb-2">Your answer</p>;
+  return (
+    <p className="text-xs font-semibold text-content-subtle uppercase tracking-wide mb-2">
+      Your answer
+    </p>
+  );
 }
 
 const Missing = () => <span className="italic text-content-subtle">No answer</span>;
 
 function OrderingReview({ question: q }: { question: ResultQuestion }) {
-  const textOf = (id: number) => q.options?.find(o => o.optionId === id)?.optionText ?? `#${id}`;
+  const textOf = (id: number) => q.options?.find((o) => o.optionId === id)?.optionText ?? `#${id}`;
   const mine = q.yourResponse?.orderedOptionIds ?? [];
   const key = q.correctAnswer?.orderedOptionIds ?? null;
   const rows = Math.max(mine.length, key?.length ?? 0);
-  if (rows === 0) return <p className="text-sm text-content-subtle">You did not answer this question.</p>;
+  if (rows === 0)
+    return <p className="text-sm text-content-subtle">You did not answer this question.</p>;
   return (
     <div>
       <ReviewHeading />
@@ -305,23 +383,26 @@ function OrderingReview({ question: q }: { question: ResultQuestion }) {
 }
 
 function MatchingReview({ question: q }: { question: ResultQuestion }) {
-  const given = new Map((q.yourResponse?.matches ?? []).map(m => [m.left.trim(), m.right]));
+  const given = new Map((q.yourResponse?.matches ?? []).map((m) => [m.left.trim(), m.right]));
   const pairs = q.correctAnswer?.pairs ?? null;
   // With a key, list every left of the key (unmatched ones too); without one, only what was answered.
-  const lefts = pairs ? pairs.map(p => p.left) : [...given.keys()];
-  if (lefts.length === 0) return <p className="text-sm text-content-subtle">You did not answer this question.</p>;
+  const lefts = pairs ? pairs.map((p) => p.left) : [...given.keys()];
+  if (lefts.length === 0)
+    return <p className="text-sm text-content-subtle">You did not answer this question.</p>;
   return (
     <div>
       <ReviewHeading />
       <ul className="space-y-2">
-        {lefts.map(left => {
+        {lefts.map((left) => {
           const mine = given.get(left.trim());
-          const expected = pairs?.find(p => same(p.left, left))?.right;
+          const expected = pairs?.find((p) => same(p.left, left))?.right;
           return (
             <MarkedRow
               key={left}
               ok={pairs ? mine != null && same(mine, expected) : null}
-              prefix={<span className="text-sm font-medium text-content normal-case">{left} →</span>}
+              prefix={
+                <span className="text-sm font-medium text-content normal-case">{left} →</span>
+              }
               expected={expected}
             >
               {mine ?? <Missing />}
@@ -336,20 +417,30 @@ function MatchingReview({ question: q }: { question: ResultQuestion }) {
 function FillBlankReview({ question: q }: { question: ResultQuestion }) {
   const given = q.yourResponse?.blanks ?? {};
   const key = q.correctAnswer?.blanks ?? null;
-  const indices = [...new Set([...Object.keys(key ?? {}), ...Object.keys(given)])].sort((a, b) => Number(a) - Number(b));
-  if (indices.length === 0) return <p className="text-sm text-content-subtle">You did not answer this question.</p>;
+  const indices = [...new Set([...Object.keys(key ?? {}), ...Object.keys(given)])].sort(
+    (a, b) => Number(a) - Number(b),
+  );
+  if (indices.length === 0)
+    return <p className="text-sm text-content-subtle">You did not answer this question.</p>;
   return (
     <div>
       <ReviewHeading />
       <ul className="space-y-2">
-        {indices.map(n => {
+        {indices.map((n) => {
           const mine = given[n];
           const accepted = key?.[n] ?? [];
           // Case-insensitive like the grader's default; a case-sensitive blank still gets the right
           // verdict when the whole question is correct.
-          const ok = key ? q.isCorrect === true || (!!mine?.trim() && accepted.some(a => same(a, mine))) : null;
+          const ok = key
+            ? q.isCorrect === true || (!!mine?.trim() && accepted.some((a) => same(a, mine)))
+            : null;
           return (
-            <MarkedRow key={n} ok={ok} prefix={`(${n})`} expected={accepted.length ? accepted.join(' / ') : undefined}>
+            <MarkedRow
+              key={n}
+              ok={ok}
+              prefix={`(${n})`}
+              expected={accepted.length ? accepted.join(" / ") : undefined}
+            >
               {mine?.trim() ? mine : <Missing />}
             </MarkedRow>
           );

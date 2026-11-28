@@ -1,4 +1,4 @@
-import { flushSync } from 'react-dom';
+import { flushSync } from "react-dom";
 
 /**
  * Scrolls to and focuses the first visible `[aria-invalid="true"]` control, so a field error is
@@ -9,10 +9,11 @@ export function focusFirstInvalid(root?: ParentNode): boolean {
   // aria-modal skips popovers that also use role="dialog" (notification bell, type picker).
   const dialogs = document.querySelectorAll('[role="dialog"][aria-modal="true"]');
   const scope = root ?? dialogs[dialogs.length - 1] ?? document;
-  const target = Array.from(scope.querySelectorAll<HTMLElement>('[aria-invalid="true"]'))
-    .find(el => el.offsetParent !== null);
+  const target = Array.from(scope.querySelectorAll<HTMLElement>('[aria-invalid="true"]')).find(
+    (el) => el.offsetParent !== null,
+  );
   if (!target) return false;
-  target.scrollIntoView({ block: 'center', behavior: 'smooth' });
+  target.scrollIntoView({ block: "center", behavior: "smooth" });
   target.focus({ preventScroll: true });
   return true;
 }

@@ -1,5 +1,5 @@
-import React from 'react';
-import { Icon } from '@/assets/icons';
+import React from "react";
+import { Icon } from "@/assets/icons";
 
 /**
  * PublicStatCard
@@ -32,10 +32,14 @@ export function PublicStatCard({
   return (
     <div className="flex flex-col gap-3 rounded-[14px] border border-line bg-surface p-5 shadow-sm">
       <div className="flex items-center gap-2 text-muted-foreground">
-        <span aria-hidden className="h-4 w-4 flex-shrink-0 [&>svg]:h-4 [&>svg]:w-4">{icon}</span>
+        <span aria-hidden className="h-4 w-4 flex-shrink-0 [&>svg]:h-4 [&>svg]:w-4">
+          {icon}
+        </span>
         <p className="text-sm font-medium">{title}</p>
       </div>
-      <p className="font-[family-name:var(--font-display)] text-2xl font-bold leading-none tracking-tight text-foreground">{value}</p>
+      <p className="font-[family-name:var(--font-display)] text-2xl font-bold leading-none tracking-tight text-foreground">
+        {value}
+      </p>
 
       <p className="flex flex-wrap items-center gap-x-1.5 text-xs text-muted-foreground">
         {trend !== undefined && (

@@ -1,7 +1,7 @@
-import React from 'react';
-import { PopularCoursesSection } from '@/features/catalog';
-import { HeroSection } from '../sections/HeroSection';
-import { HowItWorksSection } from '../sections/HowItWorksSection';
+import React from "react";
+import { PopularCoursesSection } from "@/features/catalog";
+import { HeroSection } from "../sections/HeroSection";
+import { HowItWorksSection } from "../sections/HowItWorksSection";
 
 /**
  * LandingPage

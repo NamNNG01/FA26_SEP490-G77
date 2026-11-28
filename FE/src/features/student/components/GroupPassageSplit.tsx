@@ -1,6 +1,13 @@
-import { useEffect, useRef, useState, type CSSProperties, type PointerEvent as ReactPointerEvent, type ReactNode } from 'react';
-import { Icon } from '@/assets/icons';
-import { QuestionText } from './QuestionAnswerInput';
+import {
+  useEffect,
+  useRef,
+  useState,
+  type CSSProperties,
+  type PointerEvent as ReactPointerEvent,
+  type ReactNode,
+} from "react";
+import { Icon } from "@/assets/icons";
+import { QuestionText } from "./QuestionAnswerInput";
 
 export interface GroupPassage {
   groupId: number;
@@ -10,7 +17,7 @@ export interface GroupPassage {
 
 /** Passage column width (md+), in % of the row: default, bounds and the keyboard step. */
 const PASSAGE_WIDTH = { default: 30, narrowDefault: 20, min: 15, max: 70, step: 5 };
-const widthKey = (narrow: boolean) => `examprep.passageWidth.${narrow ? 'practice' : 'exam'}`;
+const widthKey = (narrow: boolean) => `examprep.passageWidth.${narrow ? "practice" : "exam"}`;
 
 function readWidth(narrow: boolean): number {
   const fallback = narrow ? PASSAGE_WIDTH.narrowDefault : PASSAGE_WIDTH.default;
@@ -31,7 +38,7 @@ function readWidth(narrow: boolean): number {
  */
 export function GroupPassageSplit({
   group,
-  mainClassName = '',
+  mainClassName = "",
   narrow = false,
   children,
 }: {
@@ -53,8 +60,8 @@ export function GroupPassageSplit({
 
   // Takes the new width, or a step from the current one (so quick key repeats don't read a stale width).
   const resize = (next: number | ((current: number) => number)) =>
-    setWidth(current => {
-      const raw = typeof next === 'function' ? next(current) : next;
+    setWidth((current) => {
+      const raw = typeof next === "function" ? next(current) : next;
       const w = Math.round(Math.min(PASSAGE_WIDTH.max, Math.max(PASSAGE_WIDTH.min, raw)) * 10) / 10;
       try {
         localStorage.setItem(widthKey(narrow), String(w));
@@ -74,20 +81,21 @@ export function GroupPassageSplit({
     const move = (ev: PointerEvent) => resize(((ev.clientX - left) / total) * 100);
     const stop = () => {
       setDragging(false);
-      window.removeEventListener('pointermove', move);
-      window.removeEventListener('pointerup', stop);
+      window.removeEventListener("pointermove", move);
+      window.removeEventListener("pointerup", stop);
     };
-    window.addEventListener('pointermove', move);
-    window.addEventListener('pointerup', stop);
+    window.addEventListener("pointermove", move);
+    window.addEventListener("pointerup", stop);
   };
 
-  if (!passage) return <main className={`flex-1 min-h-0 overflow-y-auto ${mainClassName}`}>{children}</main>;
+  if (!passage)
+    return <main className={`flex-1 min-h-0 overflow-y-auto ${mainClassName}`}>{children}</main>;
 
   return (
     <div
       ref={row}
-      style={{ '--passage-w': `${width}%` } as CSSProperties}
-      className={`flex-1 min-h-0 flex flex-col md:flex-row overflow-hidden ${dragging ? 'select-none cursor-col-resize' : ''}`}
+      style={{ "--passage-w": `${width}%` } as CSSProperties}
+      className={`flex-1 min-h-0 flex flex-col md:flex-row overflow-hidden ${dragging ? "select-none cursor-col-resize" : ""}`}
     >
       <section
         aria-label="Reading passage"
@@ -97,26 +105,35 @@ export function GroupPassageSplit({
         <button
           type="button"
           aria-expanded={open}
-          onClick={() => setOpen(o => !o)}
+          onClick={() => setOpen((o) => !o)}
           className="md:hidden w-full flex items-center justify-between gap-2 px-4 py-2.5 text-sm font-semibold text-content focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-primary"
         >
           <span className="inline-flex items-center gap-2 min-w-0">
             <Icon.BookOpen className="w-4 h-4 text-primary flex-shrink-0" />
-            <span className="truncate">{passage.title || 'Reading passage'}</span>
+            <span className="truncate">{passage.title || "Reading passage"}</span>
           </span>
           <span className="inline-flex items-center gap-1 text-xs font-medium text-content-soft flex-shrink-0">
-            {open ? 'Hide' : 'Show'}
-            <Icon.ChevronDown className={`w-4 h-4 transition-transform ${open ? 'rotate-180' : ''}`} />
+            {open ? "Hide" : "Show"}
+            <Icon.ChevronDown
+              className={`w-4 h-4 transition-transform ${open ? "rotate-180" : ""}`}
+            />
           </span>
         </button>
         <div
-          className={`${open ? 'block' : 'hidden'} md:block max-h-[40vh] md:max-h-none md:flex-1 overflow-y-auto px-4 pb-4 md:p-[clamp(1rem,2.5vw,1.5rem)]`}
+          className={`${open ? "block" : "hidden"} md:block max-h-[40vh] md:max-h-none md:flex-1 overflow-y-auto px-4 pb-4 md:p-[clamp(1rem,2.5vw,1.5rem)]`}
         >
           <p className="hidden md:flex items-center gap-2 text-xs font-semibold uppercase tracking-wide text-content-subtle mb-3">
             <Icon.BookOpen className="w-4 h-4 text-primary" /> Reading passage
           </p>
-          {passage.title && <h3 className="hidden md:block text-base font-semibold text-content mb-2">{passage.title}</h3>}
-          <QuestionText content={passage.passageText ?? ''} className="text-sm text-content-secondary leading-relaxed" />
+          {passage.title && (
+            <h3 className="hidden md:block text-base font-semibold text-content mb-2">
+              {passage.title}
+            </h3>
+          )}
+          <QuestionText
+            content={passage.passageText ?? ""}
+            className="text-sm text-content-secondary leading-relaxed"
+          />
         </div>
       </section>
       {/* Drag (or ←/→, Home resets) to resize the passage; desktop only — stacked on a phone. */}
@@ -132,18 +149,21 @@ export function GroupPassageSplit({
         title="Drag to resize the passage (double-click to reset)"
         onPointerDown={startDrag}
         onDoubleClick={() => resize(narrow ? PASSAGE_WIDTH.narrowDefault : PASSAGE_WIDTH.default)}
-        onKeyDown={e => {
-          if (e.key === 'ArrowLeft') resize(w => w - PASSAGE_WIDTH.step);
-          else if (e.key === 'ArrowRight') resize(w => w + PASSAGE_WIDTH.step);
-          else if (e.key === 'Home') resize(narrow ? PASSAGE_WIDTH.narrowDefault : PASSAGE_WIDTH.default);
+        onKeyDown={(e) => {
+          if (e.key === "ArrowLeft") resize((w) => w - PASSAGE_WIDTH.step);
+          else if (e.key === "ArrowRight") resize((w) => w + PASSAGE_WIDTH.step);
+          else if (e.key === "Home")
+            resize(narrow ? PASSAGE_WIDTH.narrowDefault : PASSAGE_WIDTH.default);
           else return;
           e.preventDefault();
         }}
         className={`group hidden md:flex w-2 flex-shrink-0 cursor-col-resize items-center justify-center border-l border-line-soft touch-none transition-colors hover:bg-primary-light focus-visible:bg-primary-light focus-visible:outline-none ${
-          dragging ? 'bg-primary-light' : ''
+          dragging ? "bg-primary-light" : ""
         }`}
       >
-        <span className={`h-10 w-0.5 rounded-full transition-colors group-hover:bg-primary group-focus-visible:bg-primary ${dragging ? 'bg-primary' : 'bg-line'}`} />
+        <span
+          className={`h-10 w-0.5 rounded-full transition-colors group-hover:bg-primary group-focus-visible:bg-primary ${dragging ? "bg-primary" : "bg-line"}`}
+        />
       </div>
       <main className={`flex-1 min-h-0 overflow-y-auto ${mainClassName}`}>{children}</main>
     </div>
