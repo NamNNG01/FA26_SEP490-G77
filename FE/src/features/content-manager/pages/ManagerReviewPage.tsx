@@ -17,12 +17,13 @@ export function ManagerReviewPage() {
   });
 
   return (
-    <main className="mx-auto max-w-screen-2xl space-y-6 p-6 lg:p-8">
+    <div className="mx-auto max-w-screen-2xl space-y-6 p-6 lg:p-8">
       <header className="flex flex-wrap items-end justify-between gap-4">
         <div>
-          <h1 className="text-2xl font-bold text-content">Content review</h1>
+          <h1 className="text-2xl font-bold text-content">Content Review</h1>
           <p className="mt-1 text-sm text-content-subtle">
-            Review student questions and flashcard decks submitted for publication.
+            Review student questions and flashcard decks submitted for
+            publication.
           </p>
         </div>
         <div className="rounded-lg bg-surface-muted px-3 py-2 text-sm text-content-secondary">
@@ -90,6 +91,7 @@ export function ManagerReviewPage() {
         <Table
           columns={columns}
           data={rev.rows.map((row) => ({ ...row, id: idOf(row, rev.kind) }))}
+          perPage={20}
           unit="submissions"
           serverPagination={{
             page: rev.page + 1,
@@ -101,7 +103,9 @@ export function ManagerReviewPage() {
           }}
           onRowClick={(row) => void rev.open(row as Row)}
           emptyState={
-            rev.busy ? "Loading submissions…" : "No submissions found. Try changing the filters."
+            rev.busy
+              ? "Loading submissions…"
+              : "No submissions found. Try changing the filters."
           }
         />
       </div>
@@ -146,6 +150,6 @@ export function ManagerReviewPage() {
         onReasonChange={rev.setReason}
         onApproveNoteChange={rev.setApproveNote}
       />
-    </main>
+    </div>
   );
 }
