@@ -13,7 +13,7 @@ import { apiFieldErrors, getApiErrorMessage } from "@/utils/apiError";
 import { focusFirstInvalidAfter } from "@/utils/focusFirstInvalid";
 import { CourseThumbnailField } from "./CourseThumbnailField";
 import { uploadService } from "@/services/upload.service";
-import { useObjectUrl } from "@/utils/useObjectUrl";
+import { useObjectUrl } from "@/hooks/useObjectUrl";
 import {
   courseService,
   type CategoryResponse,
