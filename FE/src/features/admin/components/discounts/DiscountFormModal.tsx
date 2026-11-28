@@ -42,9 +42,10 @@ export function DiscountFormModal({
             Cancel
           </Button>
           <Button
+            form="discount-form"
+            type="submit"
             loading={saving}
             disabled={saving}
-            onClick={() => document.getElementById("discount-form-submit")?.click()}
           >
             {editing ? "Save changes" : "Create discount"}
           </Button>
@@ -191,7 +192,6 @@ export function DiscountFormModal({
             onChange={(e) => onUpdateForm("description", e.target.value)}
           />
         </label>
-        <button id="discount-form-submit" className="hidden" type="submit" />
       </form>
     </Modal>
   );

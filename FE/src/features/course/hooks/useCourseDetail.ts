@@ -202,7 +202,7 @@ export function useCourseDetail({
         ).map(String),
       );
     } catch (err: unknown) {
-      const msg = err instanceof Error ? err.message : "Failed to load course details.";
+      const msg = getApiErrorMessage(err, "Failed to load course details.");
       setError(msg);
       notification.error(msg, {
         title: "Course details could not be loaded",
@@ -461,7 +461,7 @@ export function useCourseDetail({
       setToast({ type: "success", message: `Module "${moduleToDelete.title}" removed.` });
       setModuleToDelete(null);
     } catch (err: unknown) {
-      const msg = err instanceof Error ? err.message : "Failed to delete module.";
+      const msg = getApiErrorMessage(err, "Failed to delete module.");
       setToast({ type: "error", message: msg });
     } finally {
       setDeletingModule(false);
@@ -478,7 +478,7 @@ export function useCourseDetail({
       if (onNavigate) onNavigate("course-list");
       else navigate("/manager/courses");
     } catch (err: unknown) {
-      const msg = err instanceof Error ? err.message : "Failed to delete course.";
+      const msg = getApiErrorMessage(err, "Failed to delete course.");
       setToast({ type: "error", message: msg });
     } finally {
       setDeletingCourse(false);
