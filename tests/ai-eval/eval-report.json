@@ -1,0 +1,118 @@
+{
+  "mode": "mock",
+  "totalCases": 6,
+  "repeats": 3,
+  "schemaComplianceRate": 100.0,
+  "rangeAccuracyRate": 100.0,
+  "stabilityPassRate": 100.0,
+  "mae": 0.003,
+  "monotonicityChecks": {
+    "ESSAY-01: EXCELLENT > PARTIAL": true,
+    "ESSAY-01: PARTIAL > POOR_OFF_TOPIC": true,
+    "DIAGRAM-01: EXCELLENT > PARTIAL": true
+  },
+  "results": [
+    {
+      "id": "AI-ESSAY-01-EXCELLENT",
+      "tier": "EXCELLENT",
+      "scores": [
+        9.26,
+        9.26,
+        9.26
+      ],
+      "avgScore": 9.26,
+      "stdev": 0.0,
+      "expectedRange": [
+        8.5,
+        10.0
+      ],
+      "inRange": true,
+      "schemaErrors": []
+    },
+    {
+      "id": "AI-ESSAY-01-PARTIAL",
+      "tier": "PARTIAL",
+      "scores": [
+        5.0,
+        5.0,
+        5.0
+      ],
+      "avgScore": 5.0,
+      "stdev": 0.0,
+      "expectedRange": [
+        3.5,
+        6.5
+      ],
+      "inRange": true,
+      "schemaErrors": []
+    },
+    {
+      "id": "AI-ESSAY-01-POOR",
+      "tier": "POOR_OFF_TOPIC",
+      "scores": [
+        0.5,
+        0.5,
+        0.5
+      ],
+      "avgScore": 0.5,
+      "stdev": 0.0,
+      "expectedRange": [
+        0.0,
+        1.0
+      ],
+      "inRange": true,
+      "schemaErrors": []
+    },
+    {
+      "id": "AI-ESSAY-01-INJECTION",
+      "tier": "PROMPT_INJECTION",
+      "scores": [
+        0.26,
+        0.26,
+        0.26
+      ],
+      "avgScore": 0.26,
+      "stdev": 0.0,
+      "expectedRange": [
+        0.0,
+        0.5
+      ],
+      "inRange": true,
+      "schemaErrors": []
+    },
+    {
+      "id": "AI-DIAGRAM-01-EXCELLENT",
+      "tier": "EXCELLENT",
+      "scores": [
+        5.5,
+        5.5,
+        5.5
+      ],
+      "avgScore": 5.5,
+      "stdev": 0.0,
+      "expectedRange": [
+        5.0,
+        6.0
+      ],
+      "inRange": true,
+      "schemaErrors": []
+    },
+    {
+      "id": "AI-DIAGRAM-01-PARTIAL",
+      "tier": "PARTIAL",
+      "scores": [
+        2.5,
+        2.5,
+        2.5
+      ],
+      "avgScore": 2.5,
+      "stdev": 0.0,
+      "expectedRange": [
+        1.5,
+        3.5
+      ],
+      "inRange": true,
+      "schemaErrors": []
+    }
+  ]
+}

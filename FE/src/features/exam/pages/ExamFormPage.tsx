@@ -5,7 +5,7 @@ import { Breadcrumb } from "@/components/ui/Breadcrumb";
 import { Button } from "@/components/ui/Button";
 import { Input } from "@/components/ui/Input";
 import { Select } from "@/components/ui/Select";
-import { SearchableSelect } from '@/components/ui/SearchableSelect';
+import { SearchableSelect } from "@/components/ui/SearchableSelect";
 import { Badge } from "@/components/ui/Badge";
 import { Modal } from "@/components/ui/Modal";
 import { ConfirmDialog } from "@/components/ui/ConfirmDialog";
@@ -312,7 +312,10 @@ export function ExamFormPage({
         group: g,
         groupQuestions: questions
           .filter((q) => q.groupId === g.groupId)
-          .sort((a, b) => a.orderIndex - b.orderIndex || a.questionId - b.questionId),
+          .sort(
+            (a, b) =>
+              a.orderIndex - b.orderIndex || a.questionId - b.questionId,
+          ),
       }),
     ),
   ].sort(
@@ -331,28 +334,45 @@ export function ExamFormPage({
       (max, i) => Math.max(max, i.orderIndex),
       -1,
     );
-    const maxGroups = groups.reduce((max, g) => Math.max(max, g.orderIndex), -1);
+    const maxGroups = groups.reduce(
+      (max, g) => Math.max(max, g.orderIndex),
+      -1,
+    );
     return Math.max(maxStandalone, maxImported, maxGroups) + 1;
   };
 
-  const persistUnifiedOrder = async (nextItems: UnifiedExamItem[], nextQuestions: ExamQuestion[], nextGroups: ExamGroup[]) => {
+  const persistUnifiedOrder = async (
+    nextItems: UnifiedExamItem[],
+    nextQuestions: ExamQuestion[],
+    nextGroups: ExamGroup[],
+  ) => {
     if (!isEdit || !id) return;
     setOrderSaving(true);
     try {
       const payloadItems = nextItems.flatMap<ExamOrderEntry>((entry) => {
         if (entry.kind === "question") {
-          return [{ itemType: "QUESTION", linkId: entry.question.examQuestionId }];
+          return [
+            { itemType: "QUESTION", linkId: entry.question.examQuestionId },
+          ];
         }
         if (entry.kind === "group") {
           const childIds = nextQuestions
             .filter((q) => q.groupId === entry.group.groupId)
             .sort((a, b) => a.orderIndex - b.orderIndex)
             .map((q) => q.questionId);
-          return [{ itemType: "GROUP", linkId: entry.group.examGroupId, questionIds: childIds }];
+          return [
+            {
+              itemType: "GROUP",
+              linkId: entry.group.examGroupId,
+              questionIds: childIds,
+            },
+          ];
         }
         return [];
       });
-      const updated = await examService.updateExamOrder(Number(id), { items: payloadItems });
+      const updated = await examService.updateExamOrder(Number(id), {
+        items: payloadItems,
+      });
       setQuestions(updated.questions || nextQuestions);
       setGroups(updated.groups || nextGroups);
     } catch (err) {
@@ -368,7 +388,10 @@ export function ExamFormPage({
     const target = index + delta;
     if (target < 0 || target >= unifiedItems.length) return;
     const reordered = [...unifiedItems];
-    [reordered[index], reordered[target]] = [reordered[target], reordered[index]];
+    [reordered[index], reordered[target]] = [
+      reordered[target],
+      reordered[index],
+    ];
 
     const orderByKey = new Map<string, number>();
     reordered.forEach((entry, idx) => orderByKey.set(entry.key, idx));
@@ -399,11 +422,17 @@ export function ExamFormPage({
     }
   };
 
-  const moveGroupQuestion = async (groupId: number, childIndex: number, delta: -1 | 1) => {
+  const moveGroupQuestion = async (
+    groupId: number,
+    childIndex: number,
+    delta: -1 | 1,
+  ) => {
     if (isReadOnly || orderSaving) return;
     const groupQs = questions
       .filter((q) => q.groupId === groupId)
-      .sort((a, b) => a.orderIndex - b.orderIndex || a.questionId - b.questionId);
+      .sort(
+        (a, b) => a.orderIndex - b.orderIndex || a.questionId - b.questionId,
+      );
     const target = childIndex + delta;
     if (target < 0 || target >= groupQs.length) return;
 
@@ -413,7 +442,9 @@ export function ExamFormPage({
       reorderedChildren[childIndex],
     ];
     const childOrderByQuestionId = new Map<number, number>();
-    reorderedChildren.forEach((cq, idx) => childOrderByQuestionId.set(cq.questionId, idx));
+    reorderedChildren.forEach((cq, idx) =>
+      childOrderByQuestionId.set(cq.questionId, idx),
+    );
 
     const nextQuestions = questions.map((q) =>
       q.groupId === groupId && childOrderByQuestionId.has(q.questionId)
@@ -996,9 +1027,11 @@ export function ExamFormPage({
     const unsupportedCount = drafts.length - supported.length;
     const remaining = Math.max(0, 50 - importedQuestionDrafts.length);
     const startOrder = nextTopOrder();
-    const accepted = supported
-      .slice(0, remaining)
-      .map((draft, idx) => ({ draft, weight: 1, orderIndex: startOrder + idx }));
+    const accepted = supported.slice(0, remaining).map((draft, idx) => ({
+      draft,
+      weight: 1,
+      orderIndex: startOrder + idx,
+    }));
 
     setImportPreviewOpen(false);
     if (unsupportedCount > 0) {
@@ -1169,7 +1202,9 @@ export function ExamFormPage({
             weight: 1,
           })),
         });
-        setExpandedGroupIds((curr) => new Set([...curr, createdGroup.examGroupId]));
+        setExpandedGroupIds(
+          (curr) => new Set([...curr, createdGroup.examGroupId]),
+        );
         toast.success("Reading passage group attached to exam.");
         loadExamDetail(Number(id));
       }
@@ -1292,8 +1327,9 @@ export function ExamFormPage({
         <div className="p-4 bg-info-light/40 border border-brand-line/60 rounded-[12px] flex items-center gap-2.5">
           <Icon.Info className="w-5 h-5 text-brand-ink flex-shrink-0" />
           <span className="text-sm font-medium text-foreground">
-            This exam is published. Exam settings and published question contents
-            are locked, but you can add or remove questions from the bank.
+            This exam is published. Exam settings and published question
+            contents are locked, but you can add or remove questions from the
+            bank.
           </span>
         </div>
       )}
@@ -1409,7 +1445,9 @@ export function ExamFormPage({
                           value: String(m.moduleId),
                         })),
                       ]}
-                      placeholder={!courseId ? 'Select a course first' : 'Select module'}
+                      placeholder={
+                        !courseId ? "Select a course first" : "Select module"
+                      }
                       searchPlaceholder="Search modules…"
                       emptyText="No modules found"
                     />
@@ -1431,6 +1469,7 @@ export function ExamFormPage({
                   <Input
                     label="Exam Title *"
                     placeholder="Enter exam title..."
+                    maxLength={255}
                     value={title}
                     disabled={isReadOnly}
                     onChange={(e) => {
@@ -1557,17 +1596,20 @@ export function ExamFormPage({
 
                 {canManageExamQuestions && (
                   <div className="flex flex-wrap items-center gap-2">
-                    {!isReadOnly && (questions.length > 0 || groups.length > 0 || importedQuestionDrafts.length > 0) && (
-                      <Button
-                        size="sm"
-                        variant="outline"
-                        icon={<Icon.Trash className="w-3.5 h-3.5" />}
-                        onClick={handleRemoveAllQuestions}
-                        disabled={loading || orderSaving}
-                      >
-                        Remove All
-                      </Button>
-                    )}
+                    {!isReadOnly &&
+                      (questions.length > 0 ||
+                        groups.length > 0 ||
+                        importedQuestionDrafts.length > 0) && (
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          icon={<Icon.Trash className="w-3.5 h-3.5" />}
+                          onClick={handleRemoveAllQuestions}
+                          disabled={loading || orderSaving}
+                        >
+                          Remove All
+                        </Button>
+                      )}
                     {!isReadOnly && formKind === "QUIZ" && isEdit && (
                       <Button
                         size="sm"
@@ -1642,7 +1684,8 @@ export function ExamFormPage({
               ) : (
                 <div className="space-y-3">
                   {unifiedItems.map((entry, idx) => {
-                    const canReorderTop = !isReadOnly && questionOrder === "MANUAL" && !orderSaving;
+                    const canReorderTop =
+                      !isReadOnly && questionOrder === "MANUAL" && !orderSaving;
 
                     if (entry.kind === "question") {
                       const q = entry.question;
@@ -1678,11 +1721,17 @@ export function ExamFormPage({
                                       className="w-20 px-2 py-1 rounded border border-line bg-surface text-content disabled:opacity-60"
                                       value={q.weight ?? q.points ?? 1}
                                       onChange={(e) => {
-                                        const weight = Number(e.target.value) || 0;
+                                        const weight =
+                                          Number(e.target.value) || 0;
                                         setQuestions((prev) =>
                                           prev.map((item) =>
-                                            item.examQuestionId === q.examQuestionId
-                                              ? { ...item, weight, points: undefined }
+                                            item.examQuestionId ===
+                                            q.examQuestionId
+                                              ? {
+                                                  ...item,
+                                                  weight,
+                                                  points: undefined,
+                                                }
                                               : item,
                                           ),
                                         );
@@ -1704,25 +1753,29 @@ export function ExamFormPage({
                                     pts
                                   </span>
 
-                                  {!isReadOnly && isAssessment && isEssayQuestion(q) && (
-                                    <button
-                                      type="button"
-                                      onClick={() =>
-                                        setRubricModalQuestion({
-                                          id: q.questionId,
-                                          content: q.content,
-                                        })
-                                      }
-                                      className="text-xs font-semibold text-brand-ink hover:underline cursor-pointer"
-                                    >
-                                      Edit Rubric
-                                    </button>
-                                  )}
+                                  {!isReadOnly &&
+                                    isAssessment &&
+                                    isEssayQuestion(q) && (
+                                      <button
+                                        type="button"
+                                        onClick={() =>
+                                          setRubricModalQuestion({
+                                            id: q.questionId,
+                                            content: q.content,
+                                          })
+                                        }
+                                        className="text-xs font-semibold text-brand-ink hover:underline cursor-pointer"
+                                      >
+                                        Edit Rubric
+                                      </button>
+                                    )}
                                 </div>
                               </div>
                             </div>
 
-                            {(canReorderTop || !isReadOnly || canManageExamQuestions) && (
+                            {(canReorderTop ||
+                              !isReadOnly ||
+                              canManageExamQuestions) && (
                               <div className="flex items-center gap-1">
                                 {canReorderTop && (
                                   <>
@@ -1762,7 +1815,9 @@ export function ExamFormPage({
                                 {canManageExamQuestions && (
                                   <button
                                     type="button"
-                                    disabled={isPublished && totalQuestionCount <= 1}
+                                    disabled={
+                                      isPublished && totalQuestionCount <= 1
+                                    }
                                     onClick={() =>
                                       setRemoveConfirmTarget({
                                         type: "question",
@@ -1784,7 +1839,8 @@ export function ExamFormPage({
                               </div>
                             )}
                           </div>
-                          {(q.questionType === "DIAGRAM" || q.questionType === "DIAGRAM_ESSAY") && (
+                          {(q.questionType === "DIAGRAM" ||
+                            q.questionType === "DIAGRAM_ESSAY") && (
                             <ExamDiagramAnswer
                               questionId={q.questionId}
                               readOnly={isReadOnly}
@@ -1806,7 +1862,9 @@ export function ExamFormPage({
                               <span className="w-6 h-6 rounded-full bg-brand-light text-brand-ink flex items-center justify-center text-xs font-bold">
                                 #{idx + 1}
                               </span>
-                              <Badge variant="info" className="text-2xs">Imported Draft (saved with exam)</Badge>
+                              <Badge variant="info" className="text-2xs">
+                                Imported Draft (saved with exam)
+                              </Badge>
                             </div>
                             {canReorderTop && (
                               <div className="flex items-center gap-1">
@@ -1870,11 +1928,13 @@ export function ExamFormPage({
                               />
                             </label>
                             <span className="text-xs font-semibold text-brand-ink">
-                              Score: {formatScore(scoreForWeight(item.weight))} pts
+                              Score: {formatScore(scoreForWeight(item.weight))}{" "}
+                              pts
                             </span>
                           </div>
                           {importedQuestionsSubmitted &&
-                            Object.keys(validateDraft(item.draft)).length > 0 && (
+                            Object.keys(validateDraft(item.draft)).length >
+                              0 && (
                               <p className="text-xs text-danger">
                                 Fix the question validation errors above before
                                 creating the exam.
@@ -2091,9 +2151,15 @@ export function ExamFormPage({
                                         <div className="flex items-center gap-1">
                                           <button
                                             type="button"
-                                            disabled={orderSaving || questionIndex === 0}
+                                            disabled={
+                                              orderSaving || questionIndex === 0
+                                            }
                                             onClick={() =>
-                                              moveGroupQuestion(g.groupId, questionIndex, -1)
+                                              moveGroupQuestion(
+                                                g.groupId,
+                                                questionIndex,
+                                                -1,
+                                              )
                                             }
                                             className="rounded p-1 text-content-subtle hover:bg-surface-hover hover:text-content cursor-pointer disabled:opacity-30 disabled:cursor-not-allowed"
                                             title="Move question up within group"
@@ -2105,10 +2171,15 @@ export function ExamFormPage({
                                             type="button"
                                             disabled={
                                               orderSaving ||
-                                              questionIndex === groupQuestions.length - 1
+                                              questionIndex ===
+                                                groupQuestions.length - 1
                                             }
                                             onClick={() =>
-                                              moveGroupQuestion(g.groupId, questionIndex, 1)
+                                              moveGroupQuestion(
+                                                g.groupId,
+                                                questionIndex,
+                                                1,
+                                              )
                                             }
                                             className="rounded p-1 text-content-subtle hover:bg-surface-hover hover:text-content cursor-pointer disabled:opacity-30 disabled:cursor-not-allowed"
                                             title="Move question down within group"
@@ -2130,7 +2201,8 @@ export function ExamFormPage({
                                         </div>
                                       )}
                                     </div>
-                                    {(q.questionType === "DIAGRAM" || q.questionType === "DIAGRAM_ESSAY") && (
+                                    {(q.questionType === "DIAGRAM" ||
+                                      q.questionType === "DIAGRAM_ESSAY") && (
                                       <ExamDiagramAnswer
                                         questionId={q.questionId}
                                         readOnly={isReadOnly}
@@ -2245,8 +2317,14 @@ export function ExamFormPage({
         existingQuestionIds={existingQuestionIds}
         courseId={Number(courseId)}
         initialModuleId={moduleId ? Number(moduleId) : undefined}
-        courseName={courses.find((course) => String(course.courseId) === courseId)?.title ?? ""}
-        modules={modules.map((module) => ({ moduleId: module.moduleId, title: module.title }))}
+        courseName={
+          courses.find((course) => String(course.courseId) === courseId)
+            ?.title ?? ""
+        }
+        modules={modules.map((module) => ({
+          moduleId: module.moduleId,
+          title: module.title,
+        }))}
         loading={loading}
       />
 
@@ -2266,7 +2344,12 @@ export function ExamFormPage({
         onClose={() => !questionEditSaving && setQuestionEditTarget(null)}
         title="Edit Question"
         size="2xl"
-        error={questionEditError && questionEditDraft && <Alert type="error" message={questionEditError} />}
+        error={
+          questionEditError &&
+          questionEditDraft && (
+            <Alert type="error" message={questionEditError} />
+          )
+        }
         footer={
           <div className="flex w-full flex-wrap items-center justify-end gap-2">
             <Button
@@ -2366,7 +2449,9 @@ export function ExamFormPage({
         title="Remove from this exam?"
         description={
           <>
-            <strong className="text-content">"{removeConfirmTarget?.title}"</strong>{" "}
+            <strong className="text-content">
+              "{removeConfirmTarget?.title}"
+            </strong>{" "}
             is only unlinked from this exam. The original item in the Question
             Bank is preserved.
           </>
