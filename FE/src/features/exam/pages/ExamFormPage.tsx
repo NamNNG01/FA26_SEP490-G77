@@ -1,1160 +1,39 @@
-import React, { useEffect, useState } from "react";
-import { QuestionContent } from "@/components/common/QuestionContent";
-import { useParams, useNavigate, useLocation } from "react-router";
+import React from "react";
 import { Breadcrumb } from "@/components/ui/Breadcrumb";
 import { Button } from "@/components/ui/Button";
-import { Input } from "@/components/ui/Input";
-import { Select } from "@/components/ui/Select";
-import { SearchableSelect } from "@/components/ui/SearchableSelect";
 import { Badge } from "@/components/ui/Badge";
-import { Modal } from "@/components/ui/Modal";
 import { ConfirmDialog } from "@/components/ui/ConfirmDialog";
-import { Alert } from "@/components/ui/Alert";
 import { Icon } from "@/assets/icons";
-import { useToast } from "@/components/ui/ToastHost";
 import { ROUTES } from "@/app/routes";
-import {
-  examService,
-  type ExamDetail,
-  type ExamConfig,
-  type ExamQuestion,
-  type ExamGroup,
-  type GenerationType,
-  type QuestionOrder,
-  type ExamOrderEntry,
-  type ExamStatus,
-  type ExamMode,
-  EXAM_MODE_OPTIONS,
-} from "@/services/exam.service";
-import type { QuestionListItem } from "@/services/question.service";
-import type { QuestionGroup } from "@/services/questionGroup.service";
-import {
-  courseService,
-  type CourseSummaryItem,
-  type CourseModuleResponse,
-} from "@/services/course.service";
 import { QuestionBankSelectModal } from "../components/QuestionBankSelectModal";
 import { QuestionGroupModal } from "../components/QuestionGroupModal";
 import { RubricDetailModal } from "../components/RubricDetailModal";
 import { ImportQuestionsModal } from "../components/ImportQuestionsModal";
 import { ImportPdfModal } from "@/features/question/components/ImportPdfModal";
-import { QuestionForm as QuestionFormBlock } from "@/features/question/components/QuestionForm";
 import { ExamAiGenerateTab } from "../components/ExamAiGenerateTab";
-import { DiagramAnswer } from "@/features/question/components/DiagramAnswer";
-import { QuestionForm } from "@/features/question/components/QuestionForm";
-import {
-  fromDetail,
-  isDraftValid,
-  toCreateRequest,
-  toUpdateRequest,
-  validateDraft,
-  type EditableQuestionType,
-  type QuestionDraft,
-} from "@/features/question/model";
-import { questionService, type QuestionDetail } from "@/services/question.service";
-import { getApiErrorMessage } from "@/utils/apiError";
-import { focusFirstInvalidAfter } from "@/utils/focusFirstInvalid";
+import { useExamForm } from "../hooks/useExamForm";
+import { ExamSettingsSection } from "../components/form/ExamSettingsSection";
+import { ExamQuestionsSection } from "../components/form/ExamQuestionsSection";
+import { ExamSummarySidebar } from "../components/form/ExamSummarySidebar";
+import { EditExamQuestionModal } from "../components/form/EditExamQuestionModal";
+import { ArchiveCloneModal } from "../components/form/ArchiveCloneModal";
 
 export function ExamFormPage({
-  formKind: propFormKind,
-  mode: propMode,
+  formKind,
+  mode,
 }: {
   formKind?: "QUIZ" | "ESSAY" | "DIAGRAM" | "CODE";
   mode?: "create" | "edit";
 }) {
-  const { id } = useParams<{ id: string }>();
-  const navigate = useNavigate();
-  const location = useLocation();
-  const toast = useToast();
-
-  const isEdit = propMode === "edit" || (Boolean(id) && id !== "new");
-  const isEssayFromPath = location.pathname.includes("/essay");
-  const isCodeFromPath = location.pathname.includes("/exams/code");
-  const requestedFormKind =
-    propFormKind || (isCodeFromPath ? "CODE" : isEssayFromPath ? "ESSAY" : "QUIZ");
-  const formKind = requestedFormKind === "DIAGRAM" ? "ESSAY" : requestedFormKind;
-  const isAssessment = formKind !== "QUIZ";
-  const formLabel = formKind === "QUIZ" ? "Quiz" : formKind === "CODE" ? "Code" : "Essay";
-  const examPathKind = formKind.toLowerCase();
-  const isEssayQuestion = (question: ExamQuestion) =>
-    ["ESSAY", "DIAGRAM", "DIAGRAM_ESSAY"].includes(question.questionType);
-
-  const [activeTab, setActiveTab] = useState<"manual" | "ai">("manual");
-  const [courses, setCourses] = useState<CourseSummaryItem[]>([]);
-  const [modules, setModules] = useState<CourseModuleResponse[]>([]);
-
-  const [loading, setLoading] = useState(false);
-  const [saving, setSaving] = useState(false);
-  const [isDirty, setIsDirty] = useState(false);
-  const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
-
-  const [title, setTitle] = useState("");
-  const [description, setDescription] = useState("");
-  const [courseId, setCourseId] = useState<string>("");
-  const [moduleId, setModuleId] = useState<string>("");
-  const [durationMinutes, setDurationMinutes] = useState<number>(60);
-  const [maxScore, setMaxScore] = useState<number>(100);
-  const [mode, setMode] = useState<ExamMode>("EXAM");
-  const [generationType, setGenerationType] = useState<GenerationType>("STATIC");
-  const [questionOrder, setQuestionOrder] = useState<QuestionOrder>("MANUAL");
-  const [status, setStatus] = useState<ExamStatus>("DRAFT");
-  const [orderSaving, setOrderSaving] = useState(false);
-
-  const [questions, setQuestions] = useState<ExamQuestion[]>([]);
-  const [groups, setGroups] = useState<ExamGroup[]>([]);
-  const [importPreviewOpen, setImportPreviewOpen] = useState(false);
-  const [importedQuestionDrafts, setImportedQuestionDrafts] = useState<
-    { draft: QuestionDraft; weight: number; orderIndex: number }[]
-  >([]);
-  const [importedQuestionsSubmitted, setImportedQuestionsSubmitted] = useState(false);
-  const [expandedGroupIds, setExpandedGroupIds] = useState<Set<number>>(() => new Set());
-  const [configs, setConfigs] = useState<ExamConfig[]>([]);
-
-  const [bankModalOpen, setBankModalOpen] = useState(false);
-  const [groupModalOpen, setGroupModalOpen] = useState(false);
-  const [importModalOpen, setImportModalOpen] = useState(false);
-  const [rubricModalQuestion, setRubricModalQuestion] = useState<{
-    id: number;
-    content: string;
-  } | null>(null);
-  const [questionEditTarget, setQuestionEditTarget] = useState<ExamQuestion | null>(null);
-  const [questionEditDraft, setQuestionEditDraft] = useState<QuestionDraft | null>(null);
-  const [questionEditLoading, setQuestionEditLoading] = useState(false);
-  const [questionEditSaving, setQuestionEditSaving] = useState(false);
-  const [questionEditSubmitted, setQuestionEditSubmitted] = useState(false);
-  const [questionEditError, setQuestionEditError] = useState("");
-
-  const [removeConfirmTarget, setRemoveConfirmTarget] = useState<
-    | { type: "question"; examQuestionId: number; title: string }
-    | { type: "group"; examGroupId: number; title: string }
-    | null
-  >(null);
-
-  const [archiveCloneModalOpen, setArchiveCloneModalOpen] = useState(false);
-  const [archiveCloning, setArchiveCloning] = useState(false);
-  const [saveDescriptionOnly, setSaveDescriptionOnly] = useState(false);
-  const [leaveConfirmOpen, setLeaveConfirmOpen] = useState(false);
-
-  const isPublished = status === "PUBLISHED";
-  const isArchived = status === "ARCHIVED";
-  const isReadOnly = isPublished || isArchived;
-  // Published exams keep their settings and question contents locked, while still allowing
-  // managers to add/remove questions & groups and adjust weights. Archived exams are read-only.
-  const canManageExamQuestions = !isArchived;
-
-  const allowedQuestionTypes =
-    formKind === "QUIZ"
-      ? ["SINGLE_CHOICE", "MULTIPLE_CHOICE", "TRUE_FALSE", "FILL_BLANK", "MATCHING", "ORDERING"]
-      : formKind === "CODE"
-        ? ["CODE"]
-        : ["ESSAY", "DIAGRAM", "DIAGRAM_ESSAY"];
-
-  useEffect(() => {
-    if (!questionEditTarget) {
-      setQuestionEditDraft(null);
-      return;
-    }
-    let active = true;
-    setQuestionEditDraft(null);
-    setQuestionEditLoading(true);
-    setQuestionEditError("");
-    setQuestionEditSubmitted(false);
-    questionService
-      .getQuestionById(questionEditTarget.questionId)
-      .then((detail) => {
-        if (active) setQuestionEditDraft(fromDetail(detail));
-      })
-      .catch((err) => {
-        if (active) setQuestionEditError(getApiErrorMessage(err, "Could not load this question."));
-      })
-      .finally(() => {
-        if (active) setQuestionEditLoading(false);
-      });
-    return () => {
-      active = false;
-    };
-  }, [questionEditTarget]);
-
-  const handleSaveQuestionEdit = async () => {
-    if (!questionEditTarget || !questionEditDraft || questionEditSaving) return;
-    setQuestionEditError("");
-    if (!isDraftValid(questionEditDraft)) {
-      focusFirstInvalidAfter(() => setQuestionEditSubmitted(true));
-      return;
-    }
-    setQuestionEditSubmitted(true);
-    setQuestionEditSaving(true);
-    try {
-      const detail = await questionService.getQuestionById(questionEditTarget.questionId);
-      const updated = await questionService.updateQuestion(
-        questionEditTarget.questionId,
-        toUpdateRequest(
-          { ...questionEditDraft, lockVersion: detail.lockVersion },
-          detail.moduleId,
-          { status: detail.status },
-        ),
-      );
-      setQuestions((prev) =>
-        prev.map((q) =>
-          q.questionId === updated.questionId
-            ? {
-                ...q,
-                content: updated.content,
-                questionType: updated.questionType,
-              }
-            : q,
-        ),
-      );
-      toast.success("Question updated.");
-      setQuestionEditTarget(null);
-      setQuestionEditSubmitted(false);
-    } catch (err) {
-      setQuestionEditError(getApiErrorMessage(err, "Could not save this question."));
-    } finally {
-      setQuestionEditSaving(false);
-    }
-  };
-
-  const totalQuestionCount =
-    questions.length +
-    importedQuestionDrafts.length +
-    configs.reduce((sum, config) => sum + config.numberOfQuestions, 0);
-  const hasAddedQuestions = questions.length > 0 || importedQuestionDrafts.length > 0;
-  const standaloneQuestions = questions.filter((question) => !question.groupId);
-
-  const QUESTION_ORDER_OPTIONS: { label: string; value: QuestionOrder }[] = [
-    { label: "Manual (Fixed Order)", value: "MANUAL" },
-    { label: "Random (Keep Groups Together)", value: "RANDOM" },
-  ];
-
-  type UnifiedExamItem =
-    | {
-        kind: "question";
-        key: string;
-        orderIndex: number;
-        typeRank: 0;
-        idNum: number;
-        question: ExamQuestion;
-      }
-    | {
-        kind: "imported";
-        key: string;
-        orderIndex: number;
-        typeRank: 1;
-        idNum: number;
-        item: { draft: QuestionDraft; weight: number; orderIndex: number };
-      }
-    | {
-        kind: "group";
-        key: string;
-        orderIndex: number;
-        typeRank: 2;
-        idNum: number;
-        group: ExamGroup;
-        groupQuestions: ExamQuestion[];
-      };
-
-  const unifiedItems: UnifiedExamItem[] = [
-    ...standaloneQuestions.map((q): UnifiedExamItem => ({
-      kind: "question",
-      key: `q-${q.examQuestionId}`,
-      orderIndex: q.orderIndex,
-      typeRank: 0,
-      idNum: q.examQuestionId,
-      question: q,
-    })),
-    ...importedQuestionDrafts.map((item, idx): UnifiedExamItem => ({
-      kind: "imported",
-      key: `imp-${item.draft.key}`,
-      orderIndex: item.orderIndex,
-      typeRank: 1,
-      idNum: idx,
-      item,
-    })),
-    ...groups.map((g): UnifiedExamItem => ({
-      kind: "group",
-      key: `g-${g.examGroupId}`,
-      orderIndex: g.orderIndex,
-      typeRank: 2,
-      idNum: g.examGroupId,
-      group: g,
-      groupQuestions: questions
-        .filter((q) => q.groupId === g.groupId)
-        .sort((a, b) => a.orderIndex - b.orderIndex || a.questionId - b.questionId),
-    })),
-  ].sort((a, b) => a.orderIndex - b.orderIndex || a.typeRank - b.typeRank || a.idNum - b.idNum);
-
-  const nextTopOrder = () => {
-    const maxStandalone = standaloneQuestions.reduce((max, q) => Math.max(max, q.orderIndex), -1);
-    const maxImported = importedQuestionDrafts.reduce((max, i) => Math.max(max, i.orderIndex), -1);
-    const maxGroups = groups.reduce((max, g) => Math.max(max, g.orderIndex), -1);
-    return Math.max(maxStandalone, maxImported, maxGroups) + 1;
-  };
-
-  const persistUnifiedOrder = async (
-    nextItems: UnifiedExamItem[],
-    nextQuestions: ExamQuestion[],
-    nextGroups: ExamGroup[],
-  ) => {
-    if (!isEdit || !id) return;
-    setOrderSaving(true);
-    try {
-      const payloadItems = nextItems.flatMap<ExamOrderEntry>((entry) => {
-        if (entry.kind === "question") {
-          return [{ itemType: "QUESTION", linkId: entry.question.examQuestionId }];
-        }
-        if (entry.kind === "group") {
-          const childIds = nextQuestions
-            .filter((q) => q.groupId === entry.group.groupId)
-            .sort((a, b) => a.orderIndex - b.orderIndex)
-            .map((q) => q.questionId);
-          return [
-            {
-              itemType: "GROUP",
-              linkId: entry.group.examGroupId,
-              questionIds: childIds,
-            },
-          ];
-        }
-        return [];
-      });
-      const updated = await examService.updateExamOrder(Number(id), {
-        items: payloadItems,
-      });
-      setQuestions(updated.questions || nextQuestions);
-      setGroups(updated.groups || nextGroups);
-    } catch (err) {
-      toast.error(getApiErrorMessage(err, "Failed to update question order."));
-      loadExamDetail(Number(id));
-    } finally {
-      setOrderSaving(false);
-    }
-  };
-
-  const moveUnifiedItem = async (index: number, delta: -1 | 1) => {
-    if (isReadOnly || orderSaving) return;
-    const target = index + delta;
-    if (target < 0 || target >= unifiedItems.length) return;
-    const reordered = [...unifiedItems];
-    [reordered[index], reordered[target]] = [reordered[target], reordered[index]];
-
-    const orderByKey = new Map<string, number>();
-    reordered.forEach((entry, idx) => orderByKey.set(entry.key, idx));
-
-    const nextQuestions = questions.map((q) =>
-      !q.groupId && orderByKey.has(`q-${q.examQuestionId}`)
-        ? { ...q, orderIndex: orderByKey.get(`q-${q.examQuestionId}`)! }
-        : q,
-    );
-    const nextGroups = groups.map((g) =>
-      orderByKey.has(`g-${g.examGroupId}`)
-        ? { ...g, orderIndex: orderByKey.get(`g-${g.examGroupId}`)! }
-        : g,
-    );
-    const nextImported = importedQuestionDrafts.map((it) =>
-      orderByKey.has(`imp-${it.draft.key}`)
-        ? { ...it, orderIndex: orderByKey.get(`imp-${it.draft.key}`)! }
-        : it,
-    );
-
-    setQuestions(nextQuestions);
-    setGroups(nextGroups);
-    setImportedQuestionDrafts(nextImported);
-    if (!isEdit) {
-      setIsDirty(true);
-    } else {
-      await persistUnifiedOrder(reordered, nextQuestions, nextGroups);
-    }
-  };
-
-  const moveGroupQuestion = async (groupId: number, childIndex: number, delta: -1 | 1) => {
-    if (isReadOnly || orderSaving) return;
-    const groupQs = questions
-      .filter((q) => q.groupId === groupId)
-      .sort((a, b) => a.orderIndex - b.orderIndex || a.questionId - b.questionId);
-    const target = childIndex + delta;
-    if (target < 0 || target >= groupQs.length) return;
-
-    const reorderedChildren = [...groupQs];
-    [reorderedChildren[childIndex], reorderedChildren[target]] = [
-      reorderedChildren[target],
-      reorderedChildren[childIndex],
-    ];
-    const childOrderByQuestionId = new Map<number, number>();
-    reorderedChildren.forEach((cq, idx) => childOrderByQuestionId.set(cq.questionId, idx));
-
-    const nextQuestions = questions.map((q) =>
-      q.groupId === groupId && childOrderByQuestionId.has(q.questionId)
-        ? { ...q, orderIndex: childOrderByQuestionId.get(q.questionId)! }
-        : q,
-    );
-
-    setQuestions(nextQuestions);
-    if (!isEdit) {
-      setIsDirty(true);
-    } else {
-      await persistUnifiedOrder(unifiedItems, nextQuestions, groups);
-    }
-  };
-  const totalWeight =
-    generationType === "RANDOM"
-      ? configs.reduce(
-          (sum, config) => sum + config.numberOfQuestions * (config.weightEach ?? 1),
-          0,
-        )
-      : questions.reduce((acc, q) => acc + (q.weight ?? q.points ?? 1), 0) +
-        importedQuestionDrafts.reduce((sum, item) => sum + item.weight, 0);
-  const scoreForWeight = (weight: number) =>
-    totalWeight > 0 ? Number(((maxScore * weight) / totalWeight).toFixed(2)) : 0;
-  const formatScore = (score: number) => Number(score.toFixed(2)).toString();
-  const withoutRubricWarnings = (warnings: string[]) =>
-    warnings.filter((warning) => !/\b(?:no|missing) rubrics?\b/i.test(warning));
-  const reportExamError = (message: string, title = "Exam update failed") =>
-    toast.error(message, { title, duration: null });
-
-  useEffect(() => {
-    courseService
-      .getCourses()
-      .then((res) => {
-        setCourses(res.content || []);
-      })
-      .catch((err) => {
-        const message = getApiErrorMessage(err, "Failed to load courses.");
-        toast.error(message, {
-          title: "Could not load courses",
-          duration: null,
-        });
-      });
-  }, [toast]);
-
-  useEffect(() => {
-    if (courseId) {
-      courseService
-        .getCourseModules(courseId)
-        .then((mods) => {
-          setModules(mods || []);
-        })
-        .catch((err) => {
-          setModules([]);
-          const message = getApiErrorMessage(err, "Failed to load course modules.");
-          toast.error(message, {
-            title: "Could not load course modules",
-            duration: null,
-          });
-        });
-    } else {
-      setModules([]);
-      setModuleId("");
-    }
-  }, [courseId, toast]);
-
-  const loadExamDetail = async (examIdNum: number) => {
-    setLoading(true);
-    try {
-      const data = await examService.getExamById(examIdNum);
-      // A CODE exam opened through the essay URL (or the reverse) belongs to the other form.
-      if (
-        (data.examKind === "CODE") !== (formKind === "CODE") &&
-        (data.examKind === "CODE" || data.examKind === "ESSAY")
-      ) {
-        navigate(`/manager/exams/${data.examKind.toLowerCase()}/${examIdNum}`, {
-          replace: true,
-        });
-        return;
-      }
-      setTitle(data.title || "");
-      setDescription(data.description || "");
-      setCourseId(data.courseId ? String(data.courseId) : "");
-      setModuleId(data.moduleId ? String(data.moduleId) : "");
-      setDurationMinutes(data.durationMinutes || 60);
-      setMaxScore(data.maxScore || 100);
-      setMode(data.mode === "CONTEST" ? "CONTEST" : "EXAM");
-      setGenerationType(
-        data.generationType === "MIXED" ? "STATIC" : data.generationType || "STATIC",
-      );
-      setQuestionOrder(data.questionOrder || "RANDOM");
-      setStatus(data.status || "DRAFT");
-      setConfigs(data.generationType === "MIXED" ? [] : data.configs || []);
-      setGroups(data.groups || []);
-      const detailWarnings = withoutRubricWarnings(data.warnings || []);
-      if (detailWarnings.length > 0) {
-        toast.warning(detailWarnings.join(" "), {
-          title: "Exam warnings",
-          duration: null,
-        });
-      }
-
-      const loadedQuestions = [...(data.questions || [])];
-      setQuestions(loadedQuestions);
-
-      if (isAssessment) {
-        const missingRubricQuestions = loadedQuestions.filter(
-          (q) =>
-            isAssessment &&
-            ["ESSAY", "DIAGRAM", "DIAGRAM_ESSAY"].includes(q.questionType) &&
-            q.hasRubric === undefined,
-        );
-        if (missingRubricQuestions.length > 0) {
-          Promise.allSettled(
-            missingRubricQuestions
-              .slice(0, 5)
-              .map((q) => questionService.getQuestionById(q.questionId)),
-          ).then((results) => {
-            setQuestions((prev) =>
-              prev.map((pq) => {
-                const foundRes = results.find(
-                  (r) => r.status === "fulfilled" && r.value.questionId === pq.questionId,
-                );
-                if (foundRes && foundRes.status === "fulfilled") {
-                  return {
-                    ...pq,
-                    hasRubric: !!foundRes.value.essayGradingRubric,
-                  };
-                }
-                return pq;
-              }),
-            );
-          });
-        }
-      }
-      setIsDirty(false);
-    } catch (err: unknown) {
-      const errorObj = err as { response?: { status?: number } };
-      if (errorObj?.response?.status === 404) {
-        toast.error("Exam not found. Returning to exam list.");
-        navigate(ROUTES.managerExams);
-      } else {
-        reportExamError(
-          getApiErrorMessage(err, "Failed to load exam details. Please try again."),
-          "Could not load exam details",
-        );
-      }
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  useEffect(() => {
-    if (isEdit && id) {
-      const numId = Number(id);
-      if (!isNaN(numId)) {
-        loadExamDetail(numId);
-      }
-    }
-  }, [id, isEdit, formKind]);
-
-  const handlePublishStatusChange = async (targetStatus: ExamStatus) => {
-    if (!id) return;
-    if (targetStatus === "PUBLISHED") {
-      if (generationType === "STATIC" && totalQuestionCount === 0) {
-        toast.error("Exam must have at least 1 question to be published.");
-        return;
-      }
-      if (!title.trim() || !courseId) {
-        toast.error("Exam must have title and course before publishing.");
-        return;
-      }
-    }
-
-    setSaving(true);
-    try {
-      const res = await examService.patchPublishExam(Number(id), targetStatus);
-      setStatus(res.status);
-      const publishWarnings = withoutRubricWarnings(res.warnings || []);
-      if (publishWarnings.length > 0) {
-        toast.warning(publishWarnings.join(" "), {
-          title: `Status updated to ${targetStatus}`,
-        });
-      } else {
-        toast.success(`Exam status successfully updated to ${targetStatus}.`);
-      }
-      loadExamDetail(Number(id));
-    } catch (err: unknown) {
-      const errorObj = err as {
-        response?: { status?: number; data?: { message?: string } };
-      };
-      if (errorObj?.response?.status === 400) {
-        toast.error(
-          errorObj.response.data?.message ||
-            "Exam cannot be published. Ensure questions are attached.",
-        );
-      } else {
-        toast.error(getApiErrorMessage(err, "Failed to update exam publish status."));
-      }
-    } finally {
-      setSaving(false);
-    }
-  };
-
-  const validateForm = (): boolean => {
-    const errors: Record<string, string> = {};
-    const MSG01 = "This field is required.";
-
-    if (!title.trim()) {
-      errors.title = MSG01;
-    } else if (title.length > 255) {
-      errors.title = "Title must be 255 characters or fewer.";
-    }
-
-    if (!courseId) errors.courseId = MSG01;
-    if (!moduleId) errors.moduleId = MSG01;
-
-    if (durationMinutes < 1 || durationMinutes > 600) {
-      errors.durationMinutes = "Duration must be between 1 and 600 minutes.";
-    }
-
-    if (
-      !Number.isFinite(maxScore) ||
-      maxScore <= 0 ||
-      maxScore > 10000 ||
-      (String(maxScore).split(".")[1]?.length ?? 0) > 2
-    ) {
-      errors.maxScore =
-        "Max score must be greater than 0 and no more than 10,000, with up to 2 decimal places.";
-    }
-
-    if (
-      questions.some((question) => {
-        const weight = question.weight ?? question.points ?? 1;
-        return (
-          !Number.isFinite(weight) ||
-          weight <= 0 ||
-          weight > 1000 ||
-          (String(weight).split(".")[1]?.length ?? 0) > 2
-        );
-      }) ||
-      importedQuestionDrafts.some(
-        ({ weight }) =>
-          !Number.isFinite(weight) ||
-          weight <= 0 ||
-          weight > 1000 ||
-          (String(weight).split(".")[1]?.length ?? 0) > 2,
-      )
-    ) {
-      errors.questions =
-        "Every question weight must be greater than 0, no more than 1,000, and have up to 2 decimal places.";
-    }
-
-    if (generationType === "RANDOM") {
-      if (configs.length === 0) {
-        errors.configs = "Random exam requires at least one question draw configuration rule.";
-      }
-      if (questions.length > 0 || groups.length > 0 || importedQuestionDrafts.length > 0) {
-        errors.configs =
-          "Random exams use draw rules only. Remove attached questions and groups first.";
-      }
-      if (
-        configs.some((config) => {
-          const weight = config.weightEach ?? 1;
-          return (
-            !Number.isFinite(weight) ||
-            weight <= 0 ||
-            weight > 1000 ||
-            (String(weight).split(".")[1]?.length ?? 0) > 2
-          );
-        })
-      ) {
-        errors.configs =
-          "Each random question weight must be greater than 0, no more than 1,000, and have up to 2 decimal places.";
-      }
-    } else if (configs.length > 0) {
-      errors.configs = "Static exams use attached questions and groups, not draw rules.";
-    }
-
-    setFieldErrors(errors);
-    return Object.keys(errors).length === 0;
-  };
-
-  const handleSaveExam = async () => {
-    if (!validateForm()) return;
-    if (
-      !isEdit &&
-      importedQuestionDrafts.some(({ draft }) => !isDraftValid(draft) || draft.importIssue)
-    ) {
-      setImportedQuestionsSubmitted(true);
-      reportExamError(
-        "Review the imported questions and fix any validation errors before creating the exam.",
-        "Review imported questions",
-      );
-      return;
-    }
-    setSaving(true);
-
-    try {
-      if (!isEdit) {
-        const payloadQuestionIds = questions
-          .filter((q) => !q.groupId)
-          .sort((a, b) => a.orderIndex - b.orderIndex)
-          .map((q) => ({
-            questionId: q.questionId,
-            weight: q.weight ?? q.points ?? 1,
-            orderIndex: q.orderIndex,
-          }));
-        // E-02 saves (or reuses) these and attaches them in the same transaction as the exam.
-        const importedQuestions = importedQuestionDrafts.map(({ draft, weight, orderIndex }) => ({
-          question: {
-            ...toCreateRequest(draft, Number(courseId), moduleId ? Number(moduleId) : null),
-            status: "ACTIVE" as const,
-          },
-          weight,
-          orderIndex,
-        }));
-
-        const payloadGroupIds = [...groups]
-          .sort((a, b) => a.orderIndex - b.orderIndex)
-          .map((g) => ({
-            groupId: g.groupId,
-            questions: questions
-              .filter((q) => q.groupId === g.groupId)
-              .sort((a, b) => a.orderIndex - b.orderIndex)
-              .map((q) => ({
-                questionId: q.questionId,
-                weight: q.weight ?? q.points ?? 1,
-              })),
-            orderIndex: g.orderIndex,
-          }));
-
-        const created = await examService.createExam({
-          title: title.trim(),
-          description: description.trim() || undefined,
-          courseId: courseId ? Number(courseId) : undefined,
-          moduleId: moduleId ? Number(moduleId) : undefined,
-          durationMinutes,
-          maxScore,
-          mode,
-          generationType,
-          questionOrder,
-          questionIds: payloadQuestionIds,
-          importedQuestions,
-          groupIds: payloadGroupIds,
-          configs:
-            generationType === "RANDOM"
-              ? configs.map((config) => ({
-                  ...config,
-                  moduleId: moduleId ? Number(moduleId) : undefined,
-                }))
-              : [],
-        });
-
-        toast.success("Exam successfully created.");
-        const targetRoute =
-          formKind === "QUIZ"
-            ? `/manager/exams/quiz/${created.examId}`
-            : `/manager/exams/${examPathKind}/${created.examId}`;
-        navigate(targetRoute, { replace: true });
-      } else {
-        await examService.updateExam(Number(id), {
-          title: title.trim(),
-          description: description.trim(),
-          courseId: courseId ? Number(courseId) : undefined,
-          moduleId: moduleId ? Number(moduleId) : undefined,
-          durationMinutes,
-          mode,
-          generationType,
-          questionOrder,
-          maxScore,
-          configs:
-            generationType === "RANDOM"
-              ? configs.map((config) => ({
-                  ...config,
-                  moduleId: moduleId ? Number(moduleId) : undefined,
-                }))
-              : [],
-        });
-
-        toast.success("Exam configuration updated successfully.");
-        setIsDirty(false);
-        loadExamDetail(Number(id));
-      }
-    } catch (err: unknown) {
-      const errorObj = err as {
-        response?: { status?: number; data?: { message?: string } };
-      };
-      // A new exam can't have attempts; create-time 409s are duplicate questions/groups.
-      if (isEdit && errorObj?.response?.status === 409) {
-        setArchiveCloneModalOpen(true);
-      } else if (errorObj?.response?.status === 400) {
-        reportExamError(
-          getApiErrorMessage(err, "Validation error while saving exam."),
-          "Could not save exam",
-        );
-      } else {
-        reportExamError(getApiErrorMessage(err, "Failed to save exam."));
-      }
-    } finally {
-      setSaving(false);
-    }
-  };
-
-  const handleArchiveAndClone = async () => {
-    if (!id) return;
-    setArchiveCloning(true);
-    try {
-      await examService.patchPublishExam(Number(id), "ARCHIVED");
-      const cloned = await examService.createExam({
-        title: `${title} (copy)`,
-        description,
-        courseId: courseId ? Number(courseId) : undefined,
-        moduleId: moduleId ? Number(moduleId) : undefined,
-        durationMinutes,
-        mode,
-        generationType,
-        questionOrder,
-        maxScore,
-        questionIds: questions
-          .filter((q) => !q.groupId)
-          .sort((a, b) => a.orderIndex - b.orderIndex)
-          .map((q) => ({
-            questionId: q.questionId,
-            weight: q.weight ?? q.points ?? 1,
-            orderIndex: q.orderIndex,
-          })),
-        groupIds: [...groups]
-          .sort((a, b) => a.orderIndex - b.orderIndex)
-          .map((g) => ({
-            groupId: g.groupId,
-            questions: questions
-              .filter((q) => q.groupId === g.groupId)
-              .sort((a, b) => a.orderIndex - b.orderIndex)
-              .map((q) => ({
-                questionId: q.questionId,
-                weight: q.weight ?? q.points ?? 1,
-              })),
-            orderIndex: g.orderIndex,
-          })),
-        configs: configs.map((config) => ({
-          ...config,
-          moduleId: moduleId ? Number(moduleId) : undefined,
-        })),
-      });
-
-      toast.success("Previous exam archived and new editable copy created.");
-      setArchiveCloneModalOpen(false);
-      const targetRoute =
-        formKind === "QUIZ"
-          ? `/manager/exams/quiz/${cloned.examId}`
-          : `/manager/exams/${examPathKind}/${cloned.examId}`;
-      navigate(targetRoute, { replace: true });
-    } catch (err) {
-      toast.error(getApiErrorMessage(err, "Failed to execute Archive and Clone workflow."));
-    } finally {
-      setArchiveCloning(false);
-    }
-  };
-
-  const handleSaveDescriptionOnly = async () => {
-    if (!id) return;
-    setSaving(true);
-    try {
-      await examService.updateExam(Number(id), { description });
-      toast.success("Exam description updated.");
-      setArchiveCloneModalOpen(false);
-      setSaveDescriptionOnly(false);
-      loadExamDetail(Number(id));
-    } catch (err) {
-      toast.error(getApiErrorMessage(err, "Failed to update description."));
-    } finally {
-      setSaving(false);
-    }
-  };
-
-  const handleAddQuestionsFromBank = async (
-    items: { question: QuestionListItem; weight: number }[],
-  ) => {
-    if (items.length === 0) return;
-
-    if (!isEdit) {
-      const startOrder = nextTopOrder();
-      const added: ExamQuestion[] = items.map((item, idx) => ({
-        examQuestionId: Date.now() + idx,
-        questionId: item.question.questionId,
-        content: item.question.content,
-        questionType: item.question.questionType,
-        weight: item.weight,
-        orderIndex: startOrder + idx,
-        // The bank list carries no rubric data.
-        hasRubric: false,
-      }));
-      setQuestions((prev) => [...prev, ...added]);
-      setIsDirty(true);
-      setBankModalOpen(false);
-      toast.success(`Added ${items.length} questions to draft exam.`);
-    } else {
-      setBankModalOpen(false);
-      setLoading(true);
-      let successCount = 0;
-      const failures: string[] = [];
-      let nextOrder = nextTopOrder();
-
-      for (const item of items) {
-        try {
-          await examService.addQuestionToExam(Number(id), {
-            questionId: item.question.questionId,
-            weight: item.weight,
-            orderIndex: nextOrder++,
-          });
-          successCount++;
-        } catch (err: unknown) {
-          const errObj = err as {
-            response?: { status?: number; data?: { message?: string } };
-          };
-          if (errObj?.response?.status === 409) {
-            failures.push(`Question #${item.question.questionId} already in exam.`);
-          } else {
-            failures.push(
-              `Question #${item.question.questionId}: ${getApiErrorMessage(err, "Request failed.")}`,
-            );
-          }
-        }
-      }
-
-      if (failures.length > 0) {
-        toast.error(
-          successCount > 0
-            ? `Attached ${successCount} question(s); some questions failed: ${failures.join(" ")}`
-            : failures.join(" "),
-        );
-      } else if (successCount > 0) {
-        toast.success(`Successfully attached ${successCount} question(s).`);
-      }
-      loadExamDetail(Number(id));
-    }
-  };
-
-  const handleImportedDrafts = (drafts: QuestionDraft[]) => {
-    const supported = drafts.filter((draft) => allowedQuestionTypes.includes(draft.type));
-    const unsupportedCount = drafts.length - supported.length;
-    const remaining = Math.max(0, 50 - importedQuestionDrafts.length);
-    const startOrder = nextTopOrder();
-    const accepted = supported.slice(0, remaining).map((draft, idx) => ({
-      draft,
-      weight: 1,
-      orderIndex: startOrder + idx,
-    }));
-
-    setImportPreviewOpen(false);
-    if (unsupportedCount > 0) {
-      toast.warning(
-        `${unsupportedCount} imported question(s) did not match this exam’s question types and were skipped.`,
-      );
-    }
-    if (accepted.length < supported.length) {
-      toast.warning(
-        `Only ${accepted.length} imported question(s) were added. Q-03 supports up to 50 questions per batch.`,
-      );
-    }
-    if (accepted.length === 0) return;
-
-    setImportedQuestionDrafts((prev) => [...prev, ...accepted]);
-    setImportedQuestionsSubmitted(false);
-    setIsDirty(true);
-    toast.success(
-      `Added ${accepted.length} question(s) from the import preview. They will be saved with the exam.`,
-    );
-  };
-
-  const updateImportedDraft = (key: string, draft: QuestionDraft) => {
-    setImportedQuestionDrafts((prev) =>
-      prev.map((item) => (item.draft.key === key ? { ...item, draft } : item)),
-    );
-    setIsDirty(true);
-  };
-
-  const removeImportedDraft = (key: string) => {
-    setImportedQuestionDrafts((prev) => prev.filter((item) => item.draft.key !== key));
-    setIsDirty(true);
-  };
-
-  const handleRemoveQuestion = async (examQuestionId: number) => {
-    if (!isEdit) {
-      setQuestions((prev) => prev.filter((q) => q.examQuestionId !== examQuestionId));
-      setIsDirty(true);
-      setRemoveConfirmTarget(null);
-    } else {
-      setLoading(true);
-      try {
-        await examService.removeQuestionFromExam(Number(id), examQuestionId);
-        toast.success("Question removed from exam.");
-        setRemoveConfirmTarget(null);
-        loadExamDetail(Number(id));
-      } catch (err: unknown) {
-        toast.error(getApiErrorMessage(err, "Failed to remove question."));
-      } finally {
-        setLoading(false);
-      }
-    }
-  };
-
-  const handleRemoveAllQuestions = async () => {
-    if (!isEdit) {
-      setQuestions([]);
-      setGroups([]);
-      setImportedQuestionDrafts([]);
-      setIsDirty(true);
-      toast.success("All questions removed from the draft exam.");
-      return;
-    }
-
-    if (!id || (questions.length === 0 && groups.length === 0)) return;
-
-    setLoading(true);
-    try {
-      await examService.removeAllQuestionsFromExam(Number(id));
-      toast.success("All questions removed from exam.");
-    } catch (err) {
-      toast.error(getApiErrorMessage(err, "Could not remove the questions."));
-    } finally {
-      setLoading(false);
-    }
-    loadExamDetail(Number(id));
-  };
-
-  const handleQuestionWeightBlur = async (
-    question: ExamQuestion,
-    weight = question.weight ?? question.points ?? 1,
-  ) => {
-    const currentWeight = question.weight ?? question.points ?? 1;
-    if (weight === currentWeight) return;
-    if (
-      !Number.isFinite(weight) ||
-      weight <= 0 ||
-      weight > 1000 ||
-      Math.round(weight * 100) !== weight * 100
-    ) {
-      toast.error(
-        "Question weight must be greater than 0, no more than 1,000, and have up to 2 decimal places.",
-      );
-      return;
-    }
-    if (!isEdit || !question.examQuestionId) return;
-    try {
-      const updated = await examService.updateQuestionWeight(
-        Number(id),
-        question.examQuestionId,
-        weight,
-      );
-      setQuestions((prev) =>
-        prev.map((item) =>
-          item.examQuestionId === updated.examQuestionId
-            ? { ...item, weight: updated.weight, points: undefined }
-            : item,
-        ),
-      );
-      toast.success("Question weight updated.");
-    } catch (err) {
-      toast.error(getApiErrorMessage(err, "Failed to update question weight."));
-      loadExamDetail(Number(id));
-    }
-  };
-
-  const handleAddGroup = async (group: QuestionGroup) => {
-    setGroupModalOpen(false);
-    setLoading(true);
-    try {
-      const groupQuestions = await questionService.getQuestions({
-        groupId: group.groupId,
-        status: "ACTIVE",
-        page: 0,
-        size: 100,
-      });
-      const attachedQuestions = groupQuestions.content.map((question, idx) => ({
-        examQuestionId: Date.now() + idx,
-        questionId: question.questionId,
-        content: question.content,
-        questionType: question.questionType,
-        weight: 1,
-        orderIndex: idx,
-        groupId: group.groupId,
-        hasRubric: false,
-      }));
-      const topOrder = nextTopOrder();
-
-      if (!isEdit) {
-        const newExamGroupId = Date.now() + 99999;
-        setQuestions((prev) => [...prev, ...attachedQuestions]);
-        setGroups((prev) => [
-          ...prev,
-          {
-            examGroupId: newExamGroupId,
-            groupId: group.groupId,
-            title: group.title ?? "",
-            orderIndex: topOrder,
-            passageText: group.passageText ?? undefined,
-            questionCount: attachedQuestions.length,
-          },
-        ]);
-        setExpandedGroupIds((curr) => new Set([...curr, newExamGroupId]));
-        setIsDirty(true);
-        toast.success(
-          "Reading passage group added to draft. Set weights or arrange question order in the unified list below.",
-        );
-      } else {
-        const createdGroup = await examService.addGroupToExam(Number(id), {
-          groupId: group.groupId,
-          orderIndex: topOrder,
-          questions: groupQuestions.content.map((question) => ({
-            questionId: question.questionId,
-            weight: 1,
-          })),
-        });
-        setExpandedGroupIds((curr) => new Set([...curr, createdGroup.examGroupId]));
-        toast.success("Reading passage group attached to exam.");
-        loadExamDetail(Number(id));
-      }
-    } catch (err: unknown) {
-      const errorObj = err as {
-        response?: { status?: number; data?: { message?: string } };
-      };
-      if (errorObj?.response?.status === 409) {
-        toast.error("This question group is already attached to this exam.");
-      } else {
-        toast.error(getApiErrorMessage(err, "Failed to attach question group."));
-      }
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const handleRemoveGroup = async (examGroupId: number) => {
-    if (!isEdit) {
-      const groupId = groups.find((g) => g.examGroupId === examGroupId)?.groupId;
-      setGroups((prev) => prev.filter((g) => g.examGroupId !== examGroupId));
-      if (groupId) setQuestions((prev) => prev.filter((q) => q.groupId !== groupId));
-      setIsDirty(true);
-      setRemoveConfirmTarget(null);
-    } else {
-      setLoading(true);
-      try {
-        await examService.removeGroupFromExam(Number(id), examGroupId);
-        toast.success("Question group removed from exam.");
-        setRemoveConfirmTarget(null);
-        loadExamDetail(Number(id));
-      } catch (err: unknown) {
-        toast.error(getApiErrorMessage(err, "Failed to remove group."));
-      } finally {
-        setLoading(false);
-      }
-    }
-  };
-
-  const handleCancelClick = () => {
-    if (isDirty) {
-      setLeaveConfirmOpen(true);
-    } else {
-      navigate(ROUTES.managerExams);
-    }
-  };
-
-  const existingQuestionIds = new Set(questions.map((q) => q.questionId));
-  const existingGroupIds = new Set(groups.map((g) => g.groupId));
+  const form = useExamForm({ formKind, mode });
 
   return (
     <div className="p-8 space-y-5">
       <Breadcrumb
         items={[
-          { label: "Exams", onClick: () => navigate(ROUTES.managerExams) },
+          { label: "Exams", onClick: () => form.navigate(ROUTES.managerExams) },
           {
-            label: isEdit ? `Edit ${formLabel} Exam` : `New ${formLabel} Exam`,
+            label: form.isEdit ? `Edit ${form.formLabel} Exam` : `New ${form.formLabel} Exam`,
           },
         ]}
       />
@@ -1162,40 +41,46 @@ export function ExamFormPage({
       <div className="flex flex-wrap items-center justify-between gap-4">
         <div className="flex items-center gap-3">
           <h2 className="text-xl font-bold text-content">
-            {isEdit ? `Edit ${formLabel} Exam` : `Create ${formLabel} Exam`}
+            {form.isEdit ? `Edit ${form.formLabel} Exam` : `Create ${form.formLabel} Exam`}
           </h2>
           <Badge
             variant={
-              status === "PUBLISHED" ? "success" : status === "ARCHIVED" ? "default" : "warning"
+              form.status === "PUBLISHED"
+                ? "success"
+                : form.status === "ARCHIVED"
+                  ? "default"
+                  : "warning"
             }
           >
-            {status}
+            {form.status}
           </Badge>
-          <Badge variant="purple">{formLabel}</Badge>
+          <Badge variant="purple">{form.formLabel}</Badge>
         </div>
 
         <div className="flex items-center gap-2">
-          {isEdit && (
+          {form.isEdit && (
             <>
-              {status === "DRAFT" && (
+              {form.status === "DRAFT" && (
                 <Button
                   variant="outline"
                   icon={<Icon.CheckCircle className="w-4 h-4" />}
-                  onClick={() => handlePublishStatusChange("PUBLISHED")}
+                  onClick={() => form.handlePublishStatusChange("PUBLISHED")}
                   disabled={
-                    saving || loading || (generationType === "STATIC" && totalQuestionCount === 0)
+                    form.saving ||
+                    form.loading ||
+                    (form.generationType === "STATIC" && form.totalQuestionCount === 0)
                   }
                 >
                   Publish Exam
                 </Button>
               )}
 
-              {status !== "ARCHIVED" && (
+              {form.status !== "ARCHIVED" && (
                 <Button
                   variant="outline"
                   icon={<Icon.Archive className="w-4 h-4" />}
-                  onClick={() => handlePublishStatusChange("ARCHIVED")}
-                  disabled={saving || loading}
+                  onClick={() => form.handlePublishStatusChange("ARCHIVED")}
+                  disabled={form.saving || form.loading}
                 >
                   Archive
                 </Button>
@@ -1205,7 +90,7 @@ export function ExamFormPage({
         </div>
       </div>
 
-      {isPublished && (
+      {form.isPublished && (
         <div className="p-4 bg-info-light/40 border border-brand-line/60 rounded-[12px] flex items-center gap-2.5">
           <Icon.Info className="w-5 h-5 text-brand-ink flex-shrink-0" />
           <span className="text-sm font-medium text-foreground">
@@ -1215,7 +100,7 @@ export function ExamFormPage({
         </div>
       )}
 
-      {isArchived && (
+      {form.isArchived && (
         <div className="p-4 bg-surface-muted border border-line rounded-[12px] flex items-center gap-2.5">
           <Icon.Archive className="w-5 h-5 text-content-subtle flex-shrink-0" />
           <span className="text-sm font-medium text-content-secondary">
@@ -1224,13 +109,13 @@ export function ExamFormPage({
         </div>
       )}
 
-      {!isEdit && (
+      {!form.isEdit && (
         <div className="flex border-b border-line">
           <button
             type="button"
-            onClick={() => setActiveTab("manual")}
+            onClick={() => form.setActiveTab("manual")}
             className={`px-5 py-2.5 text-sm font-semibold border-b-2 -mb-px transition-colors cursor-pointer ${
-              activeTab === "manual"
+              form.activeTab === "manual"
                 ? "border-brand-ink text-brand-ink"
                 : "border-transparent text-content-subtle hover:text-content"
             }`}
@@ -1239,9 +124,9 @@ export function ExamFormPage({
           </button>
           <button
             type="button"
-            onClick={() => setActiveTab("ai")}
+            onClick={() => form.setActiveTab("ai")}
             className={`px-5 py-2.5 text-sm font-semibold border-b-2 -mb-px transition-colors cursor-pointer flex items-center gap-1.5 ${
-              activeTab === "ai"
+              form.activeTab === "ai"
                 ? "border-brand-ink text-brand-ink"
                 : "border-transparent text-content-subtle hover:text-content"
             }`}
@@ -1252,1126 +137,256 @@ export function ExamFormPage({
         </div>
       )}
 
-      {!isEdit && activeTab === "ai" ? (
+      {!form.isEdit && form.activeTab === "ai" ? (
         <ExamAiGenerateTab
-          formKind={formKind}
+          formKind={form.formKind}
           onCreated={(created) => {
             const targetRoute =
-              formKind === "QUIZ"
+              form.formKind === "QUIZ"
                 ? `/manager/exams/quiz/${created.examId}`
-                : `/manager/exams/${examPathKind}/${created.examId}`;
-            navigate(targetRoute, { replace: true });
+                : `/manager/exams/${form.examPathKind}/${created.examId}`;
+            form.navigate(targetRoute, { replace: true });
           }}
-          onCancel={() => setActiveTab("manual")}
+          onCancel={() => form.setActiveTab("manual")}
         />
       ) : (
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 items-start">
           <div className="lg:col-span-2 space-y-6">
-            <div className="card p-5 space-y-4">
-              <h3 className="text-base font-bold text-content border-b border-line-soft pb-2.5">
-                Exam Basic Information
-              </h3>
+            <ExamSettingsSection
+              courses={form.courses}
+              modules={form.modules}
+              courseId={form.courseId}
+              onCourseChange={(v) => {
+                form.setCourseId(v);
+                form.setModuleId("");
+                form.setModules([]);
+                form.setIsDirty(true);
+                form.setFieldErrors((p) => ({ ...p, courseId: "", moduleId: "" }));
+              }}
+              moduleId={form.moduleId}
+              onModuleChange={(v) => {
+                form.setModuleId(v);
+                form.setIsDirty(true);
+                if (form.fieldErrors.moduleId) {
+                  form.setFieldErrors((p) => ({ ...p, moduleId: "" }));
+                }
+              }}
+              title={form.title}
+              onTitleChange={(v) => {
+                form.setTitle(v);
+                form.setIsDirty(true);
+                if (form.fieldErrors.title) form.setFieldErrors((p) => ({ ...p, title: "" }));
+              }}
+              description={form.description}
+              onDescriptionChange={(v) => {
+                form.setDescription(v);
+                form.setIsDirty(true);
+              }}
+              durationMinutes={form.durationMinutes}
+              onDurationChange={(v) => {
+                form.setDurationMinutes(v);
+                form.setIsDirty(true);
+              }}
+              maxScore={form.maxScore}
+              onMaxScoreChange={(v) => {
+                form.setMaxScore(v);
+                form.setIsDirty(true);
+              }}
+              mode={form.mode}
+              onModeChange={(v) => {
+                form.setMode(v);
+                form.setIsDirty(true);
+              }}
+              questionOrder={form.questionOrder}
+              onQuestionOrderChange={(v) => {
+                form.setQuestionOrder(v);
+                form.setIsDirty(true);
+              }}
+              isReadOnly={form.isReadOnly}
+              hasAddedQuestions={form.hasAddedQuestions}
+              fieldErrors={form.fieldErrors}
+            />
 
-              <div className="space-y-4">
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                  <div>
-                    <SearchableSelect
-                      label="Course *"
-                      value={courseId}
-                      disabled={isReadOnly || hasAddedQuestions}
-                      onChange={(v) => {
-                        setCourseId(v);
-                        setModuleId("");
-                        setModules([]);
-                        setIsDirty(true);
-                        setFieldErrors((p) => ({
-                          ...p,
-                          courseId: "",
-                          moduleId: "",
-                        }));
-                      }}
-                      options={[
-                        { label: "Select Course", value: "" },
-                        ...courses.map((c) => ({
-                          label: c.title,
-                          value: String(c.courseId),
-                        })),
-                      ]}
-                      placeholder="Select course"
-                      searchPlaceholder="Search courses…"
-                      emptyText="No courses found"
-                    />
-                    {fieldErrors.courseId && (
-                      <p className="text-xs text-danger mt-1">{fieldErrors.courseId}</p>
-                    )}
-                  </div>
-
-                  <div>
-                    <SearchableSelect
-                      label="Module *"
-                      value={moduleId}
-                      disabled={isReadOnly || !courseId || hasAddedQuestions}
-                      onChange={(v) => {
-                        setModuleId(v);
-                        setIsDirty(true);
-                        if (fieldErrors.moduleId) setFieldErrors((p) => ({ ...p, moduleId: "" }));
-                      }}
-                      options={[
-                        { label: "Select Module", value: "" },
-                        ...modules.map((m) => ({
-                          label: m.title,
-                          value: String(m.moduleId),
-                        })),
-                      ]}
-                      placeholder={!courseId ? "Select a course first" : "Select module"}
-                      searchPlaceholder="Search modules…"
-                      emptyText="No modules found"
-                    />
-                    {fieldErrors.moduleId && (
-                      <p className="text-xs text-danger mt-1">{fieldErrors.moduleId}</p>
-                    )}
-                  </div>
-                </div>
-                {hasAddedQuestions && !isReadOnly && (
-                  <p className="text-xs text-content-subtle -mt-2">
-                    Remove all added questions before changing the course or module.
-                  </p>
-                )}
-
-                <div>
-                  <Input
-                    label="Exam Title *"
-                    placeholder="Enter exam title..."
-                    maxLength={255}
-                    value={title}
-                    disabled={isReadOnly}
-                    onChange={(e) => {
-                      setTitle(e.target.value);
-                      setIsDirty(true);
-                      if (fieldErrors.title) setFieldErrors((p) => ({ ...p, title: "" }));
-                    }}
-                  />
-                  {fieldErrors.title && (
-                    <p className="text-xs text-danger mt-1">{fieldErrors.title}</p>
-                  )}
-                </div>
-
-                <div>
-                  <label className="text-sm font-medium text-content-secondary block mb-1">
-                    Description / Instructions (optional)
-                  </label>
-                  <textarea
-                    rows={3}
-                    disabled={isReadOnly}
-                    className="w-full px-3 py-2 text-sm rounded-[10px] border border-line bg-surface disabled:opacity-60 focus:outline-none focus:ring-2 focus:ring-brand-600/20 focus:border-brand-600"
-                    placeholder="Provide guidance, permitted materials, or exam objectives..."
-                    value={description}
-                    onChange={(e) => {
-                      setDescription(e.target.value);
-                      setIsDirty(true);
-                    }}
-                  />
-                </div>
-
-                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
-                  <div>
-                    <label className="text-xs font-medium text-content-secondary block mb-1">
-                      Duration (min) *
-                    </label>
-                    <input
-                      type="number"
-                      min={1}
-                      max={600}
-                      disabled={isReadOnly}
-                      className="w-full px-3 py-1.5 text-sm rounded-[8px] border border-line bg-surface disabled:opacity-60"
-                      value={durationMinutes}
-                      onChange={(e) => {
-                        setDurationMinutes(Number(e.target.value) || 0);
-                        setIsDirty(true);
-                      }}
-                    />
-                    {fieldErrors.durationMinutes && (
-                      <p className="text-2xs text-danger mt-0.5">{fieldErrors.durationMinutes}</p>
-                    )}
-                  </div>
-
-                  <div>
-                    <label className="text-xs font-medium text-content-secondary block mb-1">
-                      Max Score *
-                    </label>
-                    <input
-                      type="number"
-                      min={0}
-                      max={10000}
-                      step={1}
-                      disabled={isReadOnly}
-                      className="w-full px-3 py-1.5 text-sm rounded-[8px] border border-line bg-surface disabled:opacity-60"
-                      value={maxScore}
-                      onChange={(e) => {
-                        setMaxScore(Number(e.target.value) || 0);
-                        setIsDirty(true);
-                      }}
-                    />
-                    {fieldErrors.maxScore && (
-                      <p className="text-2xs text-danger mt-0.5">{fieldErrors.maxScore}</p>
-                    )}
-                  </div>
-
-                  <Select
-                    label="Mode"
-                    value={mode}
-                    disabled={isReadOnly}
-                    onChange={(v) => {
-                      setMode(v as ExamMode);
-                      setIsDirty(true);
-                    }}
-                    options={EXAM_MODE_OPTIONS}
-                  />
-
-                  <Select
-                    label="Question Order"
-                    value={questionOrder}
-                    disabled={isReadOnly}
-                    onChange={(v) => {
-                      setQuestionOrder(v as QuestionOrder);
-                      setIsDirty(true);
-                    }}
-                    options={QUESTION_ORDER_OPTIONS}
-                  />
-                </div>
-              </div>
-            </div>
-
-            <div className="card p-5 space-y-4">
-              <div className="flex flex-wrap items-center justify-between gap-2 border-b border-line-soft pb-2.5">
-                <div>
-                  <h3 className="text-base font-bold text-content">
-                    Exam Questions &amp; Passage Groups ({unifiedItems.length})
-                  </h3>
-                  <p className="text-xs text-content-subtle">
-                    {questionOrder === "MANUAL"
-                      ? "Manual order: standalone questions and reading passage groups appear in this exact sequence (options inside questions still shuffle)."
-                      : "Random order: items shuffle per attempt, while questions inside each reading passage group stay contiguous and in order."}
-                  </p>
-                  {fieldErrors.questions && (
-                    <p className="mt-1 text-xs text-danger">{fieldErrors.questions}</p>
-                  )}
-                </div>
-
-                {canManageExamQuestions && (
-                  <div className="flex flex-wrap items-center gap-2">
-                    {!isReadOnly &&
-                      (questions.length > 0 ||
-                        groups.length > 0 ||
-                        importedQuestionDrafts.length > 0) && (
-                        <Button
-                          size="sm"
-                          variant="outline"
-                          icon={<Icon.Trash className="w-3.5 h-3.5" />}
-                          onClick={handleRemoveAllQuestions}
-                          disabled={loading || orderSaving}
-                        >
-                          Remove All
-                        </Button>
-                      )}
-                    {!isReadOnly && formKind === "QUIZ" && isEdit && (
-                      <Button
-                        size="sm"
-                        variant="outline"
-                        icon={<Icon.Upload className="w-3.5 h-3.5" />}
-                        onClick={() => setImportModalOpen(true)}
-                      >
-                        Import Questions
-                      </Button>
-                    )}
-                    {!isReadOnly && !isEdit && (
-                      <Button
-                        size="sm"
-                        variant="outline"
-                        icon={<Icon.Upload className="w-3.5 h-3.5" />}
-                        onClick={() => setImportPreviewOpen(true)}
-                        disabled={!courseId || !moduleId}
-                        title={
-                          !courseId
-                            ? "Select a course before importing"
-                            : !moduleId
-                              ? "Select a module before importing"
-                              : undefined
-                        }
-                      >
-                        Import Excel / Word / PDF
-                      </Button>
-                    )}
-
-                    <Button
-                      size="sm"
-                      variant="secondary"
-                      icon={<Icon.Plus className="w-3.5 h-3.5" />}
-                      onClick={() => setGroupModalOpen(true)}
-                      disabled={!courseId || !moduleId}
-                      title={
-                        !courseId
-                          ? "Select a course before adding a group"
-                          : !moduleId
-                            ? "Select a module before adding a group"
-                            : undefined
-                      }
-                    >
-                      Add Group
-                    </Button>
-
-                    <Button
-                      size="sm"
-                      icon={<Icon.Plus className="w-3.5 h-3.5" />}
-                      onClick={() => setBankModalOpen(true)}
-                      disabled={!courseId || !moduleId}
-                      title={
-                        !courseId
-                          ? "Select a course before adding questions"
-                          : !moduleId
-                            ? "Select a module before adding questions"
-                            : undefined
-                      }
-                    >
-                      Select Questions from Bank
-                    </Button>
-                  </div>
-                )}
-              </div>
-
-              {unifiedItems.length === 0 ? (
-                <div className="py-12 text-center text-sm text-content-subtle border-2 border-dashed border-line-soft rounded-[10px]">
-                  {!courseId || !moduleId
-                    ? "Select a Course and Module above first, then add questions or reading passage groups."
-                    : "No questions or reading passage groups attached yet."}
-                </div>
-              ) : (
-                <div className="space-y-3">
-                  {unifiedItems.map((entry, idx) => {
-                    const canReorderTop = !isReadOnly && questionOrder === "MANUAL" && !orderSaving;
-
-                    if (entry.kind === "question") {
-                      const q = entry.question;
-                      return (
-                        <div
-                          key={entry.key}
-                          className="p-3.5 rounded-[10px] border border-line bg-surface transition-colors"
-                        >
-                          <div className="flex items-start justify-between gap-3">
-                            <div className="flex items-start gap-2.5 flex-1 min-w-0">
-                              <span className="w-6 h-6 rounded-full bg-brand-light text-brand-ink flex items-center justify-center text-xs font-bold flex-shrink-0 mt-0.5">
-                                #{idx + 1}
-                              </span>
-                              <div className="flex-1 min-w-0">
-                                <p className="text-sm font-medium text-content leading-snug whitespace-pre-line break-words">
-                                  <QuestionContent text={q.content} />
-                                </p>
-                                <div className="flex flex-wrap items-center gap-2 mt-2">
-                                  <Badge variant="default" className="text-2xs font-semibold">
-                                    {q.questionType.replace("_", " ")}
-                                  </Badge>
-                                  <label className="inline-flex items-center gap-1.5 text-xs text-content-secondary font-medium">
-                                    Weight
-                                    <input
-                                      type="number"
-                                      min={0}
-                                      max={1000}
-                                      step={1}
-                                      disabled={!canManageExamQuestions}
-                                      className="w-20 px-2 py-1 rounded border border-line bg-surface text-content disabled:opacity-60"
-                                      value={q.weight ?? q.points ?? 1}
-                                      onChange={(e) => {
-                                        const weight = Number(e.target.value) || 0;
-                                        setQuestions((prev) =>
-                                          prev.map((item) =>
-                                            item.examQuestionId === q.examQuestionId
-                                              ? {
-                                                  ...item,
-                                                  weight,
-                                                  points: undefined,
-                                                }
-                                              : item,
-                                          ),
-                                        );
-                                        setIsDirty(true);
-                                      }}
-                                      onBlur={(e) =>
-                                        handleQuestionWeightBlur(
-                                          q,
-                                          Number(e.currentTarget.value) || 0,
-                                        )
-                                      }
-                                    />
-                                  </label>
-                                  <span className="text-xs text-brand-ink font-semibold">
-                                    Score: {formatScore(scoreForWeight(q.weight ?? q.points ?? 1))}{" "}
-                                    pts
-                                  </span>
-
-                                  {!isReadOnly && isAssessment && isEssayQuestion(q) && (
-                                    <button
-                                      type="button"
-                                      onClick={() =>
-                                        setRubricModalQuestion({
-                                          id: q.questionId,
-                                          content: q.content,
-                                        })
-                                      }
-                                      className="text-xs font-semibold text-brand-ink hover:underline cursor-pointer"
-                                    >
-                                      Edit Rubric
-                                    </button>
-                                  )}
-                                </div>
-                              </div>
-                            </div>
-
-                            {(canReorderTop || !isReadOnly || canManageExamQuestions) && (
-                              <div className="flex items-center gap-1">
-                                {canReorderTop && (
-                                  <>
-                                    <button
-                                      type="button"
-                                      disabled={idx === 0}
-                                      onClick={() => moveUnifiedItem(idx, -1)}
-                                      className="text-content-subtle hover:text-content p-1 rounded hover:bg-surface-hover cursor-pointer disabled:opacity-30 disabled:cursor-not-allowed"
-                                      title="Move up"
-                                      aria-label={`Move item ${idx + 1} up`}
-                                    >
-                                      <Icon.ArrowUp className="w-4 h-4" />
-                                    </button>
-                                    <button
-                                      type="button"
-                                      disabled={idx === unifiedItems.length - 1}
-                                      onClick={() => moveUnifiedItem(idx, 1)}
-                                      className="text-content-subtle hover:text-content p-1 rounded hover:bg-surface-hover cursor-pointer disabled:opacity-30 disabled:cursor-not-allowed"
-                                      title="Move down"
-                                      aria-label={`Move item ${idx + 1} down`}
-                                    >
-                                      <Icon.ArrowDown className="w-4 h-4" />
-                                    </button>
-                                  </>
-                                )}
-                                {!isReadOnly && (
-                                  <button
-                                    type="button"
-                                    onClick={() => setQuestionEditTarget(q)}
-                                    className="text-content-subtle hover:text-brand-ink p-1 rounded hover:bg-surface-hover cursor-pointer"
-                                    title="Edit Question"
-                                    aria-label={`Edit question ${idx + 1}`}
-                                  >
-                                    <Icon.Edit className="w-4 h-4" />
-                                  </button>
-                                )}
-                                {canManageExamQuestions && (
-                                  <button
-                                    type="button"
-                                    disabled={isPublished && totalQuestionCount <= 1}
-                                    onClick={() =>
-                                      setRemoveConfirmTarget({
-                                        type: "question",
-                                        examQuestionId: q.examQuestionId,
-                                        title: q.content,
-                                      })
-                                    }
-                                    className="text-content-subtle hover:text-danger p-1 rounded hover:bg-danger-light cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed"
-                                    title={
-                                      isPublished && totalQuestionCount <= 1
-                                        ? "Published exam must keep at least one question"
-                                        : "Remove Question from Exam"
-                                    }
-                                    aria-label={`Remove question ${idx + 1} from exam`}
-                                  >
-                                    <Icon.Trash className="w-4 h-4" />
-                                  </button>
-                                )}
-                              </div>
-                            )}
-                          </div>
-                          {(q.questionType === "DIAGRAM" || q.questionType === "DIAGRAM_ESSAY") && (
-                            <ExamDiagramAnswer questionId={q.questionId} readOnly={isReadOnly} />
-                          )}
-                        </div>
-                      );
-                    }
-
-                    if (entry.kind === "imported") {
-                      const item = entry.item;
-                      return (
-                        <div
-                          key={entry.key}
-                          className="space-y-2 rounded-[10px] border border-brand-line/60 bg-surface p-3.5"
-                        >
-                          <div className="flex items-center justify-between gap-2 pb-1">
-                            <div className="flex items-center gap-2">
-                              <span className="w-6 h-6 rounded-full bg-brand-light text-brand-ink flex items-center justify-center text-xs font-bold">
-                                #{idx + 1}
-                              </span>
-                              <Badge variant="info" className="text-2xs">
-                                Imported Draft (saved with exam)
-                              </Badge>
-                            </div>
-                            {canReorderTop && (
-                              <div className="flex items-center gap-1">
-                                <button
-                                  type="button"
-                                  disabled={idx === 0}
-                                  onClick={() => moveUnifiedItem(idx, -1)}
-                                  className="text-content-subtle hover:text-content p-1 rounded hover:bg-surface-hover cursor-pointer disabled:opacity-30 disabled:cursor-not-allowed"
-                                  title="Move up"
-                                  aria-label={`Move item ${idx + 1} up`}
-                                >
-                                  <Icon.ArrowUp className="w-4 h-4" />
-                                </button>
-                                <button
-                                  type="button"
-                                  disabled={idx === unifiedItems.length - 1}
-                                  onClick={() => moveUnifiedItem(idx, 1)}
-                                  className="text-content-subtle hover:text-content p-1 rounded hover:bg-surface-hover cursor-pointer disabled:opacity-30 disabled:cursor-not-allowed"
-                                  title="Move down"
-                                  aria-label={`Move item ${idx + 1} down`}
-                                >
-                                  <Icon.ArrowDown className="w-4 h-4" />
-                                </button>
-                              </div>
-                            )}
-                          </div>
-                          <QuestionFormBlock
-                            q={item.draft}
-                            index={idx}
-                            onChange={(draft) => updateImportedDraft(item.draft.key, draft)}
-                            showErrors={importedQuestionsSubmitted}
-                            removable
-                            onRemove={() => removeImportedDraft(item.draft.key)}
-                            allowedTypes={allowedQuestionTypes as EditableQuestionType[]}
-                          />
-                          <div className="flex flex-wrap items-center gap-3 border-t border-line-soft pt-2">
-                            <label className="inline-flex items-center gap-2 text-xs font-medium text-content-secondary">
-                              Exam Weight
-                              <input
-                                type="number"
-                                min={0}
-                                max={1000}
-                                step={1}
-                                className="w-20 rounded border border-line bg-surface px-2 py-1 text-content disabled:opacity-60"
-                                value={item.weight}
-                                onChange={(e) => {
-                                  const weight = Number(e.target.value) || 0;
-                                  setImportedQuestionDrafts((prev) =>
-                                    prev.map((current) =>
-                                      current.draft.key === item.draft.key
-                                        ? { ...current, weight }
-                                        : current,
-                                    ),
-                                  );
-                                  setIsDirty(true);
-                                }}
-                              />
-                            </label>
-                            <span className="text-xs font-semibold text-brand-ink">
-                              Score: {formatScore(scoreForWeight(item.weight))} pts
-                            </span>
-                          </div>
-                          {importedQuestionsSubmitted &&
-                            Object.keys(validateDraft(item.draft)).length > 0 && (
-                              <p className="text-xs text-danger">
-                                Fix the question validation errors above before creating the exam.
-                              </p>
-                            )}
-                        </div>
-                      );
-                    }
-
-                    const g = entry.group;
-                    const groupQuestions = entry.groupQuestions;
-                    const isExpanded = expandedGroupIds.has(g.examGroupId);
-
-                    return (
-                      <div
-                        key={entry.key}
-                        className="rounded-[10px] border border-line bg-surface overflow-hidden"
-                      >
-                        <div className="flex items-center justify-between gap-3 p-3.5">
-                          <button
-                            type="button"
-                            aria-expanded={isExpanded}
-                            onClick={() =>
-                              setExpandedGroupIds((current) => {
-                                const next = new Set(current);
-                                if (next.has(g.examGroupId)) next.delete(g.examGroupId);
-                                else next.add(g.examGroupId);
-                                return next;
-                              })
-                            }
-                            className="flex min-w-0 flex-1 items-center gap-2 text-left cursor-pointer"
-                          >
-                            <span className="w-6 h-6 rounded-full bg-purple-light text-purple flex items-center justify-center text-xs font-bold flex-shrink-0">
-                              #{idx + 1}
-                            </span>
-                            <Icon.ChevronDown
-                              className={`w-4 h-4 flex-shrink-0 text-content-subtle transition-transform ${isExpanded ? "rotate-180" : ""}`}
-                            />
-                            <Badge variant="purple" className="text-2xs">
-                              Group
-                            </Badge>
-                            <span className="truncate text-sm font-semibold text-content">
-                              {g.title}
-                            </span>
-                            <span className="flex-shrink-0 text-xs text-content-secondary font-medium">
-                              {groupQuestions.length || g.questionCount || 0} questions
-                            </span>
-                          </button>
-
-                          <div className="flex items-center gap-1">
-                            {canReorderTop && (
-                              <>
-                                <button
-                                  type="button"
-                                  disabled={idx === 0}
-                                  onClick={() => moveUnifiedItem(idx, -1)}
-                                  className="text-content-subtle hover:text-content p-1 rounded hover:bg-surface-hover cursor-pointer disabled:opacity-30 disabled:cursor-not-allowed"
-                                  title="Move group up"
-                                  aria-label={`Move ${g.title} up`}
-                                >
-                                  <Icon.ArrowUp className="w-4 h-4" />
-                                </button>
-                                <button
-                                  type="button"
-                                  disabled={idx === unifiedItems.length - 1}
-                                  onClick={() => moveUnifiedItem(idx, 1)}
-                                  className="text-content-subtle hover:text-content p-1 rounded hover:bg-surface-hover cursor-pointer disabled:opacity-30 disabled:cursor-not-allowed"
-                                  title="Move group down"
-                                  aria-label={`Move ${g.title} down`}
-                                >
-                                  <Icon.ArrowDown className="w-4 h-4" />
-                                </button>
-                              </>
-                            )}
-                            {canManageExamQuestions && (
-                              <button
-                                type="button"
-                                disabled={
-                                  isPublished &&
-                                  totalQuestionCount -
-                                    (groupQuestions.length || g.questionCount || 0) <
-                                    1
-                                }
-                                onClick={() =>
-                                  setRemoveConfirmTarget({
-                                    type: "group",
-                                    examGroupId: g.examGroupId,
-                                    title: g.title,
-                                  })
-                                }
-                                className="text-content-subtle hover:text-danger p-1 rounded hover:bg-danger-light cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed"
-                                title={
-                                  isPublished &&
-                                  totalQuestionCount -
-                                    (groupQuestions.length || g.questionCount || 0) <
-                                    1
-                                    ? "Published exam must keep at least one question"
-                                    : "Remove group"
-                                }
-                                aria-label={`Remove ${g.title}`}
-                              >
-                                <Icon.Trash className="w-4 h-4" />
-                              </button>
-                            )}
-                          </div>
-                        </div>
-
-                        {isExpanded && (
-                          <div className="space-y-3 border-t border-line-soft bg-surface-muted/20 p-3.5">
-                            {g.passageText && (
-                              <div className="rounded-[8px] border border-line-soft bg-surface p-3 text-xs text-content-secondary leading-relaxed whitespace-pre-wrap">
-                                {g.passageText}
-                              </div>
-                            )}
-                            {groupQuestions.length === 0 ? (
-                              <p className="py-3 text-center text-xs text-content-subtle">
-                                No questions are attached from this group.
-                              </p>
-                            ) : (
-                              <div className="space-y-2">
-                                {groupQuestions.map((q, questionIndex) => (
-                                  <div
-                                    key={q.examQuestionId || q.questionId}
-                                    className="rounded-[8px] border border-line-soft bg-surface p-3"
-                                  >
-                                    <div className="flex items-start justify-between gap-3">
-                                      <div className="min-w-0 flex-1">
-                                        <div className="flex items-start gap-2">
-                                          <span className="mt-0.5 text-xs font-bold text-brand-ink">
-                                            #{questionIndex + 1}
-                                          </span>
-                                          <p className="text-sm font-medium leading-snug text-content whitespace-pre-line break-words">
-                                            <QuestionContent text={q.content} />
-                                          </p>
-                                        </div>
-                                        <div className="ml-6 mt-2 flex flex-wrap items-center gap-2">
-                                          <Badge
-                                            variant="default"
-                                            className="text-2xs font-semibold"
-                                          >
-                                            {q.questionType.replace("_", " ")}
-                                          </Badge>
-                                          <label className="inline-flex items-center gap-1.5 text-xs text-content-secondary font-medium">
-                                            Weight
-                                            <input
-                                              type="number"
-                                              min={0}
-                                              max={1000}
-                                              step={1}
-                                              disabled={!canManageExamQuestions}
-                                              className="w-20 rounded border border-line bg-surface px-2 py-1 text-content disabled:opacity-60"
-                                              value={q.weight ?? q.points ?? 1}
-                                              onChange={(e) => {
-                                                const weight = Number(e.target.value) || 0;
-                                                setQuestions((prev) =>
-                                                  prev.map((item) =>
-                                                    item.examQuestionId === q.examQuestionId
-                                                      ? {
-                                                          ...item,
-                                                          weight,
-                                                          points: undefined,
-                                                        }
-                                                      : item,
-                                                  ),
-                                                );
-                                                setIsDirty(true);
-                                              }}
-                                              onBlur={(e) =>
-                                                handleQuestionWeightBlur(
-                                                  q,
-                                                  Number(e.currentTarget.value) || 0,
-                                                )
-                                              }
-                                            />
-                                          </label>
-                                          <span className="text-xs font-semibold text-brand-ink">
-                                            Score:{" "}
-                                            {formatScore(scoreForWeight(q.weight ?? q.points ?? 1))}{" "}
-                                            pts
-                                          </span>
-                                          {!isReadOnly && isAssessment && isEssayQuestion(q) && (
-                                            <button
-                                              type="button"
-                                              onClick={() =>
-                                                setRubricModalQuestion({
-                                                  id: q.questionId,
-                                                  content: q.content,
-                                                })
-                                              }
-                                              className="text-xs font-semibold text-brand-ink hover:underline cursor-pointer"
-                                            >
-                                              Edit Rubric
-                                            </button>
-                                          )}
-                                        </div>
-                                      </div>
-                                      {!isReadOnly && (
-                                        <div className="flex items-center gap-1">
-                                          <button
-                                            type="button"
-                                            disabled={orderSaving || questionIndex === 0}
-                                            onClick={() =>
-                                              moveGroupQuestion(g.groupId, questionIndex, -1)
-                                            }
-                                            className="rounded p-1 text-content-subtle hover:bg-surface-hover hover:text-content cursor-pointer disabled:opacity-30 disabled:cursor-not-allowed"
-                                            title="Move question up within group"
-                                            aria-label={`Move question ${questionIndex + 1} in ${g.title} up`}
-                                          >
-                                            <Icon.ArrowUp className="h-4 w-4" />
-                                          </button>
-                                          <button
-                                            type="button"
-                                            disabled={
-                                              orderSaving ||
-                                              questionIndex === groupQuestions.length - 1
-                                            }
-                                            onClick={() =>
-                                              moveGroupQuestion(g.groupId, questionIndex, 1)
-                                            }
-                                            className="rounded p-1 text-content-subtle hover:bg-surface-hover hover:text-content cursor-pointer disabled:opacity-30 disabled:cursor-not-allowed"
-                                            title="Move question down within group"
-                                            aria-label={`Move question ${questionIndex + 1} in ${g.title} down`}
-                                          >
-                                            <Icon.ArrowDown className="h-4 w-4" />
-                                          </button>
-                                          <button
-                                            type="button"
-                                            onClick={() => setQuestionEditTarget(q)}
-                                            className="rounded p-1 text-content-subtle hover:bg-surface-hover hover:text-brand-ink cursor-pointer"
-                                            title="Edit Question"
-                                            aria-label={`Edit question ${questionIndex + 1} in ${g.title}`}
-                                          >
-                                            <Icon.Edit className="h-4 w-4" />
-                                          </button>
-                                        </div>
-                                      )}
-                                    </div>
-                                    {(q.questionType === "DIAGRAM" ||
-                                      q.questionType === "DIAGRAM_ESSAY") && (
-                                      <ExamDiagramAnswer
-                                        questionId={q.questionId}
-                                        readOnly={isReadOnly}
-                                      />
-                                    )}
-                                  </div>
-                                ))}
-                              </div>
-                            )}
-                          </div>
-                        )}
-                      </div>
-                    );
-                  })}
-                </div>
-              )}
-            </div>
+            <ExamQuestionsSection
+              unifiedItems={form.unifiedItems}
+              questionOrder={form.questionOrder}
+              courseId={form.courseId}
+              moduleId={form.moduleId}
+              formKind={form.formKind}
+              isEdit={form.isEdit}
+              isReadOnly={form.isReadOnly}
+              isPublished={form.isPublished}
+              isAssessment={form.isAssessment}
+              canManageExamQuestions={form.canManageExamQuestions}
+              loading={form.loading}
+              orderSaving={form.orderSaving}
+              hasAnyItems={
+                form.questions.length > 0 ||
+                form.groups.length > 0 ||
+                form.importedQuestionDrafts.length > 0
+              }
+              totalQuestionCount={form.totalQuestionCount}
+              fieldError={form.fieldErrors.questions}
+              allowedQuestionTypes={form.allowedQuestionTypes}
+              importedQuestionsSubmitted={form.importedQuestionsSubmitted}
+              expandedGroupIds={form.expandedGroupIds}
+              onToggleGroup={form.toggleGroupExpanded}
+              scoreForWeight={form.scoreForWeight}
+              formatScore={form.formatScore}
+              onRemoveAll={form.handleRemoveAllQuestions}
+              onOpenImportModal={() => form.setImportModalOpen(true)}
+              onOpenImportPreview={() => form.setImportPreviewOpen(true)}
+              onOpenGroupModal={() => form.setGroupModalOpen(true)}
+              onOpenBankModal={() => form.setBankModalOpen(true)}
+              onMoveUnifiedItem={form.moveUnifiedItem}
+              onMoveGroupQuestion={form.moveGroupQuestion}
+              onQuestionWeightChange={form.handleQuestionWeightChange}
+              onQuestionWeightBlur={form.handleQuestionWeightBlur}
+              onOpenRubricModal={form.setRubricModalQuestion}
+              onEditQuestion={form.setQuestionEditTarget}
+              onRequestRemove={form.setRemoveConfirmTarget}
+              onUpdateImportedDraft={form.updateImportedDraft}
+              onRemoveImportedDraft={form.removeImportedDraft}
+              onImportedWeightChange={form.updateImportedWeight}
+            />
           </div>
 
-          <div className="lg:col-span-1 card p-4 space-y-3.5 self-start h-fit lg:sticky lg:top-4">
-            <h4 className="text-sm font-bold text-content uppercase tracking-wider text-content-subtle border-b border-line-soft pb-2">
-              Exam Summary
-            </h4>
-
-            <div className="space-y-2.5 text-sm">
-              <div className="flex items-center justify-between">
-                <span className="text-content-subtle">Exam Type:</span>
-                <Badge variant="purple">{formLabel}</Badge>
-              </div>
-              <div className="flex items-center justify-between">
-                <span className="text-content-subtle">Status:</span>
-                <Badge
-                  variant={
-                    status === "PUBLISHED"
-                      ? "success"
-                      : status === "ARCHIVED"
-                        ? "default"
-                        : "warning"
-                  }
-                >
-                  {status}
-                </Badge>
-              </div>
-              <div className="flex items-center justify-between">
-                <span className="text-content-subtle">Mode:</span>
-                <span className="font-semibold text-content">
-                  {EXAM_MODE_OPTIONS.find((o) => o.value === mode)?.label}
-                </span>
-              </div>
-              <div className="flex items-center justify-between">
-                <span className="text-content-subtle">Question Order:</span>
-                <span className="font-semibold text-content">
-                  {questionOrder === "MANUAL" ? "Manual" : "Random"}
-                </span>
-              </div>
-              <div className="flex items-center justify-between">
-                <span className="text-content-subtle">Duration:</span>
-                <span className="font-semibold text-content">{durationMinutes} min</span>
-              </div>
-              <div className="flex items-center justify-between">
-                <span className="text-content-subtle">Total Questions:</span>
-                <span className="font-bold text-content">{totalQuestionCount}</span>
-              </div>
-              <div className="flex items-center justify-between">
-                <span className="text-content-subtle">Total Weight:</span>
-                <span className="font-semibold text-content">{formatScore(totalWeight)}</span>
-              </div>
-              <div className="flex items-center justify-between">
-                <span className="text-content-subtle">Max Score:</span>
-                <span className="font-bold text-brand-ink">{formatScore(maxScore)} pts</span>
-              </div>
-            </div>
-
-            <div className="pt-3 border-t border-line-soft space-y-2">
-              {!isReadOnly && (
-                <Button
-                  className="w-full"
-                  icon={<Icon.Check className="w-4 h-4" />}
-                  onClick={handleSaveExam}
-                  loading={saving}
-                  disabled={saving || loading || (isEdit && !isDirty)}
-                >
-                  {isEdit ? "Save Changes" : "Create Exam"}
-                </Button>
-              )}
-              <Button
-                className="w-full"
-                variant="outline"
-                onClick={handleCancelClick}
-                disabled={saving}
-              >
-                Back to List
-              </Button>
-            </div>
-          </div>
+          <ExamSummarySidebar
+            formLabel={form.formLabel}
+            status={form.status}
+            mode={form.mode}
+            questionOrder={form.questionOrder}
+            durationMinutes={form.durationMinutes}
+            totalQuestionCount={form.totalQuestionCount}
+            totalWeight={form.totalWeight}
+            maxScore={form.maxScore}
+            formatScore={form.formatScore}
+            isEdit={form.isEdit}
+            isReadOnly={form.isReadOnly}
+            isDirty={form.isDirty}
+            saving={form.saving}
+            loading={form.loading}
+            onSave={form.handleSaveExam}
+            onCancel={form.handleCancelClick}
+          />
         </div>
       )}
 
       <QuestionBankSelectModal
-        open={bankModalOpen}
-        onClose={() => setBankModalOpen(false)}
-        onSelect={handleAddQuestionsFromBank}
-        allowedQuestionTypes={allowedQuestionTypes}
-        existingQuestionIds={existingQuestionIds}
-        courseId={Number(courseId)}
-        initialModuleId={moduleId ? Number(moduleId) : undefined}
-        courseName={courses.find((course) => String(course.courseId) === courseId)?.title ?? ""}
-        modules={modules.map((module) => ({
+        open={form.bankModalOpen}
+        onClose={() => form.setBankModalOpen(false)}
+        onSelect={form.handleAddQuestionsFromBank}
+        allowedQuestionTypes={form.allowedQuestionTypes}
+        existingQuestionIds={form.existingQuestionIds}
+        courseId={Number(form.courseId)}
+        initialModuleId={form.moduleId ? Number(form.moduleId) : undefined}
+        courseName={
+          form.courses.find((course) => String(course.courseId) === form.courseId)?.title ?? ""
+        }
+        modules={form.modules.map((module) => ({
           moduleId: module.moduleId,
           title: module.title,
         }))}
-        loading={loading}
+        loading={form.loading}
       />
 
       <QuestionGroupModal
-        open={groupModalOpen}
-        onClose={() => setGroupModalOpen(false)}
-        onSelectGroup={handleAddGroup}
-        existingGroupIds={existingGroupIds}
-        courseId={courseId ? Number(courseId) : undefined}
-        moduleId={moduleId ? Number(moduleId) : undefined}
-        questionType={formKind}
-        loading={loading}
+        open={form.groupModalOpen}
+        onClose={() => form.setGroupModalOpen(false)}
+        onSelectGroup={form.handleAddGroup}
+        existingGroupIds={form.existingGroupIds}
+        courseId={form.courseId ? Number(form.courseId) : undefined}
+        moduleId={form.moduleId ? Number(form.moduleId) : undefined}
+        questionType={form.formKind}
+        loading={form.loading}
       />
 
-      <Modal
-        open={questionEditTarget !== null}
-        onClose={() => !questionEditSaving && setQuestionEditTarget(null)}
-        title="Edit Question"
-        size="2xl"
-        error={
-          questionEditError &&
-          questionEditDraft && <Alert type="error" message={questionEditError} />
-        }
-        footer={
-          <div className="flex w-full flex-wrap items-center justify-end gap-2">
-            <Button
-              variant="outline"
-              onClick={() => setQuestionEditTarget(null)}
-              disabled={questionEditSaving}
-            >
-              Cancel
-            </Button>
-            <Button
-              onClick={handleSaveQuestionEdit}
-              loading={questionEditSaving}
-              disabled={questionEditLoading || !questionEditDraft}
-            >
-              Save Question
-            </Button>
-          </div>
-        }
-      >
-        {questionEditLoading ? (
-          <p className="py-8 text-center text-sm text-content-subtle">Loading question…</p>
-        ) : questionEditError && !questionEditDraft ? (
-          <div role="alert" className="py-5 text-sm text-danger">
-            {questionEditError}
-          </div>
-        ) : questionEditDraft ? (
-          <div className="space-y-3">
-            <QuestionForm
-              q={questionEditDraft}
-              index={0}
-              onChange={setQuestionEditDraft}
-              showErrors={questionEditSubmitted}
-              allowedTypes={allowedQuestionTypes as EditableQuestionType[]}
-            />
-            <p className="text-xs text-content-subtle">
-              Saving updates this question in the Question Bank as well as in this exam.
-            </p>
-          </div>
-        ) : null}
-      </Modal>
+      <EditExamQuestionModal
+        target={form.questionEditTarget}
+        allowedQuestionTypes={form.allowedQuestionTypes}
+        onClose={() => form.setQuestionEditTarget(null)}
+        onUpdated={form.handleQuestionUpdated}
+      />
 
       <RubricDetailModal
-        open={rubricModalQuestion !== null}
-        questionId={rubricModalQuestion?.id || null}
-        questionContent={rubricModalQuestion?.content}
-        questionPoints={scoreForWeight(
-          questions.find((q) => q.questionId === rubricModalQuestion?.id)?.weight ??
-            questions.find((q) => q.questionId === rubricModalQuestion?.id)?.points ??
+        open={form.rubricModalQuestion !== null}
+        questionId={form.rubricModalQuestion?.id || null}
+        questionContent={form.rubricModalQuestion?.content}
+        questionPoints={form.scoreForWeight(
+          form.questions.find((q) => q.questionId === form.rubricModalQuestion?.id)?.weight ??
+            form.questions.find((q) => q.questionId === form.rubricModalQuestion?.id)?.points ??
             1,
         )}
-        onClose={() => setRubricModalQuestion(null)}
+        onClose={() => form.setRubricModalQuestion(null)}
         onSaved={(qid) => {
-          setQuestions((prev) =>
+          form.setQuestions((prev) =>
             prev.map((q) => (q.questionId === qid ? { ...q, hasRubric: true } : q)),
           );
         }}
       />
 
-      {!isEdit && (
+      {!form.isEdit && (
         <ImportPdfModal
-          open={importPreviewOpen}
-          onClose={() => setImportPreviewOpen(false)}
-          onImported={handleImportedDrafts}
-          courseId={courseId}
-          moduleId={moduleId}
+          open={form.importPreviewOpen}
+          onClose={() => form.setImportPreviewOpen(false)}
+          onImported={form.handleImportedDrafts}
+          courseId={form.courseId}
+          moduleId={form.moduleId}
           lockLocation
         />
       )}
 
-      {isEdit && id && (
+      {form.isEdit && form.id && (
         <ImportQuestionsModal
-          open={importModalOpen}
-          examId={Number(id)}
-          onClose={() => setImportModalOpen(false)}
-          onSuccess={() => loadExamDetail(Number(id))}
+          open={form.importModalOpen}
+          examId={Number(form.id)}
+          onClose={() => form.setImportModalOpen(false)}
+          onSuccess={() => form.loadExamDetail(Number(form.id))}
         />
       )}
 
       <ConfirmDialog
-        open={removeConfirmTarget !== null}
-        onClose={() => setRemoveConfirmTarget(null)}
+        open={form.removeConfirmTarget !== null}
+        onClose={() => form.setRemoveConfirmTarget(null)}
         onConfirm={() => {
-          if (removeConfirmTarget?.type === "question") {
-            handleRemoveQuestion(removeConfirmTarget.examQuestionId);
-          } else if (removeConfirmTarget?.type === "group") {
-            handleRemoveGroup(removeConfirmTarget.examGroupId);
+          if (form.removeConfirmTarget?.type === "question") {
+            form.handleRemoveQuestion(form.removeConfirmTarget.examQuestionId);
+          } else if (form.removeConfirmTarget?.type === "group") {
+            form.handleRemoveGroup(form.removeConfirmTarget.examGroupId);
           }
         }}
         tone="danger"
         title="Remove from this exam?"
         description={
           <>
-            <strong className="text-content">"{removeConfirmTarget?.title}"</strong> is only
+            <strong className="text-content">"{form.removeConfirmTarget?.title}"</strong> is only
             unlinked from this exam. The original item in the Question Bank is preserved.
           </>
         }
         confirmLabel="Remove"
       />
 
-      <Modal
-        open={archiveCloneModalOpen}
-        onClose={() => setArchiveCloneModalOpen(false)}
-        title="Exam Already Has Student Attempts (409)"
-        size="lg"
-        footer={
-          <div className="flex w-full flex-wrap items-center justify-end gap-2">
-            <Button variant="outline" onClick={() => setArchiveCloneModalOpen(false)}>
-              Cancel
-            </Button>
-            {saveDescriptionOnly ? (
-              <Button onClick={handleSaveDescriptionOnly} loading={saving}>
-                Save Description
-              </Button>
-            ) : (
-              <>
-                <Button variant="secondary" onClick={() => setSaveDescriptionOnly(true)}>
-                  Edit Description Only
-                </Button>
-                <Button
-                  onClick={handleArchiveAndClone}
-                  loading={archiveCloning}
-                  icon={<Icon.Copy className="w-4 h-4" />}
-                >
-                  Archive and Clone
-                </Button>
-              </>
-            )}
-          </div>
-        }
-      >
-        <div className="space-y-3 text-sm text-content">
-          <p className="text-danger font-medium">
-            This exam already has student submission attempts. Structure, duration, and question
-            matrix cannot be directly modified.
-          </p>
-          <p className="text-xs text-content-subtle leading-relaxed">
-            You can either update only the description, or execute{" "}
-            <strong>Archive and Clone</strong> to archive the current exam (preserving score
-            records) and generate a new editable draft copy.
-          </p>
-        </div>
-      </Modal>
+      <ArchiveCloneModal
+        open={form.archiveCloneModalOpen}
+        saveDescriptionOnly={form.saveDescriptionOnly}
+        saving={form.saving}
+        archiveCloning={form.archiveCloning}
+        onClose={() => form.setArchiveCloneModalOpen(false)}
+        onEnableDescriptionOnly={() => form.setSaveDescriptionOnly(true)}
+        onSaveDescriptionOnly={form.handleSaveDescriptionOnly}
+        onArchiveAndClone={form.handleArchiveAndClone}
+      />
 
       <ConfirmDialog
-        open={leaveConfirmOpen}
-        onClose={() => setLeaveConfirmOpen(false)}
-        onConfirm={() => navigate(ROUTES.managerExams)}
+        open={form.leaveConfirmOpen}
+        onClose={() => form.setLeaveConfirmOpen(false)}
+        onConfirm={() => form.navigate(ROUTES.managerExams)}
         tone="danger"
         title="Discard unsaved changes?"
         description="You have unsaved changes in this exam form. If you leave now, they will be lost."
         cancelLabel="Keep editing"
         confirmLabel="Discard"
       />
-    </div>
-  );
-}
-
-function ExamDiagramAnswer({ questionId, readOnly }: { questionId: number; readOnly: boolean }) {
-  const [question, setQuestion] = useState<QuestionDetail | null>(null);
-  const [draft, setDraft] = useState<QuestionDraft | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [saving, setSaving] = useState(false);
-  const [error, setError] = useState("");
-
-  useEffect(() => {
-    let active = true;
-    setLoading(true);
-    setError("");
-    questionService
-      .getQuestionById(questionId)
-      .then((detail) => {
-        if (!active) return;
-        setQuestion(detail);
-        setDraft(fromDetail(detail));
-      })
-      .catch((err) => {
-        if (active) {
-          setError(getApiErrorMessage(err, "Could not load the model answer diagram."));
-        }
-      })
-      .finally(() => {
-        if (active) setLoading(false);
-      });
-    return () => {
-      active = false;
-    };
-  }, [questionId]);
-
-  const saveDiagram = async (patch: Partial<QuestionDraft>) => {
-    if (!question || !draft || readOnly || saving) return;
-    const updatedDraft = { ...draft, ...patch };
-    setDraft(updatedDraft);
-    setSaving(true);
-    setError("");
-    try {
-      const updated = await questionService.updateQuestion(
-        questionId,
-        toUpdateRequest(updatedDraft, question.moduleId, {
-          status: question.status,
-        }),
-      );
-      setQuestion(updated);
-      setDraft(fromDetail(updated));
-    } catch (err) {
-      setError(
-        getApiErrorMessage(err, "Could not save the model answer diagram. Please try again."),
-      );
-    } finally {
-      setSaving(false);
-    }
-  };
-
-  if (loading)
-    return <div className="mt-3 text-xs text-content-subtle">Loading model answer diagram…</div>;
-  if (!draft)
-    return (
-      <div className="mt-3 text-xs text-danger">
-        {error || "Could not load the model answer diagram."}
-      </div>
-    );
-
-  return (
-    <div className="mt-4 border-t border-line-soft pt-4">
-      <DiagramAnswer q={draft} set={saveDiagram} readOnly={readOnly || saving} />
-      {saving && <p className="mt-2 text-xs text-content-subtle">Saving model answer diagram…</p>}
-      {error && <p className="mt-2 text-xs text-danger">{error}</p>}
     </div>
   );
 }
