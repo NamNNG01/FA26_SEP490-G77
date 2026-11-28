@@ -149,6 +149,7 @@ export function buildExamListColumns({
                   label: "Delete",
                   icon: <Icon.Trash className="h-4 w-4" />,
                   danger: true,
+                  disabled: exam.status !== "DRAFT",
                   onClick: () => onDelete(exam),
                 },
               ]}

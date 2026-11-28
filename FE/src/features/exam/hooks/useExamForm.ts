@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useLocation, useNavigate, useParams } from "react-router";
 import { useToast } from "@/components/ui/ToastHost";
 import { ROUTES } from "@/app/routes";
@@ -84,6 +84,7 @@ export function useExamForm({ formKind: propFormKind, mode: propMode }: UseExamF
   const [orderSaving, setOrderSaving] = useState(false);
 
   const [questions, setQuestions] = useState<ExamQuestion[]>([]);
+  const savedWeightsRef = useRef<Map<number, number>>(new Map());
   const [groups, setGroups] = useState<ExamGroup[]>([]);
   const [importPreviewOpen, setImportPreviewOpen] = useState(false);
   const [importedQuestionDrafts, setImportedQuestionDrafts] = useState<ImportedQuestionDraft[]>([]);
@@ -205,6 +206,9 @@ export function useExamForm({ formKind: propFormKind, mode: propMode }: UseExamF
       }
 
       const loadedQuestions = [...(data.questions || [])];
+      savedWeightsRef.current = new Map(
+        loadedQuestions.map((q) => [q.examQuestionId, q.weight ?? q.points ?? 1]),
+      );
       setQuestions(loadedQuestions);
 
       if (isAssessment) {
@@ -775,15 +779,18 @@ export function useExamForm({ formKind: propFormKind, mode: propMode }: UseExamF
         item.examQuestionId === examQuestionId ? { ...item, weight, points: undefined } : item,
       ),
     );
-    setIsDirty(true);
+    if (!isEdit) {
+      setIsDirty(true);
+    }
   };
 
   const handleQuestionWeightBlur = async (
     question: ExamQuestion,
     weight = question.weight ?? question.points ?? 1,
   ) => {
-    const currentWeight = question.weight ?? question.points ?? 1;
-    if (weight === currentWeight) return;
+    if (!isEdit || !question.examQuestionId) return;
+    const savedWeight = savedWeightsRef.current.get(question.examQuestionId);
+    if (savedWeight !== undefined && weight === savedWeight) return;
     if (
       !Number.isFinite(weight) ||
       weight <= 0 ||
@@ -795,13 +802,13 @@ export function useExamForm({ formKind: propFormKind, mode: propMode }: UseExamF
       );
       return;
     }
-    if (!isEdit || !question.examQuestionId) return;
     try {
       const updated = await examService.updateQuestionWeight(
         Number(id),
         question.examQuestionId,
         weight,
       );
+      savedWeightsRef.current.set(updated.examQuestionId, updated.weight ?? weight);
       setQuestions((prev) =>
         prev.map((item) =>
           item.examQuestionId === updated.examQuestionId
