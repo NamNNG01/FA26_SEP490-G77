@@ -1,7 +1,7 @@
-import React from 'react';
-import { NavLink } from 'react-router';
-import { Icon } from '@/assets/icons';
-import type { MenuItem } from '@/app/routes';
+import React from "react";
+import { NavLink } from "react-router";
+import { Icon } from "@/assets/icons";
+import type { MenuItem } from "@/app/routes";
 
 /**
  * Sidebar
@@ -28,9 +28,7 @@ export function Sidebar({
 }) {
   return (
     <div
-      className={`flex flex-col h-full transition-all duration-200 ${
-        collapsed ? 'w-16' : 'w-56'
-      }`}
+      className={`flex flex-col h-full transition-all duration-200 ${collapsed ? "w-16" : "w-56"}`}
     >
       <nav aria-label="Main" className="flex-1 overflow-y-auto pt-2">
         {items.map((item) => (
@@ -39,21 +37,24 @@ export function Sidebar({
             to={item.path}
             title={collapsed ? item.title : undefined}
             className={({ isActive }) =>
-              `sidebar-link w-full ${isActive ? 'active' : ''} ${
-                collapsed ? 'justify-center px-0' : ''
+              `sidebar-link w-full ${isActive ? "active" : ""} ${
+                collapsed ? "justify-center px-0" : ""
               }`
             }
           >
             <span className="relative w-4 h-4 flex-shrink-0">
               {item.icon}
               {collapsed && !!item.badge && (
-                <span aria-hidden="true" className="absolute -top-1 -right-1 h-2 w-2 rounded-full bg-danger ring-2 ring-surface" />
+                <span
+                  aria-hidden="true"
+                  className="absolute -top-1 -right-1 h-2 w-2 rounded-full bg-danger ring-2 ring-surface"
+                />
               )}
             </span>
             {!collapsed && <span className="flex-1">{item.title}</span>}
             {!collapsed && !!item.badge && (
               <span className="rounded-full bg-danger px-1.5 min-w-[18px] text-center text-[10px] font-bold leading-[18px] text-white">
-                {item.badge > 99 ? '99+' : item.badge}
+                {item.badge > 99 ? "99+" : item.badge}
                 <span className="sr-only"> pending</span>
               </span>
             )}
@@ -66,9 +67,9 @@ export function Sidebar({
         <button
           type="button"
           onClick={onToggleCollapse}
-          title={collapsed ? 'Expand sidebar' : 'Collapse sidebar'}
+          title={collapsed ? "Expand sidebar" : "Collapse sidebar"}
           className="sidebar-link w-full justify-center cursor-pointer border-t border-line-soft py-3"
-          aria-label={collapsed ? 'Expand sidebar' : 'Collapse sidebar'}
+          aria-label={collapsed ? "Expand sidebar" : "Collapse sidebar"}
         >
           {collapsed ? (
             <Icon.ChevronRight className="w-4 h-4" />

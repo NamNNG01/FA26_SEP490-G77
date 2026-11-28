@@ -1,6 +1,6 @@
-import React from 'react';
-import { Icon } from '@/assets/icons';
-import { ImagePickButton } from '@/components/common/ImagePickButton';
+import React from "react";
+import { Icon } from "@/assets/icons";
+import { ImagePickButton } from "@/components/common/ImagePickButton";
 
 /** Thumbnail preview + picker. The parent decides whether a picked file is uploaded now (edit) or after create. */
 export function CourseThumbnailField({
@@ -31,10 +31,15 @@ export function CourseThumbnailField({
       {!disabled && (
         <div className="flex items-center gap-2 mt-2">
           <ImagePickButton loading={uploading} onPick={onPick} onError={onError}>
-            {url ? 'Change image' : 'Upload image'}
+            {url ? "Change image" : "Upload image"}
           </ImagePickButton>
           {url && onRemove && (
-            <button type="button" className="text-sm text-danger hover:underline" onClick={onRemove} disabled={uploading}>
+            <button
+              type="button"
+              className="text-sm text-danger hover:underline"
+              onClick={onRemove}
+              disabled={uploading}
+            >
               Remove
             </button>
           )}

@@ -1,20 +1,27 @@
-import React, { useCallback, useEffect, useId, useMemo, useRef, useState } from 'react';
-import { Icon } from '@/assets/icons';
-import { AlertBannerContext } from './Alert';
+import React, { useCallback, useEffect, useId, useMemo, useRef, useState } from "react";
+import { Icon } from "@/assets/icons";
+import { AlertBannerContext } from "./Alert";
 
-const FOCUSABLE_SELECTOR = 'a[href], button:not([disabled]), textarea:not([disabled]), input:not([disabled]), select:not([disabled]), [tabindex]:not([tabindex="-1"])';
+const FOCUSABLE_SELECTOR =
+  'a[href], button:not([disabled]), textarea:not([disabled]), input:not([disabled]), select:not([disabled]), [tabindex]:not([tabindex="-1"])';
 
 /** Callback ref that reports the element's height while it is mounted, and 0 once it is gone. */
 function useHeightRef(onHeight: (height: number) => void) {
   const observer = useRef<ResizeObserver | null>(null);
-  return useCallback((el: HTMLElement | null) => {
-    observer.current?.disconnect();
-    observer.current = null;
-    if (!el) { onHeight(0); return; }
-    onHeight(el.offsetHeight);
-    observer.current = new ResizeObserver(() => onHeight(el.offsetHeight));
-    observer.current.observe(el);
-  }, [onHeight]);
+  return useCallback(
+    (el: HTMLElement | null) => {
+      observer.current?.disconnect();
+      observer.current = null;
+      if (!el) {
+        onHeight(0);
+        return;
+      }
+      onHeight(el.offsetHeight);
+      observer.current = new ResizeObserver(() => onHeight(el.offsetHeight));
+      observer.current.observe(el);
+    },
+    [onHeight],
+  );
 }
 
 /** Open modals, newest last: only the top one handles Escape / Tab, and the page scrolls again once none is open. */
@@ -28,9 +35,28 @@ const openModals: object[] = [];
  * button is pressed again. It may cover the `description` line(s) at the top of the body, but never
  * the content: when it is taller than the description, the content is pushed down by the difference.
  */
-export function Modal({ open, isOpen, onClose, title, description, children, footer, error, size = 'md', dismissible = true }: {
-  open?: boolean; isOpen?: boolean; onClose: () => void; title?: string; description?: React.ReactNode; children: React.ReactNode;
-  footer?: React.ReactNode; error?: React.ReactNode; size?: 'sm' | 'md' | 'lg' | 'xl' | '2xl' | 'full' | 'screen'; dismissible?: boolean;
+export function Modal({
+  open,
+  isOpen,
+  onClose,
+  title,
+  description,
+  children,
+  footer,
+  error,
+  size = "md",
+  dismissible = true,
+}: {
+  open?: boolean;
+  isOpen?: boolean;
+  onClose: () => void;
+  title?: string;
+  description?: React.ReactNode;
+  children: React.ReactNode;
+  footer?: React.ReactNode;
+  error?: React.ReactNode;
+  size?: "sm" | "md" | "lg" | "xl" | "2xl" | "full" | "screen";
+  dismissible?: boolean;
 }) {
   const isVisible = Boolean(open ?? isOpen);
   // The heading is the dialog's accessible name: assistive tech announces "dialog: <title>".
@@ -41,7 +67,9 @@ export function Modal({ open, isOpen, onClose, title, description, children, foo
   onCloseRef.current = dismissible ? onClose : () => {};
   const [errorHidden, setErrorHidden] = useState(false);
   const hasError = Boolean(error);
-  useEffect(() => { if (!hasError) setErrorHidden(false); }, [hasError]);
+  useEffect(() => {
+    if (!hasError) setErrorHidden(false);
+  }, [hasError]);
   const banner = useMemo(() => ({ onDismiss: () => setErrorHidden(true) }), []);
   const [bannerHeight, setBannerHeight] = useState(0);
   const [descriptionHeight, setDescriptionHeight] = useState(0);
@@ -58,19 +86,21 @@ export function Modal({ open, isOpen, onClose, title, description, children, foo
     const self = {};
     openModals.push(self);
 
-    document.body.style.overflow = 'hidden';
+    document.body.style.overflow = "hidden";
     panel?.querySelector<HTMLElement>(FOCUSABLE_SELECTOR)?.focus();
 
     const handleKeyDown = (e: KeyboardEvent) => {
       // A modal opened over this one owns the keyboard.
       if (openModals[openModals.length - 1] !== self) return;
-      if (e.key === 'Escape') {
+      if (e.key === "Escape") {
         e.stopPropagation();
         onCloseRef.current();
         return;
       }
-      if (e.key !== 'Tab' || !panel) return;
-      const focusables = Array.from(panel.querySelectorAll<HTMLElement>(FOCUSABLE_SELECTOR)).filter(el => el.offsetParent !== null);
+      if (e.key !== "Tab" || !panel) return;
+      const focusables = Array.from(panel.querySelectorAll<HTMLElement>(FOCUSABLE_SELECTOR)).filter(
+        (el) => el.offsetParent !== null,
+      );
       if (focusables.length === 0) return;
       const firstEl = focusables[0];
       const lastEl = focusables[focusables.length - 1];
@@ -83,30 +113,64 @@ export function Modal({ open, isOpen, onClose, title, description, children, foo
       }
     };
 
-    document.addEventListener('keydown', handleKeyDown);
+    document.addEventListener("keydown", handleKeyDown);
     return () => {
       openModals.splice(openModals.indexOf(self), 1);
-      if (openModals.length === 0) document.body.style.overflow = '';
-      document.removeEventListener('keydown', handleKeyDown);
+      if (openModals.length === 0) document.body.style.overflow = "";
+      document.removeEventListener("keydown", handleKeyDown);
       previouslyFocused?.focus?.();
     };
   }, [isVisible]);
 
   if (!isVisible) return null;
-  const widths = { sm: 'max-w-sm', md: 'max-w-md', lg: 'max-w-2xl', xl: 'max-w-4xl', '2xl': 'max-w-6xl', full: 'max-w-[85vw] h-[85vh]', screen: 'max-w-[90vw] h-[90vh]' };
+  const widths = {
+    sm: "max-w-sm",
+    md: "max-w-md",
+    lg: "max-w-2xl",
+    xl: "max-w-4xl",
+    "2xl": "max-w-6xl",
+    full: "max-w-[85vw] h-[85vh]",
+    screen: "max-w-[90vw] h-[90vh]",
+  };
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
-      <div className="absolute inset-0 bg-black/40 backdrop-blur-[2px]" onClick={() => onCloseRef.current()} />
-      <div ref={panelRef} role="dialog" aria-modal="true" aria-labelledby={title ? titleId : undefined} className={`relative min-w-0 bg-surface rounded-[14px] shadow-xl w-full ${widths[size]} flex flex-col max-h-[90vh]`}>
+      <div
+        className="absolute inset-0 bg-black/40 backdrop-blur-[2px]"
+        onClick={() => onCloseRef.current()}
+      />
+      <div
+        ref={panelRef}
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby={title ? titleId : undefined}
+        className={`relative min-w-0 bg-surface rounded-[14px] shadow-xl w-full ${widths[size]} flex flex-col max-h-[90vh]`}
+      >
         {title && (
           <div className="flex items-center justify-between gap-4 px-6 py-4 border-b border-line-soft">
-            <h3 id={titleId} className="min-w-0 text-lg font-semibold text-content">{title}</h3>
-            {dismissible && <button onClick={onClose} aria-label="Close" className="text-content-subtle hover:text-content-secondary transition-colors"><Icon.X className="w-5 h-5" /></button>}
+            <h3 id={titleId} className="min-w-0 text-lg font-semibold text-content">
+              {title}
+            </h3>
+            {dismissible && (
+              <button
+                onClick={onClose}
+                aria-label="Close"
+                className="text-content-subtle hover:text-content-secondary transition-colors"
+              >
+                <Icon.X className="w-5 h-5" />
+              </button>
+            )}
           </div>
         )}
         <div className="relative min-w-0 flex-1 min-h-0 flex flex-col">
-          <div className="min-w-0 px-6 pb-4 overflow-y-auto flex-1 min-h-0" style={{ paddingTop: 16 + reserve }}>
-            {description && <div ref={descriptionRef} className="pb-4 text-sm text-content-soft">{description}</div>}
+          <div
+            className="min-w-0 px-6 pb-4 overflow-y-auto flex-1 min-h-0"
+            style={{ paddingTop: 16 + reserve }}
+          >
+            {description && (
+              <div ref={descriptionRef} className="pb-4 text-sm text-content-soft">
+                {description}
+              </div>
+            )}
             {children}
           </div>
           {showError && (
@@ -115,7 +179,14 @@ export function Modal({ open, isOpen, onClose, title, description, children, foo
             </div>
           )}
         </div>
-        {footer && <div onClickCapture={() => setErrorHidden(false)} className="min-w-0 px-4 sm:px-6 py-4 border-t border-line-soft flex flex-wrap items-center justify-end gap-2">{footer}</div>}
+        {footer && (
+          <div
+            onClickCapture={() => setErrorHidden(false)}
+            className="min-w-0 px-4 sm:px-6 py-4 border-t border-line-soft flex flex-wrap items-center justify-end gap-2"
+          >
+            {footer}
+          </div>
+        )}
       </div>
     </div>
   );

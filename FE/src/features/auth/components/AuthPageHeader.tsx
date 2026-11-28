@@ -1,7 +1,7 @@
-import React from 'react';
-import { useNavigate } from 'react-router';
-import { Icon } from '@/assets/icons';
-import { ROUTES } from '@/app/routes';
+import React from "react";
+import { useNavigate } from "react-router";
+import { Icon } from "@/assets/icons";
+import { ROUTES } from "@/app/routes";
 
 /**
  * AuthPageHeader

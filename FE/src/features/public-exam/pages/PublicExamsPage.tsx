@@ -1,22 +1,22 @@
-import React, { useMemo, useState } from 'react';
-import { Icon } from '@/assets/icons';
-import { Badge } from '@/components/ui/Badge';
-import { Select } from '@/components/ui/Select';
-import { SearchableSelect } from '@/components/ui/SearchableSelect';
-import { Tabs } from '@/components/ui/Tabs';
-import { EmptyState } from '@/components/ui/Card';
-import { Button } from '@/components/ui/Button';
-import { Pagination, usePagination } from '@/components/ui/Pagination';
-import { SearchInput } from '@/components/common/SearchInput';
-import { PublicExamCard } from '../components/PublicExamCard';
-import { PublicStatCard } from '../components/PublicStatCard';
+import React, { useMemo, useState } from "react";
+import { Icon } from "@/assets/icons";
+import { Badge } from "@/components/ui/Badge";
+import { Select } from "@/components/ui/Select";
+import { SearchableSelect } from "@/components/ui/SearchableSelect";
+import { Tabs } from "@/components/ui/Tabs";
+import { EmptyState } from "@/components/ui/Card";
+import { Button } from "@/components/ui/Button";
+import { Pagination, usePagination } from "@/components/ui/Pagination";
+import { SearchInput } from "@/components/common/SearchInput";
+import { PublicExamCard } from "../components/PublicExamCard";
+import { PublicStatCard } from "../components/PublicStatCard";
 import {
   PER_PAGE,
   PUBLIC_EXAM_CATEGORIES,
   PUBLIC_EXAM_COURSES,
   PUBLIC_EXAMS,
   SCORE_TREND,
-} from '../mockPublicExams';
+} from "../mockPublicExams";
 
 /**
  * PublicExamsPage
@@ -32,29 +32,29 @@ import {
  */
 
 /** Sentinel tab/category meaning "do not filter by category". */
-const ALL_CATEGORY = 'All Exams';
-const ALL = 'all';
+const ALL_CATEGORY = "All Exams";
+const ALL = "all";
 
 const CATEGORY_TABS = [ALL_CATEGORY, ...PUBLIC_EXAM_CATEGORIES];
 
 const COURSE_OPTIONS = [
-  { label: 'All courses', value: ALL },
+  { label: "All courses", value: ALL },
   // Some course names are long certifications — show the short label, match on the full name.
-  ...PUBLIC_EXAM_COURSES.map(c => ({ label: c.shortName ?? c.name, value: c.name })),
+  ...PUBLIC_EXAM_COURSES.map((c) => ({ label: c.shortName ?? c.name, value: c.name })),
 ];
 
 const DIFFICULTY_OPTIONS = [
-  { label: 'All difficulties', value: ALL },
-  { label: 'Easy', value: 'Easy' },
-  { label: 'Medium', value: 'Medium' },
-  { label: 'Hard', value: 'Hard' },
+  { label: "All difficulties", value: ALL },
+  { label: "Easy", value: "Easy" },
+  { label: "Medium", value: "Medium" },
+  { label: "Hard", value: "Hard" },
 ];
 
 const STATUS_OPTIONS = [
-  { label: 'All statuses', value: ALL },
-  { label: 'Not Started', value: 'available' },
-  { label: 'In Progress', value: 'in-progress' },
-  { label: 'Completed', value: 'completed' },
+  { label: "All statuses", value: ALL },
+  { label: "Not Started", value: "available" },
+  { label: "In Progress", value: "in-progress" },
+  { label: "Completed", value: "completed" },
 ];
 
 /**
@@ -64,35 +64,35 @@ const STATUS_OPTIONS = [
  */
 function usePublicExamStats() {
   return useMemo(() => {
-    const completed = PUBLIC_EXAMS.filter(exam => exam.status === 'completed');
+    const completed = PUBLIC_EXAMS.filter((exam) => exam.status === "completed");
     const averageScore = completed.length
       ? Math.round(completed.reduce((sum, exam) => sum + (exam.score ?? 0), 0) / completed.length)
       : 0;
 
     return [
       {
-        title: 'Total Exams',
+        title: "Total Exams",
         value: String(PUBLIC_EXAMS.length),
-        description: 'Available practice exams',
+        description: "Available practice exams",
         icon: <Icon.Layers className="h-5 w-5" />,
       },
       {
-        title: 'Completed Exams',
+        title: "Completed Exams",
         value: String(completed.length),
-        description: 'Completed by you',
+        description: "Completed by you",
         icon: <Icon.CheckCircle className="h-5 w-5" />,
       },
       {
-        title: 'Average Score',
+        title: "Average Score",
         value: `${averageScore}%`,
-        description: 'compared to last month',
+        description: "compared to last month",
         icon: <Icon.Award className="h-5 w-5" />,
         trend: SCORE_TREND,
       },
       {
-        title: 'Available Exams',
+        title: "Available Exams",
         value: String(PUBLIC_EXAMS.length - completed.length),
-        description: 'Ready to start',
+        description: "Ready to start",
         icon: <Icon.Zap className="h-5 w-5" />,
       },
     ];
@@ -100,7 +100,7 @@ function usePublicExamStats() {
 }
 
 export function PublicExamsPage() {
-  const [query, setQuery] = useState('');
+  const [query, setQuery] = useState("");
   const [course, setCourse] = useState(ALL);
   const [difficulty, setDifficulty] = useState(ALL);
   const [status, setStatus] = useState(ALL);
@@ -111,25 +111,29 @@ export function PublicExamsPage() {
   const filtered = useMemo(() => {
     const needle = query.trim().toLowerCase();
     return PUBLIC_EXAMS.filter(
-      exam =>
+      (exam) =>
         (category === ALL_CATEGORY || exam.category === category) &&
         (course === ALL || exam.course === course) &&
         (difficulty === ALL || exam.difficulty === difficulty) &&
         (status === ALL || exam.status === status) &&
-        (needle === '' || exam.title.toLowerCase().includes(needle)),
+        (needle === "" || exam.title.toLowerCase().includes(needle)),
     );
   }, [query, course, difficulty, status, category]);
 
   const { page, total, pageItems, setPage } = usePagination(filtered, {
     perPage: PER_PAGE,
-    resetKey: [query, course, difficulty, status, category].join('|'),
+    resetKey: [query, course, difficulty, status, category].join("|"),
   });
 
   const filtersActive =
-    query !== '' || course !== ALL || difficulty !== ALL || status !== ALL || category !== ALL_CATEGORY;
+    query !== "" ||
+    course !== ALL ||
+    difficulty !== ALL ||
+    status !== ALL ||
+    category !== ALL_CATEGORY;
 
   const resetFilters = () => {
-    setQuery('');
+    setQuery("");
     setCourse(ALL);
     setDifficulty(ALL);
     setStatus(ALL);
@@ -146,13 +150,17 @@ export function PublicExamsPage() {
           <Badge variant="warning">Demo data</Badge>
         </div>
         <p className="mt-2 max-w-2xl text-base leading-relaxed text-muted-foreground">
-          A preview of the public exam catalogue, built from fixture data. These exams cannot be started yet.
+          A preview of the public exam catalogue, built from fixture data. These exams cannot be
+          started yet.
         </p>
       </header>
 
       {/* Statistics — auto-fit so the row reflows instead of squashing */}
-      <section aria-label="Public exam statistics" className="grid grid-cols-1 gap-5 sm:grid-cols-2 xl:grid-cols-4">
-        {stats.map(stat => (
+      <section
+        aria-label="Public exam statistics"
+        className="grid grid-cols-1 gap-5 sm:grid-cols-2 xl:grid-cols-4"
+      >
+        {stats.map((stat) => (
           <PublicStatCard key={stat.title} {...stat} />
         ))}
       </section>
@@ -168,19 +176,31 @@ export function PublicExamsPage() {
           aria-label="Search exams by title"
           placeholder="Search exams by title..."
           value={query}
-          onChange={event => setQuery(event.target.value)}
+          onChange={(event) => setQuery(event.target.value)}
         />
 
         <div className="grid flex-1 grid-cols-1 gap-3 sm:grid-cols-3">
-          <SearchableSelect aria-label="Filter by course" value={course} onChange={setCourse} options={COURSE_OPTIONS}
-            placeholder="All courses" searchPlaceholder="Search courses…" emptyText="No courses found" />
+          <SearchableSelect
+            aria-label="Filter by course"
+            value={course}
+            onChange={setCourse}
+            options={COURSE_OPTIONS}
+            placeholder="All courses"
+            searchPlaceholder="Search courses…"
+            emptyText="No courses found"
+          />
           <Select
             aria-label="Filter by difficulty"
             value={difficulty}
             onChange={setDifficulty}
             options={DIFFICULTY_OPTIONS}
           />
-          <Select aria-label="Filter by status" value={status} onChange={setStatus} options={STATUS_OPTIONS} />
+          <Select
+            aria-label="Filter by status"
+            value={status}
+            onChange={setStatus}
+            options={STATUS_OPTIONS}
+          />
         </div>
 
         {filtersActive && (
@@ -194,7 +214,7 @@ export function PublicExamsPage() {
       <section className="flex flex-wrap items-center justify-between gap-4">
         <Tabs tabs={CATEGORY_TABS} active={category} onChange={setCategory} variant="solid" />
         <p className="text-sm text-muted-foreground">
-          Showing <span className="font-semibold text-foreground">{filtered.length}</span> of{' '}
+          Showing <span className="font-semibold text-foreground">{filtered.length}</span> of{" "}
           {PUBLIC_EXAMS.length} exams
         </p>
       </section>
@@ -207,7 +227,11 @@ export function PublicExamsPage() {
             title="No exams match your filters"
             message="Try a different search term, or widen the course, difficulty and status filters."
             action={
-              <Button variant="outline" icon={<Icon.RefreshCw className="h-4 w-4" />} onClick={resetFilters}>
+              <Button
+                variant="outline"
+                icon={<Icon.RefreshCw className="h-4 w-4" />}
+                onClick={resetFilters}
+              >
                 Clear all filters
               </Button>
             }
@@ -215,15 +239,24 @@ export function PublicExamsPage() {
         </div>
       ) : (
         <>
-          <section aria-label="Public exams" className="grid grid-cols-1 gap-5 sm:grid-cols-2 xl:grid-cols-3">
-            {pageItems.map(exam => (
+          <section
+            aria-label="Public exams"
+            className="grid grid-cols-1 gap-5 sm:grid-cols-2 xl:grid-cols-3"
+          >
+            {pageItems.map((exam) => (
               <PublicExamCard key={exam.id} exam={exam} />
             ))}
           </section>
 
           {/* Pagination */}
           <section className="rounded-[14px] border border-line bg-surface shadow-sm">
-            <Pagination page={page} total={total} perPage={PER_PAGE} onChange={setPage} unit="exams" />
+            <Pagination
+              page={page}
+              total={total}
+              perPage={PER_PAGE}
+              onChange={setPage}
+              unit="exams"
+            />
           </section>
         </>
       )}

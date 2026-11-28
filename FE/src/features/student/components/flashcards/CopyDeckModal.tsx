@@ -1,10 +1,16 @@
-import React, { useState } from 'react';
-import { Modal } from '@/components/ui/Modal';
-import { Button } from '@/components/ui/Button';
-import { Input } from '@/components/ui/Input';
-import { getApiErrorMessage } from '@/utils/apiError';
-import { DECK_TITLE_MAX, apiStatus, studentDeckService, type CopyDeckView, type StudentDeckView } from '@/services/studentDeck.service';
-import { plural } from './flashcardUi';
+import React, { useState } from "react";
+import { Modal } from "@/components/ui/Modal";
+import { Button } from "@/components/ui/Button";
+import { Input } from "@/components/ui/Input";
+import { getApiErrorMessage } from "@/utils/apiError";
+import {
+  DECK_TITLE_MAX,
+  apiStatus,
+  studentDeckService,
+  type CopyDeckView,
+  type StudentDeckView,
+} from "@/services/studentDeck.service";
+import { plural } from "./flashcardUi";
 
 /**
  * Copies a readable deck (cards included) into the student's personal library
@@ -26,7 +32,7 @@ export function CopyDeckModal({
   const submit = async (e: React.FormEvent) => {
     e.preventDefault();
     const t = title.trim();
-    if (!t) return setTitleError('Enter a title.');
+    if (!t) return setTitleError("Enter a title.");
     if (t.length > DECK_TITLE_MAX) return setTitleError(`At most ${DECK_TITLE_MAX} characters.`);
     setTitleError(undefined);
 
@@ -36,8 +42,8 @@ export function CopyDeckModal({
     } catch (err) {
       setTitleError(
         apiStatus(err) === 409
-          ? 'You already have a personal deck with this title — pick another one.'
-          : getApiErrorMessage(err, 'Could not copy the deck.'),
+          ? "You already have a personal deck with this title — pick another one."
+          : getApiErrorMessage(err, "Could not copy the deck."),
       );
       setSaving(false);
     }
@@ -61,14 +67,14 @@ export function CopyDeckModal({
     >
       <form id="copy-deck-form" onSubmit={submit} className="space-y-3" noValidate>
         <p className="text-sm text-content-soft">
-          A private copy with all {plural(deck.cardCount, 'card')} goes to My decks, with no course. Your study progress starts
-          fresh, and you can edit the copy freely.
+          A private copy with all {plural(deck.cardCount, "card")} goes to My decks, with no course.
+          Your study progress starts fresh, and you can edit the copy freely.
         </p>
         <Input
           label="Title"
           value={title}
           maxLength={DECK_TITLE_MAX}
-          onChange={e => setTitle(e.target.value)}
+          onChange={(e) => setTitle(e.target.value)}
           error={titleError}
           autoFocus
         />

@@ -1,10 +1,10 @@
-import React from 'react';
-import { useNavigate } from 'react-router';
-import { Icon } from '@/assets/icons';
-import { Badge } from '@/components/ui/Badge';
-import { coursePath } from '@/app/routes';
-import type { StudentCourseCard } from '@/services/studentCourse.service';
-import { CourseLogo, formatPrice } from './CourseLogo';
+import React from "react";
+import { useNavigate } from "react-router";
+import { Icon } from "@/assets/icons";
+import { Badge } from "@/components/ui/Badge";
+import { coursePath } from "@/app/routes";
+import type { StudentCourseCard } from "@/services/studentCourse.service";
+import { CourseLogo, formatPrice } from "./CourseLogo";
 
 /**
  * CourseCatalogCard
@@ -19,8 +19,14 @@ export function CourseCatalogCard({ course }: { course: StudentCourseCard }) {
   const price = formatPrice(course.price);
 
   const stats = [
-    { value: String(course.publishedExamCount ?? 0), label: course.publishedExamCount === 1 ? 'Exam' : 'Exams' },
-    { value: String(course.deckCount ?? 0), label: course.deckCount === 1 ? 'Flashcard deck' : 'Flashcard decks' },
+    {
+      value: String(course.publishedExamCount ?? 0),
+      label: course.publishedExamCount === 1 ? "Exam" : "Exams",
+    },
+    {
+      value: String(course.deckCount ?? 0),
+      label: course.deckCount === 1 ? "Flashcard deck" : "Flashcard decks",
+    },
   ];
 
   return (
@@ -29,11 +35,17 @@ export function CourseCatalogCard({ course }: { course: StudentCourseCard }) {
         <CourseLogo title={course.title} thumbnailUrl={course.thumbnailUrl} size={40} />
         <div className="min-w-0 flex-1">
           <h3 className="text-lg leading-snug font-semibold text-content">
-            <button type="button" onClick={() => navigate(href)} className="text-left cursor-pointer">
+            <button
+              type="button"
+              onClick={() => navigate(href)}
+              className="text-left cursor-pointer"
+            >
               {course.title}
             </button>
           </h3>
-          <p className="mt-0.5 truncate text-xs text-content-subtle">{course.category?.name ?? 'Uncategorized'}</p>
+          <p className="mt-0.5 truncate text-xs text-content-subtle">
+            {course.category?.name ?? "Uncategorized"}
+          </p>
         </div>
         {course.isEnrolled && <Badge variant="success">Enrolled</Badge>}
       </div>
@@ -62,7 +74,11 @@ export function CourseCatalogCard({ course }: { course: StudentCourseCard }) {
               Enrolled
             </span>
           ) : (
-            <span className={`text-sm font-semibold ${price === 'Free' ? 'text-success' : 'text-brand-ink'}`}>{price}</span>
+            <span
+              className={`text-sm font-semibold ${price === "Free" ? "text-success" : "text-brand-ink"}`}
+            >
+              {price}
+            </span>
           )}
           <button
             type="button"

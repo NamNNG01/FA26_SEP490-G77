@@ -1,13 +1,13 @@
-import React from 'react';
-import { Icon } from '@/assets/icons';
-import { Container } from '../components/Container';
-import { Reveal } from '@/components/common/Reveal';
+import React from "react";
+import { Icon } from "@/assets/icons";
+import { Container } from "../components/Container";
+import { Reveal } from "@/components/common/Reveal";
 import {
   alsoIncluded,
   howItWorksContent,
   howItWorksSteps,
   type HowItWorksVisual,
-} from '../data/landingData';
+} from "../data/landingData";
 
 /**
  * HowItWorksSection
@@ -39,7 +39,7 @@ export function HowItWorksSection() {
           {howItWorksSteps.map((step, i) => (
             <li key={step.step}>
               <Reveal className="grid items-center gap-[clamp(1.5rem,4vw,4rem)] md:grid-cols-2">
-                <div className={i % 2 === 1 ? 'md:order-2' : ''}>
+                <div className={i % 2 === 1 ? "md:order-2" : ""}>
                   <span className="font-mono text-sm font-medium text-brand-ink">{step.step}</span>
                   <h3 className="mt-2 text-[clamp(1.25rem,1.05rem+0.8vw,1.625rem)] leading-snug font-semibold text-content">
                     {step.title}
@@ -48,7 +48,7 @@ export function HowItWorksSection() {
                     {step.description}
                   </p>
                 </div>
-                <div className={i % 2 === 1 ? 'md:order-1' : ''}>
+                <div className={i % 2 === 1 ? "md:order-1" : ""}>
                   <StepVisual kind={step.visual} />
                 </div>
               </Reveal>
@@ -59,7 +59,7 @@ export function HowItWorksSection() {
         <Reveal className="mt-[clamp(3rem,6vw,4.5rem)] border-t border-line pt-6">
           <p className="text-base text-content-muted">
             <span className="font-semibold text-content">Also in every course: </span>
-            {alsoIncluded.join(' · ')}
+            {alsoIncluded.join(" · ")}
           </p>
         </Reveal>
       </Container>
@@ -74,27 +74,25 @@ export function HowItWorksSection() {
 
 function Panel({ children, label }: { children: React.ReactNode; label: string }) {
   return (
-    <div
-      role="img"
-      aria-label={label}
-      className="rounded-[14px] border border-line bg-surface p-5"
-    >
+    <div role="img" aria-label={label} className="rounded-[14px] border border-line bg-surface p-5">
       {children}
     </div>
   );
 }
 
 function StepVisual({ kind }: { kind: HowItWorksVisual }) {
-  if (kind === 'topics') {
+  if (kind === "topics") {
     const topics = [
-      { name: 'Cloud Fundamentals', pct: 86 },
-      { name: 'Security & Compliance', pct: 64 },
-      { name: 'Compute & Storage', pct: 52 },
-      { name: 'Cost Management', pct: 31 },
+      { name: "Cloud Fundamentals", pct: 86 },
+      { name: "Security & Compliance", pct: 64 },
+      { name: "Compute & Storage", pct: 52 },
+      { name: "Cost Management", pct: 31 },
     ];
     return (
       <Panel label="Topic progress: four exam domains with their completion">
-        <p className="text-xs font-semibold tracking-[0.06em] text-content-soft uppercase">Topic progress</p>
+        <p className="text-xs font-semibold tracking-[0.06em] text-content-soft uppercase">
+          Topic progress
+        </p>
         <ul className="mt-4 flex flex-col gap-3.5">
           {topics.map((t) => (
             <li key={t.name}>
@@ -112,13 +110,15 @@ function StepVisual({ kind }: { kind: HowItWorksVisual }) {
     );
   }
 
-  if (kind === 'mock') {
+  if (kind === "mock") {
     // 0 = unanswered, 1 = answered, 2 = flagged, 3 = current
     const cells = [1, 1, 1, 2, 1, 1, 1, 1, 3, 0, 0, 0, 2, 0, 0, 0, 0, 0, 0, 0];
     return (
       <Panel label="Mock exam in progress: timer and question navigator">
         <div className="flex items-center justify-between">
-          <p className="text-xs font-semibold tracking-[0.06em] text-content-soft uppercase">Mock exam 3</p>
+          <p className="text-xs font-semibold tracking-[0.06em] text-content-soft uppercase">
+            Mock exam 3
+          </p>
           <span className="inline-flex items-center gap-1.5 font-mono text-lg font-semibold text-content">
             <Icon.Clock className="h-4 w-4 text-content-soft" />
             54:44
@@ -130,12 +130,12 @@ function StepVisual({ kind }: { kind: HowItWorksVisual }) {
               key={idx}
               className={`flex aspect-square items-center justify-center rounded-[6px] font-mono text-2xs ${
                 state === 3
-                  ? 'bg-brand-600 text-white'
+                  ? "bg-brand-600 text-white"
                   : state === 2
-                    ? 'border border-highlight text-warning-strong'
+                    ? "border border-highlight text-warning-strong"
                     : state === 1
-                      ? 'bg-brand-100 text-brand-ink-strong dark:bg-brand-900'
-                      : 'border border-line text-content-subtle'
+                      ? "bg-brand-100 text-brand-ink-strong dark:bg-brand-900"
+                      : "border border-line text-content-subtle"
               }`}
             >
               {idx + 1}
@@ -143,23 +143,34 @@ function StepVisual({ kind }: { kind: HowItWorksVisual }) {
           ))}
         </div>
         <div className="mt-4 flex gap-4 text-xs text-content-soft">
-          <span className="inline-flex items-center gap-1.5"><span className="h-2.5 w-2.5 rounded-[3px] bg-brand-100 dark:bg-brand-900" />Answered</span>
-          <span className="inline-flex items-center gap-1.5"><span className="h-2.5 w-2.5 rounded-[3px] border border-highlight" />Flagged</span>
-          <span className="inline-flex items-center gap-1.5"><span className="h-2.5 w-2.5 rounded-[3px] border border-line-strong" />Not yet</span>
+          <span className="inline-flex items-center gap-1.5">
+            <span className="h-2.5 w-2.5 rounded-[3px] bg-brand-100 dark:bg-brand-900" />
+            Answered
+          </span>
+          <span className="inline-flex items-center gap-1.5">
+            <span className="h-2.5 w-2.5 rounded-[3px] border border-highlight" />
+            Flagged
+          </span>
+          <span className="inline-flex items-center gap-1.5">
+            <span className="h-2.5 w-2.5 rounded-[3px] border border-line-strong" />
+            Not yet
+          </span>
         </div>
       </Panel>
     );
   }
 
   const weak = [
-    { name: 'Cost Management', score: '4 / 11' },
-    { name: 'Support Plans', score: '3 / 7' },
+    { name: "Cost Management", score: "4 / 11" },
+    { name: "Support Plans", score: "3 / 7" },
   ];
   return (
     <Panel label="Attempt review: overall score, weakest topics and an AI study note">
       <div className="flex items-end justify-between">
         <div>
-          <p className="text-xs font-semibold tracking-[0.06em] text-content-soft uppercase">Attempt result</p>
+          <p className="text-xs font-semibold tracking-[0.06em] text-content-soft uppercase">
+            Attempt result
+          </p>
           <p className="mt-1 font-[family-name:var(--font-display)] text-2xl leading-none font-bold text-content">
             72%
           </p>
@@ -175,7 +186,8 @@ function StepVisual({ kind }: { kind: HowItWorksVisual }) {
       </ul>
       <p className="mt-4 text-sm leading-relaxed text-content-muted">
         <span className="font-semibold text-brand-ink">AI review: </span>
-        Most misses mix up Savings Plans and Reserved Instances. Revisit the pricing-model lesson, then retry the 11 cost questions.
+        Most misses mix up Savings Plans and Reserved Instances. Revisit the pricing-model lesson,
+        then retry the 11 cost questions.
       </p>
     </Panel>
   );

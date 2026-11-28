@@ -1,19 +1,27 @@
-import React, { useState } from 'react';
-import { Table, type TableColumn } from '@/components/ui/Table';
-import { Badge } from '@/components/ui/Badge';
-import { Button } from '@/components/ui/Button';
-import { DashboardError } from '@/components/common/DashboardState';
-import { SearchInput } from '@/components/common/SearchInput';
-import { Icon } from '@/assets/icons';
-import type { CmCourseStat } from '@/services/cmDashboard.types';
-import { LabelWithInfo, Panel, PanelEmpty, PanelSkeleton } from './cmDashboardUi';
+import React, { useState } from "react";
+import { Table, type TableColumn } from "@/components/ui/Table";
+import { Badge } from "@/components/ui/Badge";
+import { Button } from "@/components/ui/Button";
+import { DashboardError } from "@/components/common/DashboardState";
+import { SearchInput } from "@/components/common/SearchInput";
+import { Icon } from "@/assets/icons";
+import type { CmCourseStat } from "@/services/cmDashboard.types";
+import { LabelWithInfo, Panel, PanelEmpty, PanelSkeleton } from "./cmDashboardUi";
 
 /** Case- and accent-insensitive normalization for search matching. */
 const normalize = (s: string) =>
-  s.normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/đ/g, 'd').replace(/Đ/g, 'D').toLowerCase();
+  s.normalize("NFD").replace(/[̀-ͯ]/g, "").replace(/đ/g, "d").replace(/Đ/g, "D").toLowerCase();
 
 /** "My courses" — click a row to filter the exam panel by that course. */
-export function CmCoursePanel({ courses, loading, error, onRetry, selectedCourseId, onSelectCourse, onViewAll }: {
+export function CmCoursePanel({
+  courses,
+  loading,
+  error,
+  onRetry,
+  selectedCourseId,
+  onSelectCourse,
+  onViewAll,
+}: {
   courses: CmCourseStat[] | null;
   loading: boolean;
   error: string | null;
@@ -23,19 +31,21 @@ export function CmCoursePanel({ courses, loading, error, onRetry, selectedCourse
   onSelectCourse: (courseId: number | null) => void;
   onViewAll: () => void;
 }) {
-  const [query, setQuery] = useState('');
+  const [query, setQuery] = useState("");
   const of = (row: Record<string, unknown>) => row.stat as CmCourseStat;
 
   // One stacked column: the panel is only a quarter of the width on xl.
   const columns: TableColumn[] = [
     {
-      key: 'course',
-      label: 'Course',
+      key: "course",
+      label: "Course",
       render: (row) => {
         const c = of(row);
         return (
           <div className="min-w-0">
-            <p className="line-clamp-2 font-medium text-foreground" title={c.title}>{c.title}</p>
+            <p className="line-clamp-2 font-medium text-foreground" title={c.title}>
+              {c.title}
+            </p>
             <p className="mt-0.5 flex flex-wrap items-center gap-x-1.5 text-xs text-muted-foreground">
               <span className="inline-flex items-center gap-1">
                 <Icon.Users className="w-3.5 h-3.5" />
@@ -64,7 +74,14 @@ export function CmCoursePanel({ courses, loading, error, onRetry, selectedCourse
 
   return (
     <Panel
-      title={<LabelWithInfo side="bottom" info="Courses are shared across managers; exam figures are yours only">My courses</LabelWithInfo>}
+      title={
+        <LabelWithInfo
+          side="bottom"
+          info="Courses are shared across managers; exam figures are yours only"
+        >
+          My courses
+        </LabelWithInfo>
+      }
       count={courses && <Badge variant="default">{courses.length} course</Badge>}
       actions={
         <Button variant="outline" size="sm" onClick={onViewAll}>
@@ -87,22 +104,24 @@ export function CmCoursePanel({ courses, loading, error, onRetry, selectedCourse
               placeholder="Search courses…"
               aria-label="Search courses"
             />
-            <p className="mt-2 text-xs text-muted-foreground">Select a course to filter the exam performance table.</p>
+            <p className="mt-2 text-xs text-muted-foreground">
+              Select a course to filter the exam performance table.
+            </p>
           </div>
           {rows.length === 0 ? (
             <PanelEmpty message={`No courses match “${query.trim()}”.`} />
           ) : (
-          <Table
-            columns={columns}
-            data={rows}
-            unit="course"
-            resetKey={q}
-            onRowClick={(row) => {
-              const id = of(row).courseId;
-              onSelectCourse(id === selectedCourseId ? null : id);
-            }}
-            isRowActive={(row) => of(row).courseId === selectedCourseId}
-          />
+            <Table
+              columns={columns}
+              data={rows}
+              unit="course"
+              resetKey={q}
+              onRowClick={(row) => {
+                const id = of(row).courseId;
+                onSelectCourse(id === selectedCourseId ? null : id);
+              }}
+              isRowActive={(row) => of(row).courseId === selectedCourseId}
+            />
           )}
         </>
       )}

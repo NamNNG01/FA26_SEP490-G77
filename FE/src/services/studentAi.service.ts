@@ -1,5 +1,5 @@
-import { apiClient } from './axios';
-import type { ApiResponse } from '@/types/api';
+import { apiClient } from "./axios";
+import type { ApiResponse } from "@/types/api";
 
 /**
  * StudentAiService — AI personalization (Deadline1 §25, StudentPersonalizationController).
@@ -21,9 +21,9 @@ const AI_TIMEOUT_MS = 45000;
 export const SMART_QUESTIONS = { min: 10, max: 30, default: 15 };
 export const SMART_MINUTES = { min: 10, max: 60, default: 30 };
 
-export type AiTrend = 'IMPROVING' | 'STABLE' | 'DECLINING';
-export type AiPriority = 'HIGH' | 'MEDIUM' | 'LOW';
-export type AiSource = 'GENERATED' | 'CACHED';
+export type AiTrend = "IMPROVING" | "STABLE" | "DECLINING";
+export type AiPriority = "HIGH" | "MEDIUM" | "LOW";
+export type AiSource = "GENERATED" | "CACHED";
 
 export interface AiQuotaLeft {
   freeRemaining: number;
@@ -60,7 +60,7 @@ export interface SmartPracticeStarted {
   } | null;
 }
 
-export type SmartJobStatus = 'PROCESSING' | 'COMPLETED' | 'FAILED';
+export type SmartJobStatus = "PROCESSING" | "COMPLETED" | "FAILED";
 
 export interface SmartPracticeStatus {
   jobId: string;
@@ -73,7 +73,7 @@ export interface SmartPracticeStatus {
 
 // ------------------------------------------------------------- AI-03
 
-export type RecommendationType = 'FLASHCARD_DECK' | 'EXAM' | 'REVIEW_SESSION' | 'WEAK_TOPIC';
+export type RecommendationType = "FLASHCARD_DECK" | "EXAM" | "REVIEW_SESSION" | "WEAK_TOPIC";
 
 export interface Recommendation {
   type: RecommendationType;
@@ -89,7 +89,13 @@ export interface Recommendations {
   courseId: number;
   overallReadiness: number;
   strengths: { categoryId: number; name: string; accuracy: number; trend: AiTrend }[];
-  weaknesses: { categoryId: number; name: string; accuracy: number; trend: AiTrend; priority: AiPriority }[];
+  weaknesses: {
+    categoryId: number;
+    name: string;
+    accuracy: number;
+    trend: AiTrend;
+    priority: AiPriority;
+  }[];
   recommendations: Recommendation[];
   /** Set when there is too little data (recommendations is then empty). */
   message: string | null;
@@ -98,12 +104,12 @@ export interface Recommendations {
 
 // ------------------------------------------------------------- AI-04
 
-export type WeaknessPeriod = 'LAST_7_DAYS' | 'LAST_30_DAYS' | 'ALL_TIME';
+export type WeaknessPeriod = "LAST_7_DAYS" | "LAST_30_DAYS" | "ALL_TIME";
 
 export const WEAKNESS_PERIOD_LABEL: Record<WeaknessPeriod, string> = {
-  LAST_7_DAYS: 'Last 7 days',
-  LAST_30_DAYS: 'Last 30 days',
-  ALL_TIME: 'All time',
+  LAST_7_DAYS: "Last 7 days",
+  LAST_30_DAYS: "Last 30 days",
+  ALL_TIME: "All time",
 };
 
 export interface CommonMistake {
@@ -112,7 +118,7 @@ export interface CommonMistake {
   suggestion: string;
   questionIds?: number[];
   /** Course resource the suggestion points to (checked to exist by the BE); all null when none fits. */
-  refType?: 'DECK' | 'EXAM' | 'MODULE' | null;
+  refType?: "DECK" | "EXAM" | "MODULE" | null;
   refId?: number | null;
   refTitle?: string | null;
 }
@@ -151,7 +157,7 @@ export interface DifficultyBreakdown {
 
 // ------------------------------------------------------------- insights (no AI)
 
-export type Mastery = 'NOT_STARTED' | 'WEAK' | 'LEARNING' | 'STRONG' | 'MASTERED';
+export type Mastery = "NOT_STARTED" | "WEAK" | "LEARNING" | "STRONG" | "MASTERED";
 
 /** One module over the course's practice bank; counts are distinct questions by their latest answer. */
 export interface ModuleInsight {
@@ -193,60 +199,85 @@ export interface Insights {
 // ------------------------------------------------------------- errors
 
 export type AiError =
-  | { kind: 'QUOTA_EXCEEDED'; message: string; estimatedTokens: number | null; availableTokens: number | null }
-  | { kind: 'INSUFFICIENT_DATA'; message: string }
-  | { kind: 'OTHER'; message: string; status: number | null };
+  | {
+      kind: "QUOTA_EXCEEDED";
+      message: string;
+      estimatedTokens: number | null;
+      availableTokens: number | null;
+    }
+  | { kind: "INSUFFICIENT_DATA"; message: string }
+  | { kind: "OTHER"; message: string; status: number | null };
 
-type ErrorBody = { message?: string; data?: { code?: string; estimatedTokens?: number; availableTokens?: number } | null };
+type ErrorBody = {
+  message?: string;
+  data?: { code?: string; estimatedTokens?: number; availableTokens?: number } | null;
+};
 
 /** Turns an AI call failure into what the screen shows (429 → quota numbers, 422 → "do more exams"). */
 export function getAiError(error: unknown, fallback: string): AiError {
   const res = (error as { response?: { status?: number; data?: ErrorBody } } | null)?.response;
   const body = res?.data;
-  const message = body?.message?.trim() || (error as { message?: string } | null)?.message || fallback;
+  const message =
+    body?.message?.trim() || (error as { message?: string } | null)?.message || fallback;
   const code = body?.data?.code;
-  if (res?.status === 429 || code === 'QUOTA_EXCEEDED') {
+  if (res?.status === 429 || code === "QUOTA_EXCEEDED") {
     return {
-      kind: 'QUOTA_EXCEEDED',
+      kind: "QUOTA_EXCEEDED",
       message,
       estimatedTokens: body?.data?.estimatedTokens ?? null,
       availableTokens: body?.data?.availableTokens ?? null,
     };
   }
-  if (code === 'INSUFFICIENT_DATA') return { kind: 'INSUFFICIENT_DATA', message };
-  return { kind: 'OTHER', message: res ? message : fallback, status: res?.status ?? null };
+  if (code === "INSUFFICIENT_DATA") return { kind: "INSUFFICIENT_DATA", message };
+  return { kind: "OTHER", message: res ? message : fallback, status: res?.status ?? null };
 }
 
 // ------------------------------------------------------------- calls
 
 export const studentAiService = {
   async startSmartPractice(body: SmartPracticeRequest): Promise<SmartPracticeStarted> {
-    const res = await apiClient.post<ApiResponse<SmartPracticeStarted>>('/student/ai/smart-practice', body, { timeout: AI_TIMEOUT_MS });
+    const res = await apiClient.post<ApiResponse<SmartPracticeStarted>>(
+      "/student/ai/smart-practice",
+      body,
+      { timeout: AI_TIMEOUT_MS },
+    );
     return res.data.data;
   },
 
   /** AI-02. `retryAfterMs` comes from the Retry-After header (set only while PROCESSING). */
-  async getSmartPractice(jobId: string): Promise<{ status: SmartPracticeStatus; retryAfterMs: number | null }> {
-    const res = await apiClient.get<ApiResponse<SmartPracticeStatus>>(`/student/ai/smart-practice/${encodeURIComponent(jobId)}`);
-    const seconds = Number(res.headers['retry-after']);
-    return { status: res.data.data, retryAfterMs: Number.isFinite(seconds) && seconds > 0 ? seconds * 1000 : null };
+  async getSmartPractice(
+    jobId: string,
+  ): Promise<{ status: SmartPracticeStatus; retryAfterMs: number | null }> {
+    const res = await apiClient.get<ApiResponse<SmartPracticeStatus>>(
+      `/student/ai/smart-practice/${encodeURIComponent(jobId)}`,
+    );
+    const seconds = Number(res.headers["retry-after"]);
+    return {
+      status: res.data.data,
+      retryAfterMs: Number.isFinite(seconds) && seconds > 0 ? seconds * 1000 : null,
+    };
   },
 
   async getRecommendations(courseId: number): Promise<Recommendations> {
-    const res = await apiClient.get<ApiResponse<Recommendations>>(`/student/ai/recommendations?courseId=${courseId}`, {
-      timeout: AI_TIMEOUT_MS,
-    });
+    const res = await apiClient.get<ApiResponse<Recommendations>>(
+      `/student/ai/recommendations?courseId=${courseId}`,
+      {
+        timeout: AI_TIMEOUT_MS,
+      },
+    );
     return res.data.data;
   },
 
   async getInsights(courseId: number): Promise<Insights> {
-    const res = await apiClient.get<ApiResponse<Insights>>(`/student/ai/insights?courseId=${courseId}`);
+    const res = await apiClient.get<ApiResponse<Insights>>(
+      `/student/ai/insights?courseId=${courseId}`,
+    );
     return res.data.data;
   },
 
   async getWeaknessReport(courseId: number, period: WeaknessPeriod): Promise<WeaknessReport> {
     const res = await apiClient.post<ApiResponse<WeaknessReport>>(
-      '/student/ai/weakness-report',
+      "/student/ai/weakness-report",
       { courseId, period },
       { timeout: AI_TIMEOUT_MS },
     );

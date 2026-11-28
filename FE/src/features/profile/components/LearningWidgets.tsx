@@ -1,7 +1,7 @@
-import React from 'react';
-import { Progress } from '@/components/ui/Progress';
-import { Icon } from '@/assets/icons';
-import type { StudentRecentCourse } from '@/services/dashboard.service';
+import React from "react";
+import { Progress } from "@/components/ui/Progress";
+import { Icon } from "@/assets/icons";
+import type { StudentRecentCourse } from "@/services/dashboard.service";
 
 function EmptyText({ children }: { children: React.ReactNode }) {
   return <p className="text-sm text-content-subtle">{children}</p>;

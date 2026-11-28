@@ -1,5 +1,5 @@
-import React from 'react';
-import { Icon } from '@/assets/icons';
+import React from "react";
+import { Icon } from "@/assets/icons";
 
 export function Breadcrumb({ items }: { items: { label: string; onClick?: () => void }[] }) {
   return (
@@ -10,7 +10,7 @@ export function Breadcrumb({ items }: { items: { label: string; onClick?: () => 
           <span
             onClick={item.onClick}
             title={item.label}
-            className={`text-sm min-w-0 max-w-[240px] truncate ${item.onClick ? 'text-brand-ink hover:underline cursor-pointer' : 'text-content-soft'}`}
+            className={`text-sm min-w-0 max-w-[240px] truncate ${item.onClick ? "text-brand-ink hover:underline cursor-pointer" : "text-content-soft"}`}
           >
             {item.label}
           </span>

@@ -1,7 +1,7 @@
-import { api } from './api';
-import { apiClient } from './axios';
-import { mockGenerateAiQuestions } from './mockQuestionAiData';
-import type { ApiResponse } from '@/types/api';
+import { api } from "./api";
+import { apiClient } from "./axios";
+import { mockGenerateAiQuestions } from "./mockQuestionAiData";
+import type { ApiResponse } from "@/types/api";
 
 /**
  * QuestionService
@@ -19,31 +19,31 @@ import type { ApiResponse } from '@/types/api';
 
 /** Values accepted by the `questions.question_type` CHECK constraint. */
 export type QuestionType =
-  | 'SINGLE_CHOICE'
-  | 'MULTIPLE_CHOICE'
-  | 'TRUE_FALSE'
-  | 'MATCHING'
-  | 'FILL_BLANK'
-  | 'ESSAY'
-  | 'CODE'
-  | 'DIAGRAM'
-  | 'DIAGRAM_ESSAY'
-  | 'ORDERING';
+  | "SINGLE_CHOICE"
+  | "MULTIPLE_CHOICE"
+  | "TRUE_FALSE"
+  | "MATCHING"
+  | "FILL_BLANK"
+  | "ESSAY"
+  | "CODE"
+  | "DIAGRAM"
+  | "DIAGRAM_ESSAY"
+  | "ORDERING";
 
-export type QuestionDifficulty = 'EASY' | 'MEDIUM' | 'HARD';
+export type QuestionDifficulty = "EASY" | "MEDIUM" | "HARD";
 
 /**
  * New questions are saved INACTIVE; the only move is INACTIVE → ACTIVE, and publishing is final.
  * ARCHIVED is no longer reachable from the UI — it stays here for questions archived before.
  */
-export type QuestionStatus = 'INACTIVE' | 'ACTIVE' | 'ARCHIVED';
+export type QuestionStatus = "INACTIVE" | "ACTIVE" | "ARCHIVED";
 
 /**
  * Background AI explanation state of a question (AI-04). PENDING = queued or being written;
  * FAILED = the AI could not write one (the manager can queue it again). Missing on older
  * responses — then a blank explanation just reads as "none".
  */
-export type ExplanationStatus = 'NONE' | 'PENDING' | 'READY' | 'FAILED';
+export type ExplanationStatus = "NONE" | "PENDING" | "READY" | "FAILED";
 
 /** A question can only be published once it has an explanation (Report-3 6.2). */
 export function explanationMissing(text: string | null | undefined): boolean {
@@ -52,9 +52,9 @@ export function explanationMissing(text: string | null | undefined): boolean {
 
 /** UI names for the stored statuses: INACTIVE shows as Draft, ACTIVE as Published. */
 export const QUESTION_STATUS_LABELS: Record<QuestionStatus, string> = {
-  INACTIVE: 'Draft',
-  ACTIVE: 'Published',
-  ARCHIVED: 'Archived',
+  INACTIVE: "Draft",
+  ACTIVE: "Published",
+  ARCHIVED: "Archived",
 };
 
 /** QuestionListItemDto */
@@ -207,7 +207,7 @@ export interface CodeQuestionConfig {
 }
 
 /** QuestionUpdateRequest — every field optional; `lockVersion` guards concurrent edits. */
-export interface QuestionUpdateRequest extends Partial<Omit<QuestionCreateRequest, 'courseId'>> {
+export interface QuestionUpdateRequest extends Partial<Omit<QuestionCreateRequest, "courseId">> {
   lockVersion?: number | null;
 }
 
@@ -246,7 +246,7 @@ export interface QuestionDetail {
  * Keys QuestionValidator allows in questionMetadata — any other key fails the
  * request. DIAGRAM questions also send `drawioXml` (max 500 KB, starts with <mxfile or <mxGraphModel).
  */
-export const QUESTION_METADATA_KEYS = ['skillTag'] as const;
+export const QUESTION_METADATA_KEYS = ["skillTag"] as const;
 
 /** ValidationError — one entry of a VALIDATION_ERROR response's `data`. */
 export interface QuestionValidationError {
@@ -259,7 +259,10 @@ export interface QuestionValidationError {
 export function questionValidationErrors(err: unknown): QuestionValidationError[] {
   const data = (err as { response?: { data?: { data?: unknown } } })?.response?.data?.data;
   if (!Array.isArray(data)) return [];
-  return data.filter((e): e is QuestionValidationError => typeof e?.path === 'string' && typeof e?.message === 'string');
+  return data.filter(
+    (e): e is QuestionValidationError =>
+      typeof e?.path === "string" && typeof e?.message === "string",
+  );
 }
 
 /**
@@ -280,7 +283,7 @@ export interface QuestionAiGenerateRequest {
   passageText?: string;
   /** Group title when generating for a Question Group. */
   groupTitle?: string;
-  language?: 'Vietnamese' | 'English';
+  language?: "Vietnamese" | "English";
 }
 
 /** AI-01 `context` limit. */
@@ -294,7 +297,7 @@ interface ExamAiRequest {
   questionCount: number;
   difficultyDistribution: Record<QuestionDifficulty, number>;
   questionTypes: { questionType: QuestionType; count: number }[];
-  language: 'vi' | 'en';
+  language: "vi" | "en";
   context?: string;
   passageText?: string;
 }
@@ -308,7 +311,14 @@ interface ExamAiDraftQuestion {
   questionType: string;
   difficulty: string | null;
   defaultPoints?: number | null;
-  options?: { key?: string | null; optionText: string; isCorrect?: boolean | null; orderIndex?: number | null }[] | null;
+  options?:
+    | {
+        key?: string | null;
+        optionText: string;
+        isCorrect?: boolean | null;
+        orderIndex?: number | null;
+      }[]
+    | null;
   answerKey?: unknown;
   explanation?: string | null;
   questionMetadata?: Record<string, unknown> | null;
@@ -327,22 +337,28 @@ interface ExamAiDraftResponse {
 
 /** One AI-01 draft → the shape the editor accepts (same fields as a create request). */
 function fromExamAiDraft(d: ExamAiDraftQuestion): QuestionAiDraft {
-  const isOrdering = d.questionType === 'ORDERING';
+  const isOrdering = d.questionType === "ORDERING";
   const options = [...(d.options ?? [])]
-    .filter(o => o?.optionText?.trim())
+    .filter((o) => o?.optionText?.trim())
     .sort((a, b) => (a.orderIndex ?? 0) - (b.orderIndex ?? 0))
-    .map((o, i): AnswerOption => (isOrdering
-      ? { ...(o.key ? { key: o.key } : {}), optionText: o.optionText, orderIndex: i }
-      : { optionText: o.optionText, isCorrect: Boolean(o.isCorrect), orderIndex: i }));
+    .map((o, i): AnswerOption =>
+      isOrdering
+        ? { ...(o.key ? { key: o.key } : {}), optionText: o.optionText, orderIndex: i }
+        : { optionText: o.optionText, isCorrect: Boolean(o.isCorrect), orderIndex: i },
+    );
   return {
-    content: d.content ?? '',
-    questionType: (d.questionType === 'MULTI_CHOICE' ? 'MULTIPLE_CHOICE' : d.questionType) as QuestionType,
+    content: d.content ?? "",
+    questionType: (d.questionType === "MULTI_CHOICE"
+      ? "MULTIPLE_CHOICE"
+      : d.questionType) as QuestionType,
     difficulty: (d.difficulty as QuestionDifficulty) ?? null,
     options,
     answerKey: d.answerKey ?? null,
     explanation: d.explanation ?? null,
     // plantUmlSource rides in metadata for the editor's preview; toMetadata never sends it.
-    questionMetadata: d.plantUmlSource ? { ...d.questionMetadata, plantUmlSource: d.plantUmlSource } : d.questionMetadata ?? null,
+    questionMetadata: d.plantUmlSource
+      ? { ...d.questionMetadata, plantUmlSource: d.plantUmlSource }
+      : (d.questionMetadata ?? null),
     essayGradingRubric: d.essayGradingRubric ?? undefined,
     codeConfig: d.codeConfig ?? null,
     testCases: d.testCases ?? null,
@@ -352,13 +368,17 @@ function fromExamAiDraft(d: ExamAiDraftQuestion): QuestionAiDraft {
 function fromExamAiDraftResponse(data: ExamAiDraftResponse | undefined): QuestionAiDraftResponse {
   return {
     questions: (data?.questions ?? [])
-      .filter(q => q?.content?.trim())
-      .map(q => ({ question: fromExamAiDraft(q), hasHashConflict: false, validationError: null })),
+      .filter((q) => q?.content?.trim())
+      .map((q) => ({
+        question: fromExamAiDraft(q),
+        hasHashConflict: false,
+        validationError: null,
+      })),
     warnings: data?.warnings ?? [],
   };
 }
 
-const AI_LANGUAGE_CODES = { Vietnamese: 'vi', English: 'en' } as const;
+const AI_LANGUAGE_CODES = { Vietnamese: "vi", English: "en" } as const;
 
 function toExamAiRequest(req: QuestionAiGenerateRequest): ExamAiRequest {
   const questionTypes = (Object.entries(req.questionTypeCounts) as [QuestionType, number][])
@@ -372,9 +392,13 @@ function toExamAiRequest(req: QuestionAiGenerateRequest): ExamAiRequest {
     ...(req.moduleId != null ? { moduleId: req.moduleId } : {}),
     ...(title ? { title: title.slice(0, 255) } : {}),
     questionCount: questionTypes.reduce((n, t) => n + t.count, 0),
-    difficultyDistribution: { EASY: req.difficultyCounts.EASY ?? 0, MEDIUM: req.difficultyCounts.MEDIUM ?? 0, HARD: req.difficultyCounts.HARD ?? 0 },
+    difficultyDistribution: {
+      EASY: req.difficultyCounts.EASY ?? 0,
+      MEDIUM: req.difficultyCounts.MEDIUM ?? 0,
+      HARD: req.difficultyCounts.HARD ?? 0,
+    },
     questionTypes,
-    language: AI_LANGUAGE_CODES[req.language ?? 'English'],
+    language: AI_LANGUAGE_CODES[req.language ?? "English"],
     ...(context ? { context: context.slice(0, AI_CONTEXT_MAX) } : {}),
     ...(passageText ? { passageText: passageText.slice(0, 20000) } : {}),
   };
@@ -440,7 +464,7 @@ export interface ImportBlock {
 /** Q-09 preview — nothing is saved; valid blocks go into the form and are saved through Q-03. */
 export interface ImportPreviewResponse {
   fileName: string;
-  fileType: 'PDF' | 'DOCX' | 'XLSX';
+  fileType: "PDF" | "DOCX" | "XLSX";
   totalBlocks: number;
   totalValid: number;
   totalErrors: number;
@@ -454,9 +478,9 @@ export interface ImportPreviewParams {
 
 /** Import file limits (PdfTextExtractor / DocxTextExtractor / ExcelQuestionParser). */
 export const IMPORT_MAX_BYTES = 10 * 1024 * 1024;
-export const IMPORT_EXTENSIONS = ['.pdf', '.docx', '.xlsx', '.xls'] as const;
+export const IMPORT_EXTENSIONS = [".pdf", ".docx", ".xlsx", ".xls"] as const;
 /** AI-02 material files (MaterialTextReader) — any layout, also plain text. */
-export const AI_MATERIAL_EXTENSIONS = ['.pdf', '.docx', '.txt'] as const;
+export const AI_MATERIAL_EXTENSIONS = [".pdf", ".docx", ".txt"] as const;
 
 /** AI-04 answer: the questions queued now; the rest already had an explanation or were already queued. */
 export interface ExplanationJobAccepted {
@@ -468,7 +492,7 @@ export interface ExplanationJobAccepted {
 }
 
 /** `VITE_AI_MOCK=true` uses demo data for AI generation (no AI quota spent). */
-const AI_MOCK = import.meta.env.VITE_AI_MOCK === 'true';
+const AI_MOCK = import.meta.env.VITE_AI_MOCK === "true";
 
 export const questionService = {
   /**
@@ -476,10 +500,17 @@ export const questionService = {
    * later through Q-03. AI-01 already drops drafts that fail its checks and
    * reports them in `warnings`.
    */
-  async generateAiQuestions(payload: QuestionAiGenerateRequest, signal?: AbortSignal): Promise<QuestionAiDraftResponse> {
+  async generateAiQuestions(
+    payload: QuestionAiGenerateRequest,
+    signal?: AbortSignal,
+  ): Promise<QuestionAiDraftResponse> {
     if (AI_MOCK) return { ...(await mockGenerateAiQuestions(payload, signal)), mock: true };
     // Up to 50 questions in one AI call — give it time.
-    const res = await apiClient.post<ApiResponse<ExamAiDraftResponse>>('/manager/exams/ai/generate', toExamAiRequest(payload), { timeout: 120000, signal });
+    const res = await apiClient.post<ApiResponse<ExamAiDraftResponse>>(
+      "/manager/exams/ai/generate",
+      toExamAiRequest(payload),
+      { timeout: 120000, signal },
+    );
     return fromExamAiDraftResponse(res.data?.data);
   },
 
@@ -488,49 +519,69 @@ export const questionService = {
    * layout) with the same settings as AI-01. The backend reads the file's
    * text (first 30,000 characters) and `topic` goes along as extra instructions.
    */
-  async generateAiQuestionsFromMaterial(file: File, payload: QuestionAiGenerateRequest, signal?: AbortSignal): Promise<QuestionAiDraftResponse> {
+  async generateAiQuestionsFromMaterial(
+    file: File,
+    payload: QuestionAiGenerateRequest,
+    signal?: AbortSignal,
+  ): Promise<QuestionAiDraftResponse> {
     if (AI_MOCK) return { ...(await mockGenerateAiQuestions(payload, signal)), mock: true };
     const req = toExamAiRequest(payload);
     const form = new FormData();
-    form.append('file', file);
-    form.append('courseId', String(req.courseId));
-    if (req.moduleId != null) form.append('moduleId', String(req.moduleId));
-    form.append('questionCount', String(req.questionCount));
-    form.append('difficultyDistribution', JSON.stringify(req.difficultyDistribution));
-    form.append('questionTypes', JSON.stringify(req.questionTypes));
-    form.append('language', req.language);
-    if (req.context) form.append('context', req.context);
+    form.append("file", file);
+    form.append("courseId", String(req.courseId));
+    if (req.moduleId != null) form.append("moduleId", String(req.moduleId));
+    form.append("questionCount", String(req.questionCount));
+    form.append("difficultyDistribution", JSON.stringify(req.difficultyDistribution));
+    form.append("questionTypes", JSON.stringify(req.questionTypes));
+    form.append("language", req.language);
+    if (req.context) form.append("context", req.context);
     // Upload + text extraction + up to 50 questions in one AI call.
-    const res = await apiClient.post<ApiResponse<ExamAiDraftResponse>>('/manager/exams/ai/generate-from-material', form, {
-      headers: { 'Content-Type': 'multipart/form-data' },
-      timeout: 180000,
-      signal,
-    });
+    const res = await apiClient.post<ApiResponse<ExamAiDraftResponse>>(
+      "/manager/exams/ai/generate-from-material",
+      form,
+      {
+        headers: { "Content-Type": "multipart/form-data" },
+        timeout: 180000,
+        signal,
+      },
+    );
     return fromExamAiDraftResponse(res.data?.data);
   },
 
   /** Q-09: reads a PDF / DOCX / Excel file in the import template and returns the questions found — saves nothing. */
-  async previewImport(file: File, params: ImportPreviewParams, signal?: AbortSignal): Promise<ImportPreviewResponse> {
+  async previewImport(
+    file: File,
+    params: ImportPreviewParams,
+    signal?: AbortSignal,
+  ): Promise<ImportPreviewResponse> {
     const form = new FormData();
-    form.append('file', file);
-    form.append('courseId', String(params.courseId));
-    if (params.moduleId != null) form.append('moduleId', String(params.moduleId));
+    form.append("file", file);
+    form.append("courseId", String(params.courseId));
+    if (params.moduleId != null) form.append("moduleId", String(params.moduleId));
     // The backend allows up to 20s to extract the text; leave room for the upload.
-    const res = await apiClient.post<ApiResponse<ImportPreviewResponse>>('/manager/questions/import-preview', form, {
-      headers: { 'Content-Type': 'multipart/form-data' },
-      timeout: 60000,
-      signal,
-    });
+    const res = await apiClient.post<ApiResponse<ImportPreviewResponse>>(
+      "/manager/questions/import-preview",
+      form,
+      {
+        headers: { "Content-Type": "multipart/form-data" },
+        timeout: 60000,
+        signal,
+      },
+    );
     return res.data.data;
   },
 
   /** Q-09: the blank import template, saved through the browser's download. */
-  async downloadImportTemplate(format: 'pdf' | 'docx' | 'xlsx'): Promise<void> {
-    const res = await apiClient.get<Blob>('/manager/questions/import-template', { params: { format }, responseType: 'blob' });
-    const disposition = String(res.headers['content-disposition'] ?? '');
-    const filename = /filename="?([^";]+)"?/.exec(disposition)?.[1] ?? `question-import-template.${format}`;
+  async downloadImportTemplate(format: "pdf" | "docx" | "xlsx"): Promise<void> {
+    const res = await apiClient.get<Blob>("/manager/questions/import-template", {
+      params: { format },
+      responseType: "blob",
+    });
+    const disposition = String(res.headers["content-disposition"] ?? "");
+    const filename =
+      /filename="?([^";]+)"?/.exec(disposition)?.[1] ?? `question-import-template.${format}`;
     const url = URL.createObjectURL(res.data);
-    const a = document.createElement('a');
+    const a = document.createElement("a");
     a.href = url;
     a.download = filename;
     a.click();
@@ -538,29 +589,43 @@ export const questionService = {
   },
 
   /** Q-03: creates 1..50 questions in one transaction — all or nothing. */
-  async createQuestionsBatch(courseId: number, moduleId: number | null, questions: QuestionCreateRequest[]): Promise<QuestionDetail[]> {
+  async createQuestionsBatch(
+    courseId: number,
+    moduleId: number | null,
+    questions: QuestionCreateRequest[],
+  ): Promise<QuestionDetail[]> {
     const query = new URLSearchParams({ courseId: String(courseId) });
-    if (moduleId != null) query.set('moduleId', String(moduleId));
-    const res = await api.post<ApiResponse<QuestionDetail[]>>(`/manager/questions/batch?${query}`, questions);
+    if (moduleId != null) query.set("moduleId", String(moduleId));
+    const res = await api.post<ApiResponse<QuestionDetail[]>>(
+      `/manager/questions/batch?${query}`,
+      questions,
+    );
     return res.data;
   },
 
   /** Q-04 */
   async getQuestionById(id: number | string): Promise<QuestionDetail> {
     const res = await api.get<ApiResponse<QuestionDetail>>(`/manager/questions/${id}`);
-    if (!res.data?.questionId) throw new Error('The question response is invalid.');
+    if (!res.data?.questionId) throw new Error("The question response is invalid.");
     return res.data;
   },
 
   /** Q-05 */
-  async updateQuestion(id: number | string, payload: QuestionUpdateRequest): Promise<QuestionDetail> {
-    const res = await api.request<ApiResponse<QuestionDetail>>({ method: 'put', url: `/manager/questions/${id}`, data: payload });
+  async updateQuestion(
+    id: number | string,
+    payload: QuestionUpdateRequest,
+  ): Promise<QuestionDetail> {
+    const res = await api.request<ApiResponse<QuestionDetail>>({
+      method: "put",
+      url: `/manager/questions/${id}`,
+      data: payload,
+    });
     return res.data;
   },
 
   /** Q-06: soft delete. */
   async deleteQuestion(id: number | string): Promise<void> {
-    await api.request<ApiResponse<void>>({ method: 'delete', url: `/manager/questions/${id}` });
+    await api.request<ApiResponse<void>>({ method: "delete", url: `/manager/questions/${id}` });
   },
 
   /** Q-07: copies the question (options, answer key, group) and returns the new one. */
@@ -570,9 +635,13 @@ export const questionService = {
   },
 
   /** Q-08: moves one question to its next status (Draft → Published); nothing else changes. */
-  async updateQuestionStatus(id: number | string, status: QuestionStatus, lockVersion?: number | null): Promise<QuestionDetail> {
+  async updateQuestionStatus(
+    id: number | string,
+    status: QuestionStatus,
+    lockVersion?: number | null,
+  ): Promise<QuestionDetail> {
     const res = await api.request<ApiResponse<QuestionDetail>>({
-      method: 'patch',
+      method: "patch",
       url: `/manager/questions/${id}/status`,
       data: { status, lockVersion: lockVersion ?? null },
     });
@@ -583,10 +652,13 @@ export const questionService = {
    * Status change for many questions at once: moves every
    * listed question to the same status, all or nothing.
    */
-  async batchUpdateStatus(questionIds: number[], status: QuestionStatus): Promise<QuestionDetail[]> {
+  async batchUpdateStatus(
+    questionIds: number[],
+    status: QuestionStatus,
+  ): Promise<QuestionDetail[]> {
     const res = await api.request<ApiResponse<QuestionDetail[]>>({
-      method: 'patch',
-      url: '/manager/questions/batch/status',
+      method: "patch",
+      url: "/manager/questions/batch/status",
       data: { questionIds, status },
     });
     return res.data;
@@ -597,24 +669,30 @@ export const questionService = {
    * backend notifies the manager (NT-01) when the batch is done. `overwrite` also rewrites
    * explanations that are already filled ("Regenerate").
    */
-  async queueAiExplanations(questionIds: number[], overwrite = false): Promise<ExplanationJobAccepted> {
-    const res = await api.post<ApiResponse<ExplanationJobAccepted>>('/manager/questions/ai/explanations', { questionIds, overwrite });
+  async queueAiExplanations(
+    questionIds: number[],
+    overwrite = false,
+  ): Promise<ExplanationJobAccepted> {
+    const res = await api.post<ApiResponse<ExplanationJobAccepted>>(
+      "/manager/questions/ai/explanations",
+      { questionIds, overwrite },
+    );
     return res.data;
   },
 
   async getQuestions(params: QuestionListParams = {}): Promise<QuestionPage> {
     const query = new URLSearchParams();
     Object.entries(params).forEach(([key, value]) => {
-      if (value === undefined || value === null || value === '') return;
-      if (Array.isArray(value)) value.forEach(v => query.append(key, String(v)));
+      if (value === undefined || value === null || value === "") return;
+      if (Array.isArray(value)) value.forEach((v) => query.append(key, String(v)));
       else query.set(key, String(value));
     });
     const queryString = query.toString();
     const res = await api.get<ApiResponse<RawSpringPage<QuestionListItem>>>(
-      `/manager/questions${queryString ? `?${queryString}` : ''}`,
+      `/manager/questions${queryString ? `?${queryString}` : ""}`,
     );
     if (!res.data || !Array.isArray(res.data.content)) {
-      throw new Error('The question response is invalid.');
+      throw new Error("The question response is invalid.");
     }
     return toQuestionPage(res.data);
   },

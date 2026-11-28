@@ -1,10 +1,10 @@
-import React, { useRef, useState } from 'react';
-import { Modal } from '@/components/ui/Modal';
-import { Button } from '@/components/ui/Button';
-import { Alert } from '@/components/ui/Alert';
-import { Icon } from '@/assets/icons';
-import { useToast } from '@/components/ui/ToastHost';
-import { examService, type ImportExamResponse } from '@/services/exam.service';
+import React, { useRef, useState } from "react";
+import { Modal } from "@/components/ui/Modal";
+import { Button } from "@/components/ui/Button";
+import { Alert } from "@/components/ui/Alert";
+import { Icon } from "@/assets/icons";
+import { useToast } from "@/components/ui/ToastHost";
+import { examService, type ImportExamResponse } from "@/services/exam.service";
 
 interface ImportQuestionsModalProps {
   open: boolean;
@@ -25,18 +25,19 @@ export function ImportQuestionsModal({
   const [defaultWeight, setDefaultWeight] = useState<number>(1);
   const [uploading, setUploading] = useState(false);
   const [result, setResult] = useState<ImportExamResponse | null>(null);
-  const [errorMsg, setErrorMsg] = useState('');
+  const [errorMsg, setErrorMsg] = useState("");
 
-  const MSG12 = 'Invalid file format or file cannot be extracted. Please select an Excel (.xlsx, .xls), PDF, DOCX, or TXT file under 10MB.';
-  const MSG13 = 'Questions imported successfully.';
-  const MSG14 = 'Skipped duplicate questions:';
+  const MSG12 =
+    "Invalid file format or file cannot be extracted. Please select an Excel (.xlsx, .xls), PDF, DOCX, or TXT file under 10MB.";
+  const MSG13 = "Questions imported successfully.";
+  const MSG14 = "Skipped duplicate questions:";
 
   const resetState = () => {
     setFile(null);
     setDefaultWeight(1);
     setUploading(false);
     setResult(null);
-    setErrorMsg('');
+    setErrorMsg("");
   };
 
   const handleClose = () => {
@@ -52,57 +53,67 @@ export function ImportQuestionsModal({
     const selected = e.target.files?.[0];
     if (!selected) return;
 
-    const allowedExts = ['.pdf', '.docx', '.xlsx', '.xls', '.txt'];
+    const allowedExts = [".pdf", ".docx", ".xlsx", ".xls", ".txt"];
     const lowerName = selected.name.toLowerCase();
     const isAllowed = allowedExts.some((ext) => lowerName.endsWith(ext));
 
     if (!isAllowed || selected.size > 10 * 1024 * 1024) {
       setErrorMsg(MSG12);
       setFile(null);
-      if (fileInputRef.current) fileInputRef.current.value = '';
+      if (fileInputRef.current) fileInputRef.current.value = "";
       return;
     }
 
-    setErrorMsg('');
+    setErrorMsg("");
     setFile(selected);
   };
 
   const handleUpload = async () => {
     if (!file) {
-      setErrorMsg('Please select a file to import.');
+      setErrorMsg("Please select a file to import.");
       return;
     }
 
     setUploading(true);
-    setErrorMsg('');
+    setErrorMsg("");
     try {
       const weight = Number(defaultWeight);
-      if (!Number.isFinite(weight) || weight <= 0 || weight > 1000 || (String(weight).split('.')[1]?.length ?? 0) > 2) {
-        setErrorMsg('Weight must be greater than 0, no more than 1,000, and have up to 2 decimal places.');
+      if (
+        !Number.isFinite(weight) ||
+        weight <= 0 ||
+        weight > 1000 ||
+        (String(weight).split(".")[1]?.length ?? 0) > 2
+      ) {
+        setErrorMsg(
+          "Weight must be greater than 0, no more than 1,000, and have up to 2 decimal places.",
+        );
         return;
       }
 
       const previewData = new FormData();
-      previewData.append('file', file);
-      previewData.append('dryRun', 'true');
+      previewData.append("file", file);
+      previewData.append("dryRun", "true");
       const preview = await examService.importQuestions(examId, previewData);
 
       const formData = new FormData();
-      formData.append('file', file);
-      formData.append('itemsJson', JSON.stringify(
-        Array.from({ length: preview.imported }, (_, index) => ({ index, weight })),
-      ));
+      formData.append("file", file);
+      formData.append(
+        "itemsJson",
+        JSON.stringify(Array.from({ length: preview.imported }, (_, index) => ({ index, weight }))),
+      );
       const res = await examService.importQuestions(examId, formData);
       setResult(res);
       toast.success(MSG13);
     } catch (err: unknown) {
       const errorObj = err as { response?: { status?: number; data?: { message?: string } } };
       if (errorObj?.response?.status === 409) {
-        setErrorMsg('The exam is currently published. Please unpublish the exam first before importing questions.');
+        setErrorMsg(
+          "The exam is currently published. Please unpublish the exam first before importing questions.",
+        );
       } else if (errorObj?.response?.status === 400) {
         setErrorMsg(errorObj.response.data?.message || MSG12);
       } else {
-        setErrorMsg(errorObj?.response?.data?.message || 'Failed to import questions.');
+        setErrorMsg(errorObj?.response?.data?.message || "Failed to import questions.");
       }
     } finally {
       setUploading(false);
@@ -115,7 +126,10 @@ export function ImportQuestionsModal({
       onClose={handleClose}
       title="Import Questions from Document"
       size="md"
-      error={!result && errorMsg && <Alert type="error" title="Could not import questions" message={errorMsg} />}
+      error={
+        !result &&
+        errorMsg && <Alert type="error" title="Could not import questions" message={errorMsg} />
+      }
       footer={
         <div className="flex items-center justify-end gap-2 w-full">
           {result ? (
@@ -154,8 +168,12 @@ export function ImportQuestionsModal({
               <span>{MSG13}</span>
             </div>
             <div className="text-xs text-content space-y-1 pl-7">
-              <p>• Newly created & attached: <strong>{result.imported}</strong> questions</p>
-              <p>• Reused from question bank: <strong>{result.reused}</strong> questions</p>
+              <p>
+                • Newly created & attached: <strong>{result.imported}</strong> questions
+              </p>
+              <p>
+                • Reused from question bank: <strong>{result.reused}</strong> questions
+              </p>
               {result.skippedDuplicates > 0 && (
                 <p className="text-warning font-medium">
                   • {MSG14} <strong>{result.skippedDuplicates}</strong>
@@ -178,7 +196,7 @@ export function ImportQuestionsModal({
               />
               <Icon.Upload className="w-8 h-8 mx-auto text-content-subtle mb-2" />
               <p className="text-sm font-medium text-content">
-                {file ? file.name : 'Click to select Excel (.xlsx/.xls), PDF, DOCX, or TXT file'}
+                {file ? file.name : "Click to select Excel (.xlsx/.xls), PDF, DOCX, or TXT file"}
               </p>
               <p className="text-xs text-content-subtle mt-1">Maximum allowed size: 10MB</p>
             </div>
@@ -203,4 +221,3 @@ export function ImportQuestionsModal({
     </Modal>
   );
 }
-

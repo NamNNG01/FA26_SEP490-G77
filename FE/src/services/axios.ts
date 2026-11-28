@@ -1,14 +1,14 @@
-import axios from 'axios';
-import { config } from '@/config';
-import { clearAuth, getAccessToken, getRefreshToken, saveTokens } from '@/auth/storage';
-import { emitSessionExpired } from '@/auth/sessionExpired';
-import { serverErrorMessage } from '@/utils/apiError';
+import axios from "axios";
+import { config } from "@/config";
+import { clearAuth, getAccessToken, getRefreshToken, saveTokens } from "@/auth/storage";
+import { emitSessionExpired } from "@/auth/sessionExpired";
+import { serverErrorMessage } from "@/utils/apiError";
 
 export const apiClient = axios.create({
   baseURL: config.apiBaseUrl,
   timeout: 15000,
   headers: {
-    'Content-Type': 'application/json',
+    "Content-Type": "application/json",
   },
 });
 
@@ -22,12 +22,12 @@ export const apiClient = axios.create({
  *     enforces @AuthenticationPrincipal UserPrincipal on these routes.
  */
 const PUBLIC_ENDPOINTS = [
-  '/auth/register',
-  '/auth/login',
-  '/auth/google',
-  '/auth/refresh',
-  '/auth/password/forgot',
-  '/auth/password/reset',
+  "/auth/register",
+  "/auth/login",
+  "/auth/google",
+  "/auth/refresh",
+  "/auth/password/forgot",
+  "/auth/password/reset",
 ];
 
 /**
@@ -47,7 +47,7 @@ function isPublicEndpoint(url: string): boolean {
 apiClient.interceptors.request.use(
   (reqConfig) => {
     const token = getAccessToken();
-    if (token && !isPublicEndpoint(reqConfig.url ?? '')) {
+    if (token && !isPublicEndpoint(reqConfig.url ?? "")) {
       reqConfig.headers.Authorization = `Bearer ${token}`;
     }
     return reqConfig;
@@ -64,11 +64,11 @@ apiClient.interceptors.request.use(
 let refreshInFlight: Promise<string> | null = null;
 
 /** Cross-tab lock name: only one tab at a time may rotate the shared pair. */
-const REFRESH_LOCK = 'examprep-auth-refresh';
+const REFRESH_LOCK = "examprep-auth-refresh";
 
 /** Run fn while holding the cross-tab refresh lock (no lock API → run as is). */
 function withRefreshLock<T>(fn: () => Promise<T>): Promise<T> {
-  if (typeof navigator !== 'undefined' && navigator.locks) {
+  if (typeof navigator !== "undefined" && navigator.locks) {
     return navigator.locks.request(REFRESH_LOCK, fn) as Promise<T>;
   }
   return fn();
@@ -81,7 +81,7 @@ function refreshAccessToken(refreshToken: string): Promise<string> {
     // reuse detection, which revokes EVERY session of the user. Use the pair
     // that tab stored instead.
     const latest = getRefreshToken();
-    if (!latest) throw new Error('Signed out in another tab');
+    if (!latest) throw new Error("Signed out in another tab");
     if (latest !== refreshToken) {
       const accessToken = getAccessToken();
       if (accessToken) return accessToken;
@@ -94,13 +94,13 @@ function refreshAccessToken(refreshToken: string): Promise<string> {
     // the call hits ".../api/v1auth/refresh" (404) and every 401 ends
     // in a silent logout.
     const res = await axios.post(
-      `${config.apiBaseUrl.replace(/\/+$/, '')}/auth/refresh`,
+      `${config.apiBaseUrl.replace(/\/+$/, "")}/auth/refresh`,
       { refreshToken: latest },
       { timeout: 15000 },
     );
     const body = res.data as { success: boolean; data?: unknown };
     if (!body?.success || !body.data) {
-      throw new Error('Refresh failed');
+      throw new Error("Refresh failed");
     }
     const data = body.data as {
       accessToken: string;
@@ -131,7 +131,7 @@ apiClient.interceptors.response.use(
   (response) => response,
   async (error) => {
     const original = error.config;
-    const requestUrl: string = original?.url ?? '';
+    const requestUrl: string = original?.url ?? "";
     const isPublic = isPublicEndpoint(requestUrl);
 
     if (error.response?.status === 401 && original && !original._retry && !isPublic) {
@@ -159,7 +159,7 @@ apiClient.interceptors.response.use(
     // code 4xx". The error stays an AxiosError, so .response is still there.
     // A failed @Valid only says "Validation failed…"; show which fields failed instead.
     const serverMessage = serverErrorMessage(error.response?.data);
-    if (typeof serverMessage === 'string' && serverMessage.trim()) {
+    if (typeof serverMessage === "string" && serverMessage.trim()) {
       error.message = serverMessage;
     }
 

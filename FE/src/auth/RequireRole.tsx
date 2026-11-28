@@ -1,7 +1,7 @@
-import React from 'react';
-import { Navigate, Outlet, useLocation } from 'react-router';
-import { useAuth, landingPathForRole } from './authContext';
-import { Role } from '@/utils/permissions';
+import React from "react";
+import { Navigate, Outlet, useLocation } from "react-router";
+import { useAuth, landingPathForRole } from "./authContext";
+import { Role } from "@/utils/permissions";
 
 /**
  * RequireRole — route-level authorisation.
@@ -33,7 +33,9 @@ export function RequireRole({ roles }: { roles: Role[] }) {
   }
 
   if (!roles.includes(roleCode as Role)) {
-    return <Navigate to={landingPathForRole(roleCode)} replace state={{ from: location.pathname }} />;
+    return (
+      <Navigate to={landingPathForRole(roleCode)} replace state={{ from: location.pathname }} />
+    );
   }
 
   return <Outlet />;

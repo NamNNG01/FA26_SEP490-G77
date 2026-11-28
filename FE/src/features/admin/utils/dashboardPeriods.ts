@@ -1,4 +1,4 @@
-import type { DashboardFilter, Granularity } from '@/services/adminDashboard.service';
+import type { DashboardFilter, Granularity } from "@/services/adminDashboard.service";
 
 /**
  * Pure calendar helpers of the admin dashboard period picker. The figures come from the API; only
@@ -7,13 +7,13 @@ import type { DashboardFilter, Granularity } from '@/services/adminDashboard.ser
  */
 
 export function toIsoDate(d: Date): string {
-  const m = String(d.getMonth() + 1).padStart(2, '0');
-  const day = String(d.getDate()).padStart(2, '0');
+  const m = String(d.getMonth() + 1).padStart(2, "0");
+  const day = String(d.getDate()).padStart(2, "0");
   return `${d.getFullYear()}-${m}-${day}`;
 }
 
 function parseIsoDate(iso: string): Date {
-  const [y, m, d] = iso.split('-').map(Number);
+  const [y, m, d] = iso.split("-").map(Number);
   return new Date(y, (m ?? 1) - 1, d ?? 1);
 }
 
@@ -39,13 +39,21 @@ export function clampToDataStart(filter: DashboardFilter, minDate?: string): Das
  * Default range per unit: last 7 days, last 6 months, last 3 years (ending today), never starting
  * before `minDate` when it is given.
  */
-export function defaultFilter(granularity: Granularity, today = new Date(), minDate?: string): DashboardFilter {
+export function defaultFilter(
+  granularity: Granularity,
+  today = new Date(),
+  minDate?: string,
+): DashboardFilter {
   let filter: DashboardFilter;
-  if (granularity === 'month') {
+  if (granularity === "month") {
     const from = new Date(today.getFullYear(), today.getMonth() - 5, 1);
     filter = { granularity, from: toIsoDate(from).slice(0, 7), to: toIsoDate(today).slice(0, 7) };
-  } else if (granularity === 'year') {
-    filter = { granularity, from: String(today.getFullYear() - 2), to: String(today.getFullYear()) };
+  } else if (granularity === "year") {
+    filter = {
+      granularity,
+      from: String(today.getFullYear() - 2),
+      to: String(today.getFullYear()),
+    };
   } else {
     filter = { granularity, from: toIsoDate(addDays(today, -6)), to: toIsoDate(today) };
   }
@@ -61,12 +69,12 @@ export function filterDayRange(filter: DashboardFilter): { from: string; to: str
   const todayDate = new Date(today.getFullYear(), today.getMonth(), today.getDate());
   let start: Date;
   let end: Date;
-  if (filter.granularity === 'day') {
+  if (filter.granularity === "day") {
     start = parseIsoDate(filter.from);
     end = parseIsoDate(filter.to);
-  } else if (filter.granularity === 'month') {
+  } else if (filter.granularity === "month") {
     start = parseIsoDate(`${filter.from}-01`);
-    const [y, m] = filter.to.split('-').map(Number);
+    const [y, m] = filter.to.split("-").map(Number);
     end = new Date(y, m, 0);
   } else {
     start = new Date(Number(filter.from), 0, 1);

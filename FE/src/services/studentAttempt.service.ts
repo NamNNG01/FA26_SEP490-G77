@@ -1,7 +1,7 @@
-import { api } from './api';
-import { apiClient } from './axios';
-import type { ApiResponse } from '@/types/api';
-import type { PageResponse } from './course.service';
+import { api } from "./api";
+import { apiClient } from "./axios";
+import type { ApiResponse } from "@/types/api";
+import type { PageResponse } from "./course.service";
 
 /**
  * StudentAttemptService — exam detail and exam-taking for learners.
@@ -19,19 +19,19 @@ import type { PageResponse } from './course.service';
  */
 
 export type QuestionType =
-  | 'SINGLE_CHOICE'
-  | 'MULTIPLE_CHOICE'
-  | 'TRUE_FALSE'
-  | 'MATCHING'
-  | 'FILL_BLANK'
-  | 'ORDERING'
-  | 'ESSAY'
-  | 'CODE'
-  | 'DIAGRAM'
-  | 'DIAGRAM_ESSAY';
+  | "SINGLE_CHOICE"
+  | "MULTIPLE_CHOICE"
+  | "TRUE_FALSE"
+  | "MATCHING"
+  | "FILL_BLANK"
+  | "ORDERING"
+  | "ESSAY"
+  | "CODE"
+  | "DIAGRAM"
+  | "DIAGRAM_ESSAY";
 
 /** Essay-like types are graded against a rubric (by the AI worker), not auto-graded. */
-export const RUBRIC_TYPES: ReadonlySet<string> = new Set(['ESSAY', 'DIAGRAM', 'DIAGRAM_ESSAY']);
+export const RUBRIC_TYPES: ReadonlySet<string> = new Set(["ESSAY", "DIAGRAM", "DIAGRAM_ESSAY"]);
 
 /**
  * `response` payload per question type (BE AnswerResponseValidator):
@@ -75,7 +75,7 @@ export interface AttemptQuestion {
    */
   key?: {
     correctOptionIds: number[];
-    correctAnswer: ResultQuestion['correctAnswer'];
+    correctAnswer: ResultQuestion["correctAnswer"];
     explanation: string | null;
   } | null;
   /** The question group (reading passage); null for a standalone question. */
@@ -98,19 +98,21 @@ export interface AttemptSession {
   /** Student choice for self-made attempts ("EXAM" | "PRACTICE") persisted server-side. */
   takeAs?: string | null;
   /** SA-02 only. */
-  answers: {
-    questionId: number;
-    draftSeq: number | null;
-    response: AnswerResponse | null;
-    /** Practice: the stored verdict once the answer was checked (SA-09) and locked; absent otherwise. */
-    check?: {
-      supported: boolean;
-      isCorrect: boolean | null;
-      correctOptionIds: number[];
-      correctAnswer: ResultQuestion['correctAnswer'];
-      explanation: string | null;
-    } | null;
-  }[] | null;
+  answers:
+    | {
+        questionId: number;
+        draftSeq: number | null;
+        response: AnswerResponse | null;
+        /** Practice: the stored verdict once the answer was checked (SA-09) and locked; absent otherwise. */
+        check?: {
+          supported: boolean;
+          isCorrect: boolean | null;
+          correctOptionIds: number[];
+          correctAnswer: ResultQuestion["correctAnswer"];
+          explanation: string | null;
+        } | null;
+      }[]
+    | null;
 }
 
 export interface DraftEntry {
@@ -235,7 +237,12 @@ export interface StudentExamDetail {
 
 /** SE-01 */
 export interface ExplanationBatch {
-  items: { questionId: number; explanation: string | null; source: string | null; reason: string | null }[];
+  items: {
+    questionId: number;
+    explanation: string | null;
+    source: string | null;
+    reason: string | null;
+  }[];
 }
 
 /**
@@ -254,7 +261,14 @@ export interface DeepExplanation {
 export interface AiQuota {
   timezone: string;
   free: { monthlyLimit: number; usedThisMonth: number; remaining: number; resetAt: string };
-  plan: { planName: string; tokenLimit: number; tokenUsed: number; remaining: number; startDate: string; endDate: string } | null;
+  plan: {
+    planName: string;
+    tokenLimit: number;
+    tokenUsed: number;
+    remaining: number;
+    startDate: string;
+    endDate: string;
+  } | null;
   expiredPlan: { planName: string; endDate: string } | null;
   reservedPending: number;
 }
@@ -278,18 +292,21 @@ export const studentAttemptService = {
   async start(examId: number | string): Promise<AttemptSession> {
     try {
       const idempotencyKey =
-        typeof globalThis.crypto?.randomUUID === 'function'
+        typeof globalThis.crypto?.randomUUID === "function"
           ? globalThis.crypto.randomUUID()
           : `${Date.now()}-${Math.random().toString(36).slice(2)}`;
       const res = await apiClient.post<ApiResponse<AttemptSession>>(
         `/student/exams/${examId}/attempts`,
         undefined,
-        { headers: { 'Idempotency-Key': idempotencyKey } },
+        { headers: { "Idempotency-Key": idempotencyKey } },
       );
       return res.data.data;
     } catch (err) {
       const e = err as AxiosLikeError;
-      const active = e.response?.status === 409 ? (e.response.data?.data as { activeAttemptId?: number } | undefined) : undefined;
+      const active =
+        e.response?.status === 409
+          ? (e.response.data?.data as { activeAttemptId?: number } | undefined)
+          : undefined;
       if (active?.activeAttemptId) return studentAttemptService.get(active.activeAttemptId);
       throw err;
     }
@@ -304,7 +321,7 @@ export const studentAttemptService = {
   /** SA-03 — callers chunk to DRAFT_BATCH_LIMIT. */
   async saveDrafts(attemptId: number | string, answers: DraftEntry[]): Promise<DraftSaved> {
     const res = await api.request<ApiResponse<DraftSaved>>({
-      method: 'put',
+      method: "put",
       url: `/student/attempts/${attemptId}/answers`,
       data: { answers },
     });
@@ -313,7 +330,10 @@ export const studentAttemptService = {
 
   /** SA-04 — drafts are flushed through SA-03 first, so the body stays empty. */
   async submit(attemptId: number | string): Promise<AttemptSubmitted> {
-    const res = await api.post<ApiResponse<AttemptSubmitted>>(`/student/attempts/${attemptId}/submit`, {});
+    const res = await api.post<ApiResponse<AttemptSubmitted>>(
+      `/student/attempts/${attemptId}/submit`,
+      {},
+    );
     return res.data;
   },
 
@@ -323,7 +343,10 @@ export const studentAttemptService = {
    * ponytail: proposed endpoint, not in the BE yet (docs/notes/student-delete-attempt-be-gap.md).
    */
   async deleteAttempt(attemptId: number | string): Promise<void> {
-    await api.request<ApiResponse<null>>({ method: 'delete', url: `/student/attempts/${attemptId}` });
+    await api.request<ApiResponse<null>>({
+      method: "delete",
+      url: `/student/attempts/${attemptId}`,
+    });
   },
 
   /** SA-05 */
@@ -333,7 +356,11 @@ export const studentAttemptService = {
   },
 
   /** SA-06 */
-  async getHistory(examId: number | string, page = 0, size = 20): Promise<PageResponse<AttemptHistoryItem>> {
+  async getHistory(
+    examId: number | string,
+    page = 0,
+    size = 20,
+  ): Promise<PageResponse<AttemptHistoryItem>> {
     const res = await api.get<ApiResponse<PageResponse<AttemptHistoryItem>>>(
       `/student/exams/${examId}/attempts?page=${page}&size=${size}`,
     );
@@ -362,16 +389,19 @@ export const studentAttemptService = {
 
   /** SE-01 — 1 to 20 question ids. */
   async explain(attemptId: number | string, questionIds: number[]): Promise<ExplanationBatch> {
-    const res = await api.post<ApiResponse<ExplanationBatch>>(`/student/attempts/${attemptId}/explanations:batch`, {
-      questionIds,
-    });
+    const res = await api.post<ApiResponse<ExplanationBatch>>(
+      `/student/attempts/${attemptId}/explanations:batch`,
+      {
+        questionIds,
+      },
+    );
     return res.data;
   },
 
   /** SE-03 — the AI can take a while: give it the same room as other AI calls. */
   async deepExplain(attemptId: number | string, questionId: number): Promise<DeepExplanation> {
     const res = await api.request<ApiResponse<DeepExplanation>>({
-      method: 'post',
+      method: "post",
       url: `/student/attempts/${attemptId}/questions/${questionId}/deep-explanation`,
       data: {},
       timeout: 60000,
@@ -381,7 +411,7 @@ export const studentAttemptService = {
 
   /** SQ-01 */
   async getAiQuota(): Promise<AiQuota> {
-    const res = await api.get<ApiResponse<AiQuota>>('/student/me/ai-quota');
+    const res = await api.get<ApiResponse<AiQuota>>("/student/me/ai-quota");
     return res.data;
   },
 };

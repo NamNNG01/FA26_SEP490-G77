@@ -1,10 +1,10 @@
-import { api } from './api';
-import type { ApiResponse } from '@/types/api';
+import { api } from "./api";
+import type { ApiResponse } from "@/types/api";
 
-export type DiscountType = 'PERCENT' | 'FIXED_AMOUNT';
-export type DiscountValidity = 'ACTIVE' | 'UPCOMING' | 'EXPIRED' | 'EXHAUSTED' | 'INACTIVE';
-export type AppliesTo = 'COURSE' | 'SUBSCRIPTION' | 'ALL';
-export type DiscountAccessType = 'PUBLIC' | 'CLAIM_REQUIRED';
+export type DiscountType = "PERCENT" | "FIXED_AMOUNT";
+export type DiscountValidity = "ACTIVE" | "UPCOMING" | "EXPIRED" | "EXHAUSTED" | "INACTIVE";
+export type AppliesTo = "COURSE" | "SUBSCRIPTION" | "ALL";
+export type DiscountAccessType = "PUBLIC" | "CLAIM_REQUIRED";
 
 export interface Discount {
   discountId: number;
@@ -26,7 +26,12 @@ export interface Discount {
   validity: DiscountValidity;
   createdAt: string;
   updatedAt?: string;
-  stats?: { assignedCount: number; usedCount: number; unusedAssignedCount: number; remaining: number };
+  stats?: {
+    assignedCount: number;
+    usedCount: number;
+    unusedAssignedCount: number;
+    remaining: number;
+  };
   usedInContests?: { contestId: number; title: string; status: string; rankPosition: number }[];
 }
 
@@ -67,7 +72,7 @@ export interface Page<T> {
 
 function normalizeDiscountPage(value: Page<Discount> | null | undefined): Page<Discount> {
   if (!value || !Array.isArray(value.content) || !Number.isFinite(value.totalElements)) {
-    throw new Error('The server returned an invalid discount list. Please retry.');
+    throw new Error("The server returned an invalid discount list. Please retry.");
   }
   return value;
 }
@@ -75,14 +80,24 @@ function normalizeDiscountPage(value: Page<Discount> | null | undefined): Page<D
 function query(params: Record<string, string | number | boolean | undefined>) {
   const search = new URLSearchParams();
   Object.entries(params).forEach(([key, value]) => {
-    if (value !== undefined && value !== '') search.set(key, String(value));
+    if (value !== undefined && value !== "") search.set(key, String(value));
   });
   return search.toString();
 }
 
 export const adminDiscountService = {
-  async list(params: { keyword?: string; discountType?: string; isActive?: string; validity?: string; accessType?: DiscountAccessType | ''; page: number; size: number }) {
-    const res = await api.get<ApiResponse<Page<Discount>>>(`/admin/discounts?${query({ ...params, sort: 'createdAt,desc' })}`);
+  async list(params: {
+    keyword?: string;
+    discountType?: string;
+    isActive?: string;
+    validity?: string;
+    accessType?: DiscountAccessType | "";
+    page: number;
+    size: number;
+  }) {
+    const res = await api.get<ApiResponse<Page<Discount>>>(
+      `/admin/discounts?${query({ ...params, sort: "createdAt,desc" })}`,
+    );
     return normalizeDiscountPage(res.data);
   },
   async get(id: number) {
@@ -90,24 +105,41 @@ export const adminDiscountService = {
     return res.data;
   },
   async create(payload: DiscountPayload) {
-    const res = await api.post<ApiResponse<Discount>>('/admin/discounts', payload);
+    const res = await api.post<ApiResponse<Discount>>("/admin/discounts", payload);
     return res.data;
   },
   async update(id: number, payload: DiscountPayload) {
-    const res = await api.request<ApiResponse<Discount>>({ method: 'put', url: `/admin/discounts/${id}`, data: payload });
+    const res = await api.request<ApiResponse<Discount>>({
+      method: "put",
+      url: `/admin/discounts/${id}`,
+      data: payload,
+    });
     return res.data;
   },
   async setStatus(id: number, isActive: boolean) {
-    const res = await api.request<ApiResponse<{ discountId: number; isActive: boolean; affectedContests: { contestId: number; title: string; status: string }[] }>>({
-      method: 'patch', url: `/admin/discounts/${id}/status`, data: { isActive },
+    const res = await api.request<
+      ApiResponse<{
+        discountId: number;
+        isActive: boolean;
+        affectedContests: { contestId: number; title: string; status: string }[];
+      }>
+    >({
+      method: "patch",
+      url: `/admin/discounts/${id}/status`,
+      data: { isActive },
     });
     return res.data;
   },
   async remove(id: number) {
-    await api.request<ApiResponse<null>>({ method: 'delete', url: `/admin/discounts/${id}` });
+    await api.request<ApiResponse<null>>({ method: "delete", url: `/admin/discounts/${id}` });
   },
-  async assignments(id: number, params: { isUsed?: string; keyword?: string; page: number; size: number }) {
-    const res = await api.get<ApiResponse<Page<DiscountAssignment>>>(`/admin/discounts/${id}/assignments?${query(params)}`);
+  async assignments(
+    id: number,
+    params: { isUsed?: string; keyword?: string; page: number; size: number },
+  ) {
+    const res = await api.get<ApiResponse<Page<DiscountAssignment>>>(
+      `/admin/discounts/${id}/assignments?${query(params)}`,
+    );
     return res.data;
   },
 };

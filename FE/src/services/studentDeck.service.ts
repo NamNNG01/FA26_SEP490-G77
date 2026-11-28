@@ -1,8 +1,8 @@
-import { api } from './api';
-import { apiClient } from './axios';
-import type { ApiResponse } from '@/types/api';
-import type { PageResponse } from './course.service';
-import { downloadFile } from '@/utils/downloadFile';
+import { api } from "./api";
+import { apiClient } from "./axios";
+import type { ApiResponse } from "@/types/api";
+import type { PageResponse } from "./course.service";
+import { downloadFile } from "@/utils/downloadFile";
 
 /**
  * StudentDeckService — a student's own flashcard decks and study progress.
@@ -33,15 +33,15 @@ import { downloadFile } from '@/utils/downloadFile';
  *   GET    /api/v1/student/decks/{deckId}/export?format=pdf   — any readable deck as a PDF download
  */
 
-export type DeckMode = 'FLASHCARD' | 'CODE_SNIPPET' | 'CODE_OUTPUT';
-export type DeckVisibility = 'PRIVATE' | 'PUBLIC';
-export type ReviewStatus = 'NONE' | 'PENDING_REVIEW' | 'APPROVED' | 'REJECTED';
-export type CodeLanguage = 'JAVA' | 'PYTHON' | 'C' | 'CPP';
+export type DeckMode = "FLASHCARD" | "CODE_SNIPPET" | "CODE_OUTPUT";
+export type DeckVisibility = "PRIVATE" | "PUBLIC";
+export type ReviewStatus = "NONE" | "PENDING_REVIEW" | "APPROVED" | "REJECTED";
+export type CodeLanguage = "JAVA" | "PYTHON" | "C" | "CPP";
 /** NEW = never opened (study responses only). */
-export type CardStatus = 'NEW' | 'LEARNING' | 'KNOWN';
+export type CardStatus = "NEW" | "LEARNING" | "KNOWN";
 
-export const DECK_MODES: DeckMode[] = ['FLASHCARD', 'CODE_SNIPPET', 'CODE_OUTPUT'];
-export const CODE_LANGUAGES: CodeLanguage[] = ['JAVA', 'PYTHON', 'C', 'CPP'];
+export const DECK_MODES: DeckMode[] = ["FLASHCARD", "CODE_SNIPPET", "CODE_OUTPUT"];
+export const CODE_LANGUAGES: CodeLanguage[] = ["JAVA", "PYTHON", "C", "CPP"];
 export const DECK_TITLE_MAX = 150;
 export const DECK_DESCRIPTION_MAX = 500;
 export const CARD_TEXT_MAX = 5000;
@@ -94,7 +94,7 @@ export interface DeckListItem {
 }
 
 export interface DeckListParams {
-  scope: 'MINE' | 'COURSE' | 'BOOKMARKED' | 'COMMUNITY';
+  scope: "MINE" | "COURSE" | "BOOKMARKED" | "COMMUNITY";
   courseId?: number;
   search?: string;
   mode?: DeckMode;
@@ -218,7 +218,7 @@ export interface ViewerView {
   cards: ViewerCard[];
 }
 
-export type ImportStatus = 'PROCESSING' | 'COMPLETED' | 'FAILED';
+export type ImportStatus = "PROCESSING" | "COMPLETED" | "FAILED";
 
 export interface ImportStarted {
   importId: number;
@@ -246,22 +246,22 @@ export interface CardFromQuestionView {
 }
 
 export const DECK_MODE_LABEL: Record<DeckMode, string> = {
-  FLASHCARD: 'Flashcard',
-  CODE_SNIPPET: 'Code snippet',
-  CODE_OUTPUT: 'Code → Output',
+  FLASHCARD: "Flashcard",
+  CODE_SNIPPET: "Code snippet",
+  CODE_OUTPUT: "Code → Output",
 };
 
 export const CODE_LANGUAGE_LABEL: Record<CodeLanguage, string> = {
-  JAVA: 'Java',
-  PYTHON: 'Python',
-  C: 'C',
-  CPP: 'C++',
+  JAVA: "Java",
+  PYTHON: "Python",
+  C: "C",
+  CPP: "C++",
 };
 
 /** A deck under review or public can't be changed (docs/notes/student-flashcards-be-gaps-2026-10-29.md §4). */
-export const isDeckEditable = (status: ReviewStatus) => status === 'NONE' || status === 'REJECTED';
+export const isDeckEditable = (status: ReviewStatus) => status === "NONE" || status === "REJECTED";
 /** Public decks can't be deleted — other students may be studying them. */
-export const isDeckDeletable = (status: ReviewStatus) => status !== 'APPROVED';
+export const isDeckDeletable = (status: ReviewStatus) => status !== "APPROVED";
 
 /** FC-13 list item → the DeckView the deck page starts from. */
 export const deckViewFromListItem = (d: DeckListItem, isOwner: boolean): StudentDeckView => ({
@@ -284,12 +284,12 @@ export const deckViewFromListItem = (d: DeckListItem, isOwner: boolean): Student
 
 /** Result question types FC-12 can turn into a card (the BE writes the key as the back). */
 export const SAVABLE_QUESTION_TYPES: ReadonlySet<string> = new Set([
-  'SINGLE_CHOICE',
-  'MULTIPLE_CHOICE',
-  'TRUE_FALSE',
-  'ORDERING',
-  'MATCHING',
-  'FILL_BLANK',
+  "SINGLE_CHOICE",
+  "MULTIPLE_CHOICE",
+  "TRUE_FALSE",
+  "ORDERING",
+  "MATCHING",
+  "FILL_BLANK",
 ]);
 
 // ------------------------------------------------------------- errors
@@ -318,14 +318,17 @@ export function existingCardId(err: unknown): number | null {
 export function isEndpointMissing(err: unknown): boolean {
   const res = (err as HttpError | null)?.response;
   if (!res) return false;
-  return res.status === 405 || (res.status === 404 && res.data?.message === 'Requested resource was not found');
+  return (
+    res.status === 405 ||
+    (res.status === 404 && res.data?.message === "Requested resource was not found")
+  );
 }
 
 // ------------------------------------------------------------- calls
 
 export const studentDeckService = {
   /** Any readable deck (own, public, or enrolled course) and its cards as a PDF, saved through the browser's download. */
-  async exportPdf(deckId: number | string, fallbackName = 'flashcards.pdf'): Promise<void> {
+  async exportPdf(deckId: number | string, fallbackName = "flashcards.pdf"): Promise<void> {
     await downloadFile(`/student/decks/${deckId}/export?format=pdf`, fallbackName);
   },
 
@@ -333,15 +336,18 @@ export const studentDeckService = {
   async listDecks(params: DeckListParams): Promise<PageResponse<DeckListItem>> {
     const query = new URLSearchParams();
     Object.entries(params).forEach(([key, value]) => {
-      if (value !== undefined && value !== null && value !== '') query.set(key, String(value));
+      if (value !== undefined && value !== null && value !== "") query.set(key, String(value));
     });
-    const res = await api.get<ApiResponse<PageResponse<DeckListItem>>>(`/student/decks?${query.toString()}`);
-    if (!res.data || !Array.isArray(res.data.content)) throw new Error('Decks response is invalid.');
+    const res = await api.get<ApiResponse<PageResponse<DeckListItem>>>(
+      `/student/decks?${query.toString()}`,
+    );
+    if (!res.data || !Array.isArray(res.data.content))
+      throw new Error("Decks response is invalid.");
     return res.data;
   },
 
   /** Every page of FC-13 (max 100 per page). */
-  async listAllDecks(params: Omit<DeckListParams, 'page' | 'size'>): Promise<DeckListItem[]> {
+  async listAllDecks(params: Omit<DeckListParams, "page" | "size">): Promise<DeckListItem[]> {
     const all: DeckListItem[] = [];
     for (let page = 0; ; page++) {
       const res = await studentDeckService.listDecks({ ...params, page, size: 100 });
@@ -357,17 +363,21 @@ export const studentDeckService = {
   },
 
   async createDeck(payload: DeckCreateRequest): Promise<StudentDeckView> {
-    const res = await api.post<ApiResponse<StudentDeckView>>('/student/decks', payload);
+    const res = await api.post<ApiResponse<StudentDeckView>>("/student/decks", payload);
     return res.data;
   },
 
   async updateDeck(deckId: number | string, payload: DeckUpdateRequest): Promise<StudentDeckView> {
-    const res = await api.request<ApiResponse<StudentDeckView>>({ method: 'put', url: `/student/decks/${deckId}`, data: payload });
+    const res = await api.request<ApiResponse<StudentDeckView>>({
+      method: "put",
+      url: `/student/decks/${deckId}`,
+      data: payload,
+    });
     return res.data;
   },
 
   async deleteDeck(deckId: number | string): Promise<void> {
-    await api.request<ApiResponse<null>>({ method: 'delete', url: `/student/decks/${deckId}` });
+    await api.request<ApiResponse<null>>({ method: "delete", url: `/student/decks/${deckId}` });
   },
 
   async requestPublish(deckId: number | string): Promise<PublishRequestView> {
@@ -377,7 +387,9 @@ export const studentDeckService = {
 
   /** Unpublish a public community deck back to private. */
   async withdrawReview(deckId: number | string): Promise<PublishRequestView> {
-    const res = await api.post<ApiResponse<PublishRequestView>>(`/student/decks/${deckId}/unpublish`);
+    const res = await api.post<ApiResponse<PublishRequestView>>(
+      `/student/decks/${deckId}/unpublish`,
+    );
     return res.data;
   },
 
@@ -389,7 +401,9 @@ export const studentDeckService = {
 
   /** 409 when the caller already has a personal deck (no course) with this title. */
   async copyDeck(deckId: number | string, newTitle: string): Promise<CopyDeckView> {
-    const res = await api.post<ApiResponse<CopyDeckView>>(`/student/decks/${deckId}/copy`, { newTitle });
+    const res = await api.post<ApiResponse<CopyDeckView>>(`/student/decks/${deckId}/copy`, {
+      newTitle,
+    });
     return res.data;
   },
 
@@ -399,73 +413,123 @@ export const studentDeckService = {
   },
 
   async updateCard(cardId: number | string, payload: CardWriteRequest): Promise<CardView> {
-    const res = await api.request<ApiResponse<CardView>>({ method: 'put', url: `/student/cards/${cardId}`, data: payload });
+    const res = await api.request<ApiResponse<CardView>>({
+      method: "put",
+      url: `/student/cards/${cardId}`,
+      data: payload,
+    });
     return res.data;
   },
 
   async deleteCard(cardId: number | string): Promise<void> {
-    await api.request<ApiResponse<null>>({ method: 'delete', url: `/student/cards/${cardId}` });
+    await api.request<ApiResponse<null>>({ method: "delete", url: `/student/cards/${cardId}` });
   },
 
   async importCards(deckId: number | string, file: File): Promise<ImportStarted> {
     const form = new FormData();
-    form.append('file', file);
-    const res = await apiClient.post<ApiResponse<ImportStarted>>(`/student/decks/${deckId}/cards/import`, form, {
-      headers: { 'Content-Type': 'multipart/form-data' },
-      timeout: 60000,
-    });
+    form.append("file", file);
+    const res = await apiClient.post<ApiResponse<ImportStarted>>(
+      `/student/decks/${deckId}/cards/import`,
+      form,
+      {
+        headers: { "Content-Type": "multipart/form-data" },
+        timeout: 60000,
+      },
+    );
     return res.data.data;
   },
 
-  async getImportStatus(deckId: number | string, importId: number | string): Promise<ImportStatusView> {
-    const res = await api.get<ApiResponse<ImportStatusView>>(`/student/decks/${deckId}/imports/${importId}`);
+  async getImportStatus(
+    deckId: number | string,
+    importId: number | string,
+  ): Promise<ImportStatusView> {
+    const res = await api.get<ApiResponse<ImportStatusView>>(
+      `/student/decks/${deckId}/imports/${importId}`,
+    );
     return res.data;
   },
 
-  async cardFromQuestion(deckId: number | string, questionId: number, attemptId: number): Promise<CardFromQuestionView> {
-    const res = await api.post<ApiResponse<CardFromQuestionView>>(`/student/decks/${deckId}/cards/from-question`, { questionId, attemptId });
+  async cardFromQuestion(
+    deckId: number | string,
+    questionId: number,
+    attemptId: number,
+  ): Promise<CardFromQuestionView> {
+    const res = await api.post<ApiResponse<CardFromQuestionView>>(
+      `/student/decks/${deckId}/cards/from-question`,
+      { questionId, attemptId },
+    );
     return res.data;
   },
 
-  async writeProgress(cardId: number, payload: { status?: 'LEARNING' | 'KNOWN' | 'WRONG'; isStarred?: boolean }): Promise<ProgressView> {
-    const res = await api.request<ApiResponse<ProgressView>>({ method: 'put', url: `/student/cards/${cardId}/progress`, data: payload });
+  async writeProgress(
+    cardId: number,
+    payload: { status?: "LEARNING" | "KNOWN" | "WRONG"; isStarred?: boolean },
+  ): Promise<ProgressView> {
+    const res = await api.request<ApiResponse<ProgressView>>({
+      method: "put",
+      url: `/student/cards/${cardId}/progress`,
+      data: payload,
+    });
     return res.data;
   },
 
   async learnAll(deckId: number | string): Promise<DeckLearnedView> {
-    const res = await api.request<ApiResponse<DeckLearnedView>>({ method: 'put', url: `/student/decks/${deckId}/learn-all` });
+    const res = await api.request<ApiResponse<DeckLearnedView>>({
+      method: "put",
+      url: `/student/decks/${deckId}/learn-all`,
+    });
     return res.data;
   },
 
   /** Clears the caller's progress on every card of the deck (learned back to 0, stars kept). Pending BE. */
   async resetProgress(deckId: number | string): Promise<DeckLearnedView> {
-    const res = await api.request<ApiResponse<DeckLearnedView>>({ method: 'put', url: `/student/decks/${deckId}/progress/reset` });
+    const res = await api.request<ApiResponse<DeckLearnedView>>({
+      method: "put",
+      url: `/student/decks/${deckId}/progress/reset`,
+    });
     return res.data;
   },
 
   /** cardLimit 0 = every card, in the BE's study order (new, learning, known). */
   /** `mode`: LEARN = flipping cards, PRACTICE = the multiple-choice Learn screen. */
-  async startSession(deckId: number | string, cardLimit = 0, mode: 'LEARN' | 'PRACTICE' = 'LEARN'): Promise<StudySessionView> {
-    const res = await api.post<ApiResponse<StudySessionView>>(`/student/decks/${deckId}/study-sessions`, { mode, cardLimit });
-    if (!res.data || !Array.isArray(res.data.cards)) throw new Error('Study session response is invalid.');
+  async startSession(
+    deckId: number | string,
+    cardLimit = 0,
+    mode: "LEARN" | "PRACTICE" = "LEARN",
+  ): Promise<StudySessionView> {
+    const res = await api.post<ApiResponse<StudySessionView>>(
+      `/student/decks/${deckId}/study-sessions`,
+      { mode, cardLimit },
+    );
+    if (!res.data || !Array.isArray(res.data.cards))
+      throw new Error("Study session response is invalid.");
     return res.data;
   },
 
-  async finishSession(sessionId: string, knownCardIds: number[], wrongCardIds: number[]): Promise<SessionSummary> {
-    const res = await api.post<ApiResponse<SessionSummary>>(`/student/study-sessions/${sessionId}/finish`, { knownCardIds, wrongCardIds });
+  async finishSession(
+    sessionId: string,
+    knownCardIds: number[],
+    wrongCardIds: number[],
+  ): Promise<SessionSummary> {
+    const res = await api.post<ApiResponse<SessionSummary>>(
+      `/student/study-sessions/${sessionId}/finish`,
+      { knownCardIds, wrongCardIds },
+    );
     return res.data;
   },
 
   /** LEARNING cards, most-missed first; limit 1–50. */
   async getReviewCards(deckId: number | string, limit = 50): Promise<StudyCard[]> {
-    const res = await api.get<ApiResponse<StudyCard[]>>(`/student/decks/${deckId}/review-cards?limit=${limit}`);
-    if (!Array.isArray(res.data)) throw new Error('Review cards response is invalid.');
+    const res = await api.get<ApiResponse<StudyCard[]>>(
+      `/student/decks/${deckId}/review-cards?limit=${limit}`,
+    );
+    if (!Array.isArray(res.data)) throw new Error("Review cards response is invalid.");
     return res.data;
   },
 
   async getViewer(deckId: number | string): Promise<ViewerView> {
     const res = await api.get<ApiResponse<ViewerView>>(`/student/decks/${deckId}/viewer`);
-    if (!res.data || !Array.isArray(res.data.cards)) throw new Error('Deck response is invalid.');
+    if (!res.data || !Array.isArray(res.data.cards)) throw new Error("Deck response is invalid.");
     return res.data;
   },
 };

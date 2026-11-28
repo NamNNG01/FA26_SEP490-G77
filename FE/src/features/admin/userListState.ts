@@ -13,7 +13,7 @@ export interface UserListState {
   page: number;
 }
 
-const userListState: UserListState = { search: '', role: 'all', status: 'all', page: 1 };
+const userListState: UserListState = { search: "", role: "all", status: "all", page: 1 };
 
 export function getUserListState(): UserListState {
   return userListState;

@@ -1,15 +1,15 @@
-import React, { useEffect, useRef, useState } from 'react';
-import { useNavigate } from 'react-router';
-import { Modal } from '@/components/ui/Modal';
-import { Button } from '@/components/ui/Button';
-import { Progress } from '@/components/ui/Progress';
-import { Alert } from '@/components/ui/Alert';
-import { SearchableSelect } from '@/components/ui/SearchableSelect';
-import { useToast } from '@/components/ui/ToastHost';
-import { Icon } from '@/assets/icons';
-import { studentDeckPath } from '@/app/routes';
-import { getApiErrorMessage } from '@/utils/apiError';
-import { studentAttemptService } from '@/services/studentAttempt.service';
+import React, { useEffect, useRef, useState } from "react";
+import { useNavigate } from "react-router";
+import { Modal } from "@/components/ui/Modal";
+import { Button } from "@/components/ui/Button";
+import { Progress } from "@/components/ui/Progress";
+import { Alert } from "@/components/ui/Alert";
+import { SearchableSelect } from "@/components/ui/SearchableSelect";
+import { useToast } from "@/components/ui/ToastHost";
+import { Icon } from "@/assets/icons";
+import { studentDeckPath } from "@/app/routes";
+import { getApiErrorMessage } from "@/utils/apiError";
+import { studentAttemptService } from "@/services/studentAttempt.service";
 import {
   apiErrorCode,
   deckViewFromListItem,
@@ -18,10 +18,10 @@ import {
   studentDeckService,
   type DeckListItem,
   type StudentDeckView,
-} from '@/services/studentDeck.service';
-import type { DeckStudyState } from '../DeckCard';
-import { DeckFormModal } from './DeckFormModal';
-import { plural } from './flashcardUi';
+} from "@/services/studentDeck.service";
+import type { DeckStudyState } from "../DeckCard";
+import { DeckFormModal } from "./DeckFormModal";
+import { plural } from "./flashcardUi";
 
 interface Target {
   deckId: number;
@@ -76,24 +76,26 @@ export function SaveToFlashcardsModal({
   useEffect(() => {
     let off = false;
     studentDeckService
-      .listAllDecks({ scope: 'MINE', mode: 'FLASHCARD' })
-      .then(all => {
+      .listAllDecks({ scope: "MINE", mode: "FLASHCARD" })
+      .then((all) => {
         if (off) return;
-        const editable = all.filter(d => d.mode === 'FLASHCARD' && isDeckEditable(d.reviewStatus));
+        const editable = all.filter(
+          (d) => d.mode === "FLASHCARD" && isDeckEditable(d.reviewStatus),
+        );
         setDecks(editable);
         if (editable.length > 0) setSelected(editable[0].deckId);
       })
-      .catch(err => {
+      .catch((err) => {
         if (off) return;
         setDecks([]);
         if (isEndpointMissing(err)) setListMissing(true);
-        else setListError(getApiErrorMessage(err, 'Could not load your decks.'));
+        else setListError(getApiErrorMessage(err, "Could not load your decks."));
       });
     // The new-deck form defaults to the exam's course.
     if (examId) {
       studentAttemptService
         .getExamDetail(examId)
-        .then(e => !off && setCourseId(e.courseId))
+        .then((e) => !off && setCourseId(e.courseId))
         .catch(() => {});
     }
     return () => {
@@ -116,18 +118,21 @@ export function SaveToFlashcardsModal({
         result.added++;
         inDeck.push(qid);
       } catch (err) {
-        if (apiErrorCode(err) === 'ALREADY_EXISTS') {
+        if (apiErrorCode(err) === "ALREADY_EXISTS") {
           result.skipped++;
           inDeck.push(qid);
         } else {
-          result.failed.push({ questionId: qid, reason: getApiErrorMessage(err, 'Could not save.') });
+          result.failed.push({
+            questionId: qid,
+            reason: getApiErrorMessage(err, "Could not save."),
+          });
           // The deck itself is unusable (locked, not mine, not enrolled): stop instead of failing every question.
           const code = apiErrorCode(err);
           const status = (err as { response?: { status?: number } })?.response?.status;
-          if (code === 'DECK_LOCKED' || status === 403 || status === 404) break;
+          if (code === "DECK_LOCKED" || status === 403 || status === 404) break;
         }
       }
-      setDone(d => d + 1);
+      setDone((d) => d + 1);
     }
     setSaving(false);
     if (inDeck.length > 0) onSaved(inDeck);
@@ -135,7 +140,7 @@ export function SaveToFlashcardsModal({
     if (!bulk) {
       if (result.added) toast.success(`Saved to "${target.title}".`);
       else if (result.skipped) toast.info(`This question is already in "${target.title}".`);
-      else setSaveError(result.failed[0]?.reason ?? 'Could not save the question.');
+      else setSaveError(result.failed[0]?.reason ?? "Could not save the question.");
       if (result.added || result.skipped) onClose();
       return;
     }
@@ -144,7 +149,11 @@ export function SaveToFlashcardsModal({
 
   const openDeck = (target: Target) =>
     navigate(studentDeckPath(target.deckId), {
-      state: { deckTitle: target.title, deck: { ...target.deck, isOwner: true }, tab: 'mine' } satisfies DeckStudyState,
+      state: {
+        deckTitle: target.title,
+        deck: { ...target.deck, isOwner: true },
+        tab: "mine",
+      } satisfies DeckStudyState,
     });
 
   if (creating) {
@@ -152,9 +161,9 @@ export function SaveToFlashcardsModal({
       <DeckFormModal
         lockedMode="FLASHCARD"
         defaultCourseId={courseId}
-        defaultTitle={bulk ? examTitle : ''}
+        defaultTitle={bulk ? examTitle : ""}
         onClose={() => setCreating(false)}
-        onSaved={deck => {
+        onSaved={(deck) => {
           setCreating(false);
           void save({ deckId: deck.deckId, title: deck.title, deck: { ...deck, isOwner: true } });
         }}
@@ -162,7 +171,7 @@ export function SaveToFlashcardsModal({
     );
   }
 
-  const chosen = decks?.find(d => d.deckId === selected);
+  const chosen = decks?.find((d) => d.deckId === selected);
   const total = questionIds.length;
 
   // ── Summary of "save all" ─────────────────────────────────────────────
@@ -178,7 +187,10 @@ export function SaveToFlashcardsModal({
             <Button variant="outline" onClick={onClose}>
               Close
             </Button>
-            <Button iconRight={<Icon.ChevronRight className="w-4 h-4" />} onClick={() => openDeck(target)}>
+            <Button
+              iconRight={<Icon.ChevronRight className="w-4 h-4" />}
+              onClick={() => openDeck(target)}
+            >
               Open deck
             </Button>
           </>
@@ -190,7 +202,7 @@ export function SaveToFlashcardsModal({
           </p>
           <ul className="space-y-1">
             <li className="flex items-center gap-2 text-success">
-              <Icon.CheckCircle className="w-4 h-4" /> Added {plural(result.added, 'card')}
+              <Icon.CheckCircle className="w-4 h-4" /> Added {plural(result.added, "card")}
             </li>
             {result.skipped > 0 && (
               <li className="flex items-center gap-2 text-content-soft">
@@ -205,7 +217,7 @@ export function SaveToFlashcardsModal({
           </ul>
           {result.failed.length > 0 && (
             <ul className="rounded-[10px] border border-line divide-y divide-line max-h-48 overflow-y-auto text-xs">
-              {result.failed.map(f => (
+              {result.failed.map((f) => (
                 <li key={f.questionId} className="px-3 py-2 text-content-soft">
                   {f.reason}
                 </li>
@@ -213,7 +225,10 @@ export function SaveToFlashcardsModal({
             </ul>
           )}
           {result.added + result.skipped + result.failed.length < total && (
-            <p className="text-xs text-content-subtle">Stopped before the last {total - result.added - result.skipped - result.failed.length} questions.</p>
+            <p className="text-xs text-content-subtle">
+              Stopped before the last {total - result.added - result.skipped - result.failed.length}{" "}
+              questions.
+            </p>
           )}
         </div>
       </Modal>
@@ -225,7 +240,9 @@ export function SaveToFlashcardsModal({
     <Modal
       open
       onClose={saving ? () => (cancelled.current = true) : onClose}
-      title={bulk ? `Save ${plural(total, 'question')} to flashcards` : 'Save question to flashcards'}
+      title={
+        bulk ? `Save ${plural(total, "question")} to flashcards` : "Save question to flashcards"
+      }
       error={saveError && <Alert type="error" message={saveError} />}
       footer={
         saving ? (
@@ -240,7 +257,14 @@ export function SaveToFlashcardsModal({
               Cancel
             </Button>
             <Button
-              onClick={() => chosen && save({ deckId: chosen.deckId, title: chosen.title, deck: deckViewFromListItem(chosen, true) })}
+              onClick={() =>
+                chosen &&
+                save({
+                  deckId: chosen.deckId,
+                  title: chosen.title,
+                  deck: deckViewFromListItem(chosen, true),
+                })
+              }
               disabled={!chosen}
             >
               Save
@@ -251,15 +275,17 @@ export function SaveToFlashcardsModal({
     >
       {saving ? (
         <div className="space-y-3 py-2">
-          <p className="text-sm text-content-soft">{bulk ? `Saving questions… ${done} / ${total}` : 'Saving…'}</p>
+          <p className="text-sm text-content-soft">
+            {bulk ? `Saving questions… ${done} / ${total}` : "Saving…"}
+          </p>
           {bulk && <Progress value={done} max={total} size="sm" />}
         </div>
       ) : (
         <div className="space-y-3">
           {bulk && (
             <p className="text-sm text-content-soft">
-              Each question becomes a card: the question on the front, the correct answer (and explanation) on the back. Questions already in
-              the deck are skipped.
+              Each question becomes a card: the question on the front, the correct answer (and
+              explanation) on the back. Questions already in the deck are skipped.
             </p>
           )}
           {decks == null ? (
@@ -268,28 +294,36 @@ export function SaveToFlashcardsModal({
             <p className="text-sm text-content-subtle">
               {listMissing
                 ? "Your decks can't be listed yet — create a new deck below."
-                : listError ?? 'You have no Flashcard deck you can add to. Create one below.'}
+                : (listError ?? "You have no Flashcard deck you can add to. Create one below.")}
             </p>
           ) : (
             <div className="space-y-1.5">
               <SearchableSelect
                 label="Deck"
-                value={selected == null ? '' : String(selected)}
-                onChange={v => setSelected(Number(v))}
-                options={decks.map(d => ({ label: d.courseTitle ? `${d.title} · ${d.courseTitle}` : d.title, value: String(d.deckId) }))}
+                value={selected == null ? "" : String(selected)}
+                onChange={(v) => setSelected(Number(v))}
+                options={decks.map((d) => ({
+                  label: d.courseTitle ? `${d.title} · ${d.courseTitle}` : d.title,
+                  value: String(d.deckId),
+                }))}
                 placeholder="Choose a deck"
                 searchPlaceholder="Search decks…"
                 emptyText="No decks match"
               />
               {chosen && (
                 <p className="text-xs text-content-subtle">
-                  {plural(chosen.cardCount, 'card')}
+                  {plural(chosen.cardCount, "card")}
                   {chosen.courseTitle && ` · ${chosen.courseTitle}`}
                 </p>
               )}
             </div>
           )}
-          <Button variant="outline" size="sm" icon={<Icon.Plus className="w-4 h-4" />} onClick={() => setCreating(true)}>
+          <Button
+            variant="outline"
+            size="sm"
+            icon={<Icon.Plus className="w-4 h-4" />}
+            onClick={() => setCreating(true)}
+          >
             New deck
           </Button>
         </div>

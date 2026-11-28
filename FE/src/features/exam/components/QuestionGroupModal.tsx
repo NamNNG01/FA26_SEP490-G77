@@ -1,16 +1,16 @@
-import React, { useEffect, useState } from 'react';
-import { useNavigate } from 'react-router';
-import { Modal } from '@/components/ui/Modal';
-import { Button } from '@/components/ui/Button';
-import { Badge } from '@/components/ui/Badge';
-import { Alert } from '@/components/ui/Alert';
-import { SearchInput } from '@/components/common/SearchInput';
-import { Icon } from '@/assets/icons';
-import { useToast } from '@/components/ui/ToastHost';
-import type { ExamKind } from '@/services/exam.service';
-import { questionGroupService, type QuestionGroup } from '@/services/questionGroup.service';
-import { ROUTES, managerQuestionCreateWithContextPath } from '@/app/routes';
-import { getApiErrorMessage } from '@/utils/apiError';
+import React, { useEffect, useState } from "react";
+import { useNavigate } from "react-router";
+import { Modal } from "@/components/ui/Modal";
+import { Button } from "@/components/ui/Button";
+import { Badge } from "@/components/ui/Badge";
+import { Alert } from "@/components/ui/Alert";
+import { SearchInput } from "@/components/common/SearchInput";
+import { Icon } from "@/assets/icons";
+import { useToast } from "@/components/ui/ToastHost";
+import type { ExamKind } from "@/services/exam.service";
+import { questionGroupService, type QuestionGroup } from "@/services/questionGroup.service";
+import { ROUTES, managerQuestionCreateWithContextPath } from "@/app/routes";
+import { getApiErrorMessage } from "@/utils/apiError";
 
 interface QuestionGroupModalProps {
   open: boolean;
@@ -36,7 +36,7 @@ export function QuestionGroupModal({
   const toast = useToast();
   const navigate = useNavigate();
   const [groups, setGroups] = useState<QuestionGroup[]>([]);
-  const [search, setSearch] = useState('');
+  const [search, setSearch] = useState("");
   const [selectedGroup, setSelectedGroup] = useState<QuestionGroup | null>(null);
   const [fetching, setFetching] = useState(false);
 
@@ -47,17 +47,25 @@ export function QuestionGroupModal({
       .getQuestionGroups({
         courseId,
         moduleId,
-        questionType: questionType === 'ESSAY' ? undefined : questionType,
+        questionType: questionType === "ESSAY" ? undefined : questionType,
         search: search.trim() || undefined,
         size: 100,
       })
       .then((res) => {
-        const types = questionType === 'ESSAY' ? ['ESSAY', 'DIAGRAM', 'DIAGRAM_ESSAY'] : [questionType];
-        setGroups((res.content || []).filter((group) => group.questionType != null && types.includes(group.questionType)));
+        const types =
+          questionType === "ESSAY" ? ["ESSAY", "DIAGRAM", "DIAGRAM_ESSAY"] : [questionType];
+        setGroups(
+          (res.content || []).filter(
+            (group) => group.questionType != null && types.includes(group.questionType),
+          ),
+        );
       })
       .catch((err) => {
         setGroups([]);
-        toast.error(getApiErrorMessage(err, 'Failed to load question groups.'), { title: 'Could not load question groups', duration: null });
+        toast.error(getApiErrorMessage(err, "Failed to load question groups."), {
+          title: "Could not load question groups",
+          duration: null,
+        });
       })
       .finally(() => {
         setFetching(false);
@@ -91,7 +99,11 @@ export function QuestionGroupModal({
               onClose();
               navigate(
                 courseId != null
-                  ? managerQuestionCreateWithContextPath({ context: 'new-group', courseId, moduleId })
+                  ? managerQuestionCreateWithContextPath({
+                      context: "new-group",
+                      courseId,
+                      moduleId,
+                    })
                   : ROUTES.managerQuestions,
               );
             }}
@@ -133,7 +145,8 @@ export function QuestionGroupModal({
             <div className="py-10 text-center text-sm text-content-subtle">Loading groups…</div>
           ) : groups.length === 0 ? (
             <div className="py-10 text-center text-sm text-content-subtle px-4">
-              No question groups with questions found. Use “New Group in Question Bank” to create a group with at least 1 question.
+              No question groups with questions found. Use “New Group in Question Bank” to create a
+              group with at least 1 question.
             </div>
           ) : (
             groups.map((g) => {
@@ -148,17 +161,17 @@ export function QuestionGroupModal({
                   onClick={() => !disabledRow && setSelectedGroup(g)}
                   className={`p-3.5 transition-colors ${
                     disabledRow
-                      ? 'bg-surface-muted/60 opacity-60 cursor-not-allowed'
+                      ? "bg-surface-muted/60 opacity-60 cursor-not-allowed"
                       : isSelected
-                      ? 'bg-primary-light border-l-4 border-brand-ink cursor-pointer'
-                      : 'hover:bg-surface-hover cursor-pointer'
+                        ? "bg-primary-light border-l-4 border-brand-ink cursor-pointer"
+                        : "hover:bg-surface-hover cursor-pointer"
                   }`}
                 >
                   <div className="flex items-center justify-between gap-2">
                     <h4 className="text-sm font-semibold text-content">{g.title}</h4>
                     <div className="flex items-center gap-1.5 flex-shrink-0">
                       <Badge variant="purple" className="text-2xs">
-                        {g.questionCount} question{g.questionCount === 1 ? '' : 's'}
+                        {g.questionCount} question{g.questionCount === 1 ? "" : "s"}
                       </Badge>
                       {isAttached && (
                         <Badge variant="warning" className="text-2xs">
@@ -184,4 +197,3 @@ export function QuestionGroupModal({
     </Modal>
   );
 }
-

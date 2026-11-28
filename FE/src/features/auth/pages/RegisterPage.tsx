@@ -1,17 +1,17 @@
-import React, { useState } from 'react';
-import { useNavigate, useSearchParams } from 'react-router';
-import { isAxiosError } from 'axios';
-import { Button } from '@/components/ui/Button';
-import { Input } from '@/components/ui/Input';
-import { Alert } from '@/components/ui/Alert';
-import { useAuth, landingPathForRole, AFTER_AUTH_STATE } from '@/auth/authContext';
-import { AuthPageHeader } from '../components/AuthPageHeader';
-import { GoogleSignInButton } from '../components/GoogleSignInButton';
-import { Icon } from '@/assets/icons';
-import { ROUTES } from '@/app/routes';
-import { safeRedirect, withRedirectTarget } from '@/hooks/useRequireAuth';
-import { getPasswordChecks, getPasswordValidationError } from '@/services/password.service';
-import { PasswordRequirements } from '../components/PasswordRequirements';
+import React, { useState } from "react";
+import { useNavigate, useSearchParams } from "react-router";
+import { isAxiosError } from "axios";
+import { Button } from "@/components/ui/Button";
+import { Input } from "@/components/ui/Input";
+import { Alert } from "@/components/ui/Alert";
+import { useAuth, landingPathForRole, AFTER_AUTH_STATE } from "@/auth/authContext";
+import { AuthPageHeader } from "../components/AuthPageHeader";
+import { GoogleSignInButton } from "../components/GoogleSignInButton";
+import { Icon } from "@/assets/icons";
+import { ROUTES } from "@/app/routes";
+import { safeRedirect, withRedirectTarget } from "@/hooks/useRequireAuth";
+import { getPasswordChecks, getPasswordValidationError } from "@/services/password.service";
+import { PasswordRequirements } from "../components/PasswordRequirements";
 
 /**
  * Sign-up form. `?redirect=` (e.g. a guest buying a course) is where the new
@@ -21,27 +21,27 @@ export function RegisterPage() {
   const { register } = useAuth();
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
-  const redirectTo = safeRedirect(searchParams.get('redirect'));
+  const redirectTo = safeRedirect(searchParams.get("redirect"));
 
-  const [fullName, setFullName] = useState('');
-  const [email, setEmail] = useState('');
-  const [password, setPassword] = useState('');
-  const [confirmPassword, setConfirmPassword] = useState('');
+  const [fullName, setFullName] = useState("");
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
+  const [confirmPassword, setConfirmPassword] = useState("");
   const [showPwd, setShowPwd] = useState(false);
   const [showConfirm, setShowConfirm] = useState(false);
   const [loading, setLoading] = useState(false);
-  const [error, setError] = useState('');
-  const [confirmError, setConfirmError] = useState('');
+  const [error, setError] = useState("");
+  const [confirmError, setConfirmError] = useState("");
   const [submitted, setSubmitted] = useState(false);
   const passwordChecks = getPasswordChecks(password);
-  const passwordValid = passwordChecks.every(c => c.met);
+  const passwordValid = passwordChecks.every((c) => c.met);
   const passwordTouched = password.length > 0 || submitted;
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
-    setError('');
-    setConfirmError('');
+    setError("");
+    setConfirmError("");
     setSubmitted(true);
 
     // Backend validation (from RegisterRequest):
@@ -50,43 +50,45 @@ export function RegisterPage() {
     // - Full name: @NotBlank, @Size(max=100)
     const trimmedEmail = email.trim();
     if (!trimmedEmail) {
-      setError('Email is required');
+      setError("Email is required");
       setLoading(false);
       return;
     }
     if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(trimmedEmail)) {
-      setError('Invalid email format');
+      setError("Invalid email format");
       setLoading(false);
       return;
     }
     if (trimmedEmail.length > 150) {
-      setError('Email must not exceed 150 characters');
+      setError("Email must not exceed 150 characters");
       setLoading(false);
       return;
     }
     if (!password) {
-      setError('Password is required');
+      setError("Password is required");
       setLoading(false);
       return;
     }
     if (getPasswordValidationError(password)) {
       // Every rule is listed under the field — point there rather than at one rule.
-      setError('Your password doesn’t meet all the requirements yet — see the list under the password field.');
+      setError(
+        "Your password doesn’t meet all the requirements yet — see the list under the password field.",
+      );
       setLoading(false);
       return;
     }
     if (!fullName.trim()) {
-      setError('Full name is required');
+      setError("Full name is required");
       setLoading(false);
       return;
     }
     if (fullName.length > 100) {
-      setError('Full name must not exceed 100 characters');
+      setError("Full name must not exceed 100 characters");
       setLoading(false);
       return;
     }
     if (password !== confirmPassword) {
-      setConfirmError('Passwords do not match.');
+      setConfirmError("Passwords do not match.");
       setLoading(false);
       return;
     }
@@ -96,16 +98,20 @@ export function RegisterPage() {
       // Backend register always creates STUDENT accounts; use the fresh
       // user returned by register() rather than stale context state.
       const registeredUser = await register(trimmedEmail, password, fullName);
-      navigate(redirectTo ?? landingPathForRole(registeredUser.role), { replace: true, state: AFTER_AUTH_STATE });
+      navigate(redirectTo ?? landingPathForRole(registeredUser.role), {
+        replace: true,
+        state: AFTER_AUTH_STATE,
+      });
     } catch (err: unknown) {
       // 409 = the backend hit a database conflict while saving the account
       // (GlobalExceptionHandler → DataIntegrityViolationException); its
       // generic message means nothing to a user, and retrying usually works.
-      const message = isAxiosError(err) && err.response?.status === 409
-        ? 'We could not create your account right now. Please try again in a moment.'
-        : err instanceof Error
-          ? err.message
-          : 'Registration failed. Please try again.';
+      const message =
+        isAxiosError(err) && err.response?.status === 409
+          ? "We could not create your account right now. Please try again in a moment."
+          : err instanceof Error
+            ? err.message
+            : "Registration failed. Please try again.";
       setError(message);
     } finally {
       setLoading(false);
@@ -118,15 +124,20 @@ export function RegisterPage() {
           gap (16–20px), the card is width 100% of the 430px column with
           auto height — the whole page fits the viewport on desktop/laptop. */}
       <div className="flex flex-col">
-        <AuthPageHeader title="Create your account" subtitle="Join PrepExam and start practising today." />
+        <AuthPageHeader
+          title="Create your account"
+          subtitle="Join PrepExam and start practising today."
+        />
 
         <div className="card p-6 [@media(max-height:850px)]:p-5 shadow-lg">
           {error && <Alert type="error" title="Registration failed" message={error} />}
-          {confirmError && (
-            <Alert type="error" title="Password mismatch" message={confirmError} />
-          )}
+          {confirmError && <Alert type="error" title="Password mismatch" message={confirmError} />}
 
-          <form noValidate onSubmit={handleSubmit} className="space-y-[18px] [@media(max-height:850px)]:space-y-3.5">
+          <form
+            noValidate
+            onSubmit={handleSubmit}
+            className="space-y-[18px] [@media(max-height:850px)]:space-y-3.5"
+          >
             <Input
               label="Full name"
               placeholder="Enter your name"
@@ -151,7 +162,7 @@ export function RegisterPage() {
             <Input
               label="Password"
               placeholder="Enter your password"
-              type={showPwd ? 'text' : 'password'}
+              type={showPwd ? "text" : "password"}
               id="register-password"
               name="password"
               autoComplete="new-password"
@@ -164,7 +175,7 @@ export function RegisterPage() {
               suffix={
                 <button
                   type="button"
-                  aria-label={showPwd ? 'Hide password' : 'Show password'}
+                  aria-label={showPwd ? "Hide password" : "Show password"}
                   onClick={() => setShowPwd((s) => !s)}
                   className="hover:text-content-secondary transition-colors"
                 >
@@ -172,11 +183,15 @@ export function RegisterPage() {
                 </button>
               }
             />
-            <PasswordRequirements id="register-password-requirements" checks={passwordChecks} touched={passwordTouched} />
+            <PasswordRequirements
+              id="register-password-requirements"
+              checks={passwordChecks}
+              touched={passwordTouched}
+            />
             <Input
               label="Confirm password"
               placeholder="Confirm your password"
-              type={showConfirm ? 'text' : 'password'}
+              type={showConfirm ? "text" : "password"}
               id="register-confirm-password"
               name="confirmPassword"
               autoComplete="new-password"
@@ -186,11 +201,15 @@ export function RegisterPage() {
               suffix={
                 <button
                   type="button"
-                  aria-label={showConfirm ? 'Hide password' : 'Show password'}
+                  aria-label={showConfirm ? "Hide password" : "Show password"}
                   onClick={() => setShowConfirm((s) => !s)}
                   className="hover:text-content-secondary transition-colors"
                 >
-                  {showConfirm ? <Icon.EyeOff className="w-4 h-4" /> : <Icon.Eye className="w-4 h-4" />}
+                  {showConfirm ? (
+                    <Icon.EyeOff className="w-4 h-4" />
+                  ) : (
+                    <Icon.Eye className="w-4 h-4" />
+                  )}
                 </button>
               }
             />
@@ -203,15 +222,15 @@ export function RegisterPage() {
             mode="signup"
             redirectTo={redirectTo}
             onStart={() => {
-              setError('');
-              setConfirmError('');
+              setError("");
+              setConfirmError("");
             }}
             onError={setError}
           />
 
           <div className="mt-5 pt-5 border-t border-line-soft flex flex-col gap-3 items-center">
             <p className="text-sm text-content-soft flex items-center gap-2">
-              Already have an account?{' '}
+              Already have an account?{" "}
               <button
                 type="button"
                 onClick={() => navigate(withRedirectTarget(ROUTES.login, redirectTo))}

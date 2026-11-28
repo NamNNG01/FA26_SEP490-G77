@@ -1,22 +1,35 @@
-import { useState } from 'react';
-import { useNavigate, useParams } from 'react-router';
-import { Badge } from '@/components/ui/Badge';
-import { Alert } from '@/components/ui/Alert';
-import { Button } from '@/components/ui/Button';
-import { Breadcrumb } from '@/components/ui/Breadcrumb';
-import { Skeleton } from '@/components/ui/Skeleton';
-import { EmptyState } from '@/components/ui/Card';
-import { Icon } from '@/assets/icons';
-import { Progress } from '@/components/ui/Progress';
-import { ROUTES, studentModulePath } from '@/app/routes';
-import type { StudentCourseDetail } from '@/services/studentCourse.service';
-import { modulePracticeService, type ModulePracticeOverview, type PracticeScope } from '@/services/modulePractice.service';
-import { CardGridSkeleton, CourseThumb, LoadError, STUDENT_PAGE_CLASS } from '../components/studentUi';
-import { GENERAL_MODULE, sortedModules } from '../components/courseContent';
-import { useCourseDetail, type CourseDetailState, type LearningProgress } from '../components/courseProgress';
-import { ModulePracticeModal } from '../components/ModulePracticeModal';
-import { SmartPracticeModal } from '../components/SmartPracticeModal';
-import type { ModulePageState } from './StudentModuleDetailPage';
+import { useState } from "react";
+import { useNavigate, useParams } from "react-router";
+import { Badge } from "@/components/ui/Badge";
+import { Alert } from "@/components/ui/Alert";
+import { Button } from "@/components/ui/Button";
+import { Breadcrumb } from "@/components/ui/Breadcrumb";
+import { Skeleton } from "@/components/ui/Skeleton";
+import { EmptyState } from "@/components/ui/Card";
+import { Icon } from "@/assets/icons";
+import { Progress } from "@/components/ui/Progress";
+import { ROUTES, studentModulePath } from "@/app/routes";
+import type { StudentCourseDetail } from "@/services/studentCourse.service";
+import {
+  modulePracticeService,
+  type ModulePracticeOverview,
+  type PracticeScope,
+} from "@/services/modulePractice.service";
+import {
+  CardGridSkeleton,
+  CourseThumb,
+  LoadError,
+  STUDENT_PAGE_CLASS,
+} from "../components/studentUi";
+import { GENERAL_MODULE, sortedModules } from "../components/courseContent";
+import {
+  useCourseDetail,
+  type CourseDetailState,
+  type LearningProgress,
+} from "../components/courseProgress";
+import { ModulePracticeModal } from "../components/ModulePracticeModal";
+import { SmartPracticeModal } from "../components/SmartPracticeModal";
+import type { ModulePageState } from "./StudentModuleDetailPage";
 
 /**
  * Student course detail — course info (CL-02), then the course content as a grid of module cards.
@@ -28,7 +41,7 @@ import type { ModulePageState } from './StudentModuleDetailPage';
  * practice exam for the course from the info card (AI-01 / PQ-01, course fixed).
  */
 export function StudentCourseDetailPage() {
-  const { courseId = '' } = useParams<{ courseId: string }>();
+  const { courseId = "" } = useParams<{ courseId: string }>();
   const navigate = useNavigate();
   const { data, loading, error, retry } = useCourseDetail(courseId);
   const [personalQuiz, setPersonalQuiz] = useState(false);
@@ -36,7 +49,10 @@ export function StudentCourseDetailPage() {
 
   const breadcrumb = (
     <Breadcrumb
-      items={[{ label: 'My Courses', onClick: () => navigate(ROUTES.studentCourses) }, { label: course?.title ?? 'Course' }]}
+      items={[
+        { label: "My Courses", onClick: () => navigate(ROUTES.studentCourses) },
+        { label: course?.title ?? "Course" },
+      ]}
     />
   );
 
@@ -62,7 +78,7 @@ export function StudentCourseDetailPage() {
     return (
       <div className={`${STUDENT_PAGE_CLASS} space-y-6`}>
         {breadcrumb}
-        <LoadError message={error ?? 'Course not found.'} onRetry={retry} />
+        <LoadError message={error ?? "Course not found."} onRetry={retry} />
       </div>
     );
   }
@@ -76,30 +92,47 @@ export function StudentCourseDetailPage() {
       {breadcrumb}
 
       <div className="card p-[clamp(1rem,2vw,1.25rem)] flex flex-col sm:flex-row gap-5">
-        <CourseThumb url={course.thumbnailUrl} title={course.title} className="sm:w-64 rounded-[10px] flex-shrink-0" />
+        <CourseThumb
+          url={course.thumbnailUrl}
+          title={course.title}
+          className="sm:w-64 rounded-[10px] flex-shrink-0"
+        />
         <div className="flex-1 min-w-0 space-y-3">
           <div className="flex flex-wrap items-center gap-2">
             {course.category && <Badge>{course.category.name}</Badge>}
             {enrollment?.isEnrolled && (
-              <Badge variant={enrollment.status === 'COMPLETED' ? 'success' : 'info'}>
-                {enrollment.status === 'COMPLETED' ? 'Completed' : 'In progress'}
+              <Badge variant={enrollment.status === "COMPLETED" ? "success" : "info"}>
+                {enrollment.status === "COMPLETED" ? "Completed" : "In progress"}
               </Badge>
             )}
             {isActive && (
-              <Button variant="outline" size="sm" className="ml-auto" icon={<Icon.Zap className="w-4 h-4" />} onClick={() => setPersonalQuiz(true)}>
+              <Button
+                variant="outline"
+                size="sm"
+                className="ml-auto"
+                icon={<Icon.Zap className="w-4 h-4" />}
+                onClick={() => setPersonalQuiz(true)}
+              >
                 Create practice exam
               </Button>
             )}
           </div>
           <div>
-            <h1 className="text-[clamp(1.25rem,1.1rem+0.6vw,1.5rem)] font-bold text-content">{course.title}</h1>
-            {course.manager && <p className="text-sm text-content-subtle mt-0.5">by {course.manager.fullName}</p>}
+            <h1 className="text-[clamp(1.25rem,1.1rem+0.6vw,1.5rem)] font-bold text-content">
+              {course.title}
+            </h1>
+            {course.manager && (
+              <p className="text-sm text-content-subtle mt-0.5">by {course.manager.fullName}</p>
+            )}
           </div>
-          {course.description && <p className="text-sm text-content-soft whitespace-pre-line">{course.description}</p>}
+          {course.description && (
+            <p className="text-sm text-content-soft whitespace-pre-line">{course.description}</p>
+          )}
           <div className="flex flex-wrap gap-x-5 gap-y-1 text-sm text-content-soft">
             {course.stats.questionCount != null && (
               <span className="inline-flex items-center gap-1.5">
-                <Icon.HelpCircle className="w-4 h-4" /> {course.stats.questionCount} question{course.stats.questionCount === 1 ? '' : 's'}
+                <Icon.HelpCircle className="w-4 h-4" /> {course.stats.questionCount} question
+                {course.stats.questionCount === 1 ? "" : "s"}
               </span>
             )}
             <span className="inline-flex items-center gap-1.5">
@@ -110,7 +143,8 @@ export function StudentCourseDetailPage() {
             </span>
             {moduleCount > 0 && (
               <span className="inline-flex items-center gap-1.5">
-                <Icon.Folder className="w-4 h-4" /> {moduleCount} module{moduleCount === 1 ? '' : 's'}
+                <Icon.Folder className="w-4 h-4" /> {moduleCount} module
+                {moduleCount === 1 ? "" : "s"}
               </span>
             )}
           </div>
@@ -119,21 +153,17 @@ export function StudentCourseDetailPage() {
 
       {!isActive && (
         <Alert
-          type={enrollment?.status === 'COMPLETED' ? 'info' : 'warning'}
-          title={enrollment?.status === 'COMPLETED' ? 'Course completed' : 'Not enrolled'}
+          type={enrollment?.status === "COMPLETED" ? "info" : "warning"}
+          title={enrollment?.status === "COMPLETED" ? "Course completed" : "Not enrolled"}
           message={
-            enrollment?.status === 'COMPLETED'
-              ? 'Exams and flashcards are only available while your enrollment is active.'
-              : 'Enroll in this course to take its exams and study its flashcards.'
+            enrollment?.status === "COMPLETED"
+              ? "Exams and flashcards are only available while your enrollment is active."
+              : "Enroll in this course to take its exams and study its flashcards."
           }
         />
       )}
 
-      {isActive ? (
-        <ModuleGrid content={data} />
-      ) : (
-        <LockedModules course={course} />
-      )}
+      {isActive ? <ModuleGrid content={data} /> : <LockedModules course={course} />}
 
       {isActive && (
         <SmartPracticeModal
@@ -157,18 +187,22 @@ export function StudentCourseDetailPage() {
 function ModuleGrid({ content }: { content: CourseDetailState }) {
   const navigate = useNavigate();
   const { course, generalCounts, modules, hasGeneral, be, moduleProgress } = content;
-  const [practicing, setPracticing] = useState<{ scope: PracticeScope; title: string; overview: ModulePracticeOverview | null } | null>(null);
+  const [practicing, setPracticing] = useState<{
+    scope: PracticeScope;
+    title: string;
+    overview: ModulePracticeOverview | null;
+  } | null>(null);
   // The card whose MP-01 is being read before its practice modal opens.
   const [opening, setOpening] = useState<string | null>(null);
   // LP-01 rides along to the module page so it need not read it again.
-  const pageState: ModulePageState = { course, progress: be !== 'error' ? be : undefined };
+  const pageState: ModulePageState = { course, progress: be !== "error" ? be : undefined };
 
   const openPractice = (key: string, scope: PracticeScope, title: string) => {
     if (opening) return;
     setOpening(key);
     modulePracticeService
       .getOverview(scope)
-      .then(overview => setPracticing({ scope, title, overview }))
+      .then((overview) => setPracticing({ scope, title, overview }))
       // Without MP-01 the modal still opens; it just cannot show the session in progress.
       .catch(() => setPracticing({ scope, title, overview: null }))
       .finally(() => setOpening(null));
@@ -196,10 +230,16 @@ function ModuleGrid({ content }: { content: CourseDetailState }) {
             index={i + 1}
             title={m.title}
             description={m.description}
-            counts={{ exams: m.examCount ?? 0, decks: m.deckCount ?? 0, questions: m.questionCount ?? 0 }}
+            counts={{
+              exams: m.examCount ?? 0,
+              decks: m.deckCount ?? 0,
+              questions: m.questionCount ?? 0,
+            }}
             progress={moduleProgress(String(m.moduleId))}
             practiceLoading={opening === String(m.moduleId)}
-            onOpen={() => navigate(studentModulePath(course.courseId, m.moduleId), { state: pageState })}
+            onOpen={() =>
+              navigate(studentModulePath(course.courseId, m.moduleId), { state: pageState })
+            }
             onPractice={() => openPractice(String(m.moduleId), { moduleId: m.moduleId }, m.title)}
           />
         ))}
@@ -210,8 +250,12 @@ function ModuleGrid({ content }: { content: CourseDetailState }) {
             counts={generalCounts}
             progress={moduleProgress(GENERAL_MODULE)}
             practiceLoading={opening === GENERAL_MODULE}
-            onOpen={() => navigate(studentModulePath(course.courseId, GENERAL_MODULE), { state: pageState })}
-            onPractice={() => openPractice(GENERAL_MODULE, { courseId: course.courseId }, 'General')}
+            onOpen={() =>
+              navigate(studentModulePath(course.courseId, GENERAL_MODULE), { state: pageState })
+            }
+            onPractice={() =>
+              openPractice(GENERAL_MODULE, { courseId: course.courseId }, "General")
+            }
           />
         )}
       </div>
@@ -266,8 +310,12 @@ function ModuleCard({
             {index ?? <Icon.Folder className="w-5 h-5" />}
           </span>
           <div className="flex-1 min-w-0">
-            <h3 className="text-base font-semibold text-content leading-snug line-clamp-2">{title}</h3>
-            {description && <p className="text-xs text-content-soft mt-0.5 line-clamp-2">{description}</p>}
+            <h3 className="text-base font-semibold text-content leading-snug line-clamp-2">
+              {title}
+            </h3>
+            {description && (
+              <p className="text-xs text-content-soft mt-0.5 line-clamp-2">{description}</p>
+            )}
           </div>
           <Icon.ChevronRight className="w-4 h-4 text-content-subtle flex-shrink-0 mt-1" />
         </div>
@@ -276,14 +324,17 @@ function ModuleCard({
           <div className="flex flex-wrap gap-x-4 gap-y-1 text-xs text-content-soft">
             {counts.questions != null && (
               <span className="inline-flex items-center gap-1">
-                <Icon.HelpCircle className="w-3.5 h-3.5" /> {counts.questions} question{counts.questions === 1 ? '' : 's'}
+                <Icon.HelpCircle className="w-3.5 h-3.5" /> {counts.questions} question
+                {counts.questions === 1 ? "" : "s"}
               </span>
             )}
             <span className="inline-flex items-center gap-1">
-              <Icon.ClipboardList className="w-3.5 h-3.5" /> {counts.exams} exam{counts.exams === 1 ? '' : 's'}
+              <Icon.ClipboardList className="w-3.5 h-3.5" /> {counts.exams} exam
+              {counts.exams === 1 ? "" : "s"}
             </span>
             <span className="inline-flex items-center gap-1">
-              <Icon.Layers className="w-3.5 h-3.5" /> {counts.decks} deck{counts.decks === 1 ? '' : 's'}
+              <Icon.Layers className="w-3.5 h-3.5" /> {counts.decks} deck
+              {counts.decks === 1 ? "" : "s"}
             </span>
           </div>
           {/* Same height with or without a bar. */}
@@ -323,7 +374,6 @@ function ModuleCard({
   );
 }
 
-
 /** Not enrolled / completed: MC-02/03 refuse, so only the module names are shown. */
 function LockedModules({ course }: { course: StudentCourseDetail }) {
   const modules = sortedModules(course);
@@ -344,11 +394,16 @@ function LockedModules({ course }: { course: StudentCourseDetail }) {
               {i + 1}
             </span>
             <div className="flex-1 min-w-0">
-              <h3 className="text-base font-semibold text-content-soft leading-snug line-clamp-2">{m.title}</h3>
-              {m.description && <p className="text-xs text-content-subtle mt-0.5 line-clamp-2">{m.description}</p>}
+              <h3 className="text-base font-semibold text-content-soft leading-snug line-clamp-2">
+                {m.title}
+              </h3>
+              {m.description && (
+                <p className="text-xs text-content-subtle mt-0.5 line-clamp-2">{m.description}</p>
+              )}
               {m.questionCount != null && (
                 <p className="text-xs text-content-subtle mt-1 inline-flex items-center gap-1">
-                  <Icon.HelpCircle className="w-3.5 h-3.5" /> {m.questionCount} question{m.questionCount === 1 ? '' : 's'}
+                  <Icon.HelpCircle className="w-3.5 h-3.5" /> {m.questionCount} question
+                  {m.questionCount === 1 ? "" : "s"}
                 </p>
               )}
             </div>

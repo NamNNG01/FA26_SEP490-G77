@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { useQuietRefresh } from '@/hooks/useAutoRefresh';
+import { useQuietRefresh } from "@/hooks/useAutoRefresh";
 import { useNavigate, useSearchParams } from "react-router";
 import { Button } from "@/components/ui/Button";
 import { Alert } from "@/components/ui/Alert";
@@ -14,20 +14,10 @@ import { ConfirmDialog } from "@/components/ui/ConfirmDialog";
 import { Icon } from "@/assets/icons";
 import { ROUTES } from "@/app/routes";
 import { useToast } from "@/components/ui/ToastHost";
-import {
-  studentProgressService,
-  type SavedQuestion,
-} from "@/services/studentProgress.service";
-import {
-  studentCourseService,
-  type MyCourse,
-} from "@/services/studentCourse.service";
+import { studentProgressService, type SavedQuestion } from "@/services/studentProgress.service";
+import { studentCourseService, type MyCourse } from "@/services/studentCourse.service";
 import { getApiErrorMessage } from "@/utils/apiError";
-import {
-  LoadError,
-  PageTitle,
-  STUDENT_PAGE_CLASS,
-} from "../components/studentUi";
+import { LoadError, PageTitle, STUDENT_PAGE_CLASS } from "../components/studentUi";
 import { ReportQuestionIssueButton } from "../components/ReportQuestionIssueDialog";
 
 const SIZE = 10;
@@ -59,16 +49,14 @@ export function StudentQuestionNotebookPage() {
   const [search, setSearch] = useState("");
   const [debouncedSearch, setDebouncedSearch] = useState("");
   const [examType, setExamType] = useState<"" | "QUIZ" | "ESSAY" | "CODE">("");
-  const [courseId, setCourseId] = useState(() => (/^\d+$/.test(params.get("courseId") ?? "") ? params.get("courseId")! : ""));
+  const [courseId, setCourseId] = useState(() =>
+    /^\d+$/.test(params.get("courseId") ?? "") ? params.get("courseId")! : "",
+  );
   const [courses, setCourses] = useState<MyCourse[]>([]);
   const [page, setPage] = useState(0);
-  const [sessionType, setSessionType] = useState<
-    "wrong" | "bookmarked" | "all"
-  >("wrong");
+  const [sessionType, setSessionType] = useState<"wrong" | "bookmarked" | "all">("wrong");
   const [sessionCourseId, setSessionCourseId] = useState("");
-  const [sessionExamType, setSessionExamType] = useState<"QUIZ" | "ESSAY" | "CODE">(
-    "QUIZ",
-  );
+  const [sessionExamType, setSessionExamType] = useState<"QUIZ" | "ESSAY" | "CODE">("QUIZ");
   const [sessionSize, setSessionSize] = useState("10");
   const [sessionDuration, setSessionDuration] = useState("30");
   const [sessionModalOpen, setSessionModalOpen] = useState(false);
@@ -81,7 +69,9 @@ export function StudentQuestionNotebookPage() {
   const [busyId, setBusyId] = useState<number | null>(null);
   const [actionError, setActionError] = useState<string | null>(null);
   const [starting, setStarting] = useState(false);
-  const [bulkAction, setBulkAction] = useState<"bookmark" | "clear-bookmarks" | "delete" | null>(null);
+  const [bulkAction, setBulkAction] = useState<"bookmark" | "clear-bookmarks" | "delete" | null>(
+    null,
+  );
   const [bulkBusy, setBulkBusy] = useState(false);
   const [exportingPdf, setExportingPdf] = useState(false);
 
@@ -113,14 +103,15 @@ export function StudentQuestionNotebookPage() {
       setLoading(true);
       setError(null);
     }
-    studentProgressService.getSavedQuestions({
-      page,
-      size: SIZE,
-      type: filter,
-      search: debouncedSearch.trim() || undefined,
-      examType: examType || undefined,
-      courseId: courseId ? Number(courseId) : undefined,
-    })
+    studentProgressService
+      .getSavedQuestions({
+        page,
+        size: SIZE,
+        type: filter,
+        search: debouncedSearch.trim() || undefined,
+        examType: examType || undefined,
+        courseId: courseId ? Number(courseId) : undefined,
+      })
       .then((result) => {
         if (cancelled) return;
         setRows(result.content);
@@ -128,9 +119,7 @@ export function StudentQuestionNotebookPage() {
       })
       .catch((err) => {
         if (!cancelled && !quiet)
-          setError(
-            getApiErrorMessage(err, "Failed to load the question notebook."),
-          );
+          setError(getApiErrorMessage(err, "Failed to load the question notebook."));
       })
       .finally(() => {
         if (!cancelled) setLoading(false);
@@ -165,13 +154,9 @@ export function StudentQuestionNotebookPage() {
         durationMinutes: duration,
         courseId: Number(sessionCourseId),
       });
-      navigate(
-        `${ROUTES.studentExam}?attemptId=${encodeURIComponent(String(session.attemptId))}`,
-      );
+      navigate(`${ROUTES.studentExam}?attemptId=${encodeURIComponent(String(session.attemptId))}`);
     } catch (err) {
-      setActionError(
-        getApiErrorMessage(err, "Could not start a review session."),
-      );
+      setActionError(getApiErrorMessage(err, "Could not start a review session."));
     } finally {
       setStarting(false);
     }
@@ -195,9 +180,7 @@ export function StudentQuestionNotebookPage() {
       setBulkAction(null);
       setReload((value) => value + 1);
     } catch (err) {
-      toast.error(
-        getApiErrorMessage(err, "Could not update the saved questions."),
-      );
+      toast.error(getApiErrorMessage(err, "Could not update the saved questions."));
     } finally {
       setBulkBusy(false);
     }
@@ -223,13 +206,9 @@ export function StudentQuestionNotebookPage() {
     setBusyId(question.reviewId);
     setActionError(null);
     try {
-      const updated = await studentProgressService.toggleBookmark(
-        question.questionId,
-      );
+      const updated = await studentProgressService.toggleBookmark(question.questionId);
       if (filter === "bookmarked" && !updated.isBookmarked) {
-        setRows((rowsNow) =>
-          rowsNow.filter((row) => row.reviewId !== question.reviewId),
-        );
+        setRows((rowsNow) => rowsNow.filter((row) => row.reviewId !== question.reviewId));
         setTotal((value) => Math.max(0, value - 1));
       } else
         setRows((rowsNow) =>
@@ -277,16 +256,19 @@ export function StudentQuestionNotebookPage() {
       />
 
       <div>
-        <Button onClick={() => { setActionError(null); setSessionModalOpen(true); }}>
+        <Button
+          onClick={() => {
+            setActionError(null);
+            setSessionModalOpen(true);
+          }}
+        >
           Start a review session
         </Button>
       </div>
 
       <section className="space-y-3">
         <div className="flex flex-wrap items-center justify-between gap-3">
-          <h2 className="text-base font-semibold text-content">
-            Saved questions
-          </h2>
+          <h2 className="text-base font-semibold text-content">Saved questions</h2>
           <div className="flex flex-wrap gap-2">
             <Button
               size="sm"
@@ -306,11 +288,7 @@ export function StudentQuestionNotebookPage() {
             >
               Bookmark all
             </Button>
-            <Button
-              size="sm"
-              variant="outline"
-              onClick={() => setBulkAction("clear-bookmarks")}
-            >
+            <Button size="sm" variant="outline" onClick={() => setBulkAction("clear-bookmarks")}>
               Clear bookmarks
             </Button>
             <Button
@@ -380,9 +358,7 @@ export function StudentQuestionNotebookPage() {
         {error ? (
           <LoadError message={error} onRetry={() => setReload((v) => v + 1)} />
         ) : loading ? (
-          <div className="card p-8 text-sm text-content-subtle">
-            Loading questions…
-          </div>
+          <div className="card p-8 text-sm text-content-subtle">Loading questions…</div>
         ) : rows.length === 0 ? (
           <div className="card">
             <EmptyState
@@ -417,7 +393,12 @@ export function StudentQuestionNotebookPage() {
 
       <Modal
         open={sessionModalOpen}
-        onClose={() => { if (!starting) { setSessionModalOpen(false); setActionError(null); } }}
+        onClose={() => {
+          if (!starting) {
+            setSessionModalOpen(false);
+            setActionError(null);
+          }
+        }}
         title="Start a review session"
         description="Choose what to practice and set a time limit for your session."
         size="lg"
@@ -427,7 +408,10 @@ export function StudentQuestionNotebookPage() {
           <>
             <Button
               variant="outline"
-              onClick={() => { setSessionModalOpen(false); setActionError(null); }}
+              onClick={() => {
+                setSessionModalOpen(false);
+                setActionError(null);
+              }}
               disabled={starting}
             >
               Cancel
@@ -554,12 +538,8 @@ function QuestionCard({
           size="sm"
           variant="ghost"
           disabled={busy}
-          aria-label={
-            question.isBookmarked ? "Remove bookmark" : "Bookmark question"
-          }
-          title={
-            question.isBookmarked ? "Remove bookmark" : "Bookmark question"
-          }
+          aria-label={question.isBookmarked ? "Remove bookmark" : "Bookmark question"}
+          title={question.isBookmarked ? "Remove bookmark" : "Bookmark question"}
           onClick={onBookmark}
         >
           <Icon.Star
@@ -589,7 +569,11 @@ function QuestionCard({
             : "Not practiced yet"}
         </p>
         <div className="flex flex-wrap gap-2">
-          <ReportQuestionIssueButton questionId={question.questionId} source="NOTEBOOK" options={question.options ?? []} />
+          <ReportQuestionIssueButton
+            questionId={question.questionId}
+            source="NOTEBOOK"
+            options={question.options ?? []}
+          />
           <Button
             size="sm"
             variant="outline"

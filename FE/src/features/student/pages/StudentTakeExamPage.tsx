@@ -1,24 +1,29 @@
-import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { useLocation, useNavigate, useSearchParams } from 'react-router';
-import { Button } from '@/components/ui/Button';
-import { Badge } from '@/components/ui/Badge';
-import { Modal } from '@/components/ui/Modal';
-import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
-import { Alert } from '@/components/ui/Alert';
-import { Spinner } from '@/components/ui/Spinner';
-import { TimerDisplay } from '@/components/common/TimerDisplay';
-import { QuestionPalette } from '@/components/common/QuestionPalette';
-import { Icon } from '@/assets/icons';
-import { ROUTES, studentExamAttemptsPath, studentExamPath, studentExamResultPath } from '@/app/routes';
-import { getApiErrorMessage } from '@/utils/apiError';
-import { useToast } from '@/components/ui/ToastHost';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useLocation, useNavigate, useSearchParams } from "react-router";
+import { Button } from "@/components/ui/Button";
+import { Badge } from "@/components/ui/Badge";
+import { Modal } from "@/components/ui/Modal";
+import { ConfirmDialog } from "@/components/ui/ConfirmDialog";
+import { Alert } from "@/components/ui/Alert";
+import { Spinner } from "@/components/ui/Spinner";
+import { TimerDisplay } from "@/components/common/TimerDisplay";
+import { QuestionPalette } from "@/components/common/QuestionPalette";
+import { Icon } from "@/assets/icons";
+import {
+  ROUTES,
+  studentExamAttemptsPath,
+  studentExamPath,
+  studentExamResultPath,
+} from "@/app/routes";
+import { getApiErrorMessage } from "@/utils/apiError";
+import { useToast } from "@/components/ui/ToastHost";
 import {
   DRAFT_BATCH_LIMIT,
   RUBRIC_TYPES,
   studentAttemptService,
   type AnswerResponse,
   type AttemptSession,
-} from '@/services/studentAttempt.service';
+} from "@/services/studentAttempt.service";
 import {
   CHECKABLE_TYPES,
   INSTANT_CHECK_TYPES,
@@ -27,17 +32,26 @@ import {
   studentPracticeExamService,
   type AnswerCheck,
   type CheckOutcome,
-} from '@/services/studentPracticeExam.service';
-import { QUESTION_TYPE_LABEL, QuestionAnswerInput, QuestionText, isAnswered } from '../components/QuestionAnswerInput';
-import { PracticeCheck, checkProgress } from '../components/PracticeCheck';
-import { studentCodeExamService, type CodeLanguageInfo, type CodeQuestion } from '@/services/studentCodeExam.service';
-import { CodeQuestionWorkspace, currentCodeAnswer } from '../components/code/CodeQuestionWorkspace';
-import { ModulePracticeRunner } from '../components/ModulePracticeRunner';
-import { ReportQuestionIssueButton } from '../components/ReportQuestionIssueDialog';
-import { GroupPassageSplit } from '../components/GroupPassageSplit';
-import { EssayQuestionPrompt } from '../components/EssayQuestionPrompt';
-import { invalidateCached } from '@/hooks/useCachedQuery';
-import { examDetailCacheKey } from './StudentExamDetailPage';
+} from "@/services/studentPracticeExam.service";
+import {
+  QUESTION_TYPE_LABEL,
+  QuestionAnswerInput,
+  QuestionText,
+  isAnswered,
+} from "../components/QuestionAnswerInput";
+import { PracticeCheck, checkProgress } from "../components/PracticeCheck";
+import {
+  studentCodeExamService,
+  type CodeLanguageInfo,
+  type CodeQuestion,
+} from "@/services/studentCodeExam.service";
+import { CodeQuestionWorkspace, currentCodeAnswer } from "../components/code/CodeQuestionWorkspace";
+import { ModulePracticeRunner } from "../components/ModulePracticeRunner";
+import { ReportQuestionIssueButton } from "../components/ReportQuestionIssueDialog";
+import { GroupPassageSplit } from "../components/GroupPassageSplit";
+import { EssayQuestionPrompt } from "../components/EssayQuestionPrompt";
+import { invalidateCached } from "@/hooks/useCachedQuery";
+import { examDetailCacheKey } from "./StudentExamDetailPage";
 import {
   canChooseTakeMode,
   forgetTakeAs,
@@ -46,7 +60,7 @@ import {
   takeAsOf,
   takeExamBehavior,
   type TakeAs,
-} from '../examModes';
+} from "../examModes";
 
 /** Unsaved answers are pushed to SA-03 this often. */
 const AUTOSAVE_MS = 4000;
@@ -54,7 +68,7 @@ const WARN_SECONDS = 300;
 /** With code written, time-up submits this early so CD-05 still reaches the BE before the deadline. */
 const CODE_SUBMIT_LEAD_SECONDS = 5;
 
-type SaveState = 'saved' | 'dirty' | 'saving' | 'error';
+type SaveState = "saved" | "dirty" | "saving" | "error";
 
 /**
  * Full-screen take-exam screen (mounted outside the dashboard shell).
@@ -109,8 +123,12 @@ function rememberCurrentQuestion(attemptId: number, index: number) {
 
 export function StudentTakeExamPage() {
   const [searchParams] = useSearchParams();
-  const practiceSessionId = searchParams.get('practiceSessionId');
-  return practiceSessionId ? <ModulePracticeRunner sessionId={practiceSessionId} /> : <ExamAttemptScreen />;
+  const practiceSessionId = searchParams.get("practiceSessionId");
+  return practiceSessionId ? (
+    <ModulePracticeRunner sessionId={practiceSessionId} />
+  ) : (
+    <ExamAttemptScreen />
+  );
 }
 
 function ExamAttemptScreen() {
@@ -121,17 +139,17 @@ function ExamAttemptScreen() {
   /** Set when the attempt was opened from a contest page. */
   const contestId = (location.state as { contestId?: number } | null)?.contestId ?? null;
   const toast = useToast();
-  const examIdParam = searchParams.get('examId');
-  const attemptIdParam = searchParams.get('attemptId');
-  const takeAsParam = searchParams.get('as');
+  const examIdParam = searchParams.get("examId");
+  const attemptIdParam = searchParams.get("attemptId");
+  const takeAsParam = searchParams.get("as");
 
   const [session, setSession] = useState<AttemptSession | null>(null);
   /** Self-made exam: how the student chose to take it (`?as=`, then kept per attempt). */
   const [takeAs, setTakeAs] = useState<TakeAs | null>(null);
-  const isContest = contestId != null || session?.examMode === 'CONTEST';
+  const isContest = contestId != null || session?.examMode === "CONTEST";
   /** From the exam's mode in the DB (and the Exam / Practice choice): timer, instant check and where leaving leads. */
-  const behavior = takeExamBehavior(isContest ? 'CONTEST' : session?.examMode, takeAs);
-  const practice = behavior.kind === 'PRACTICE';
+  const behavior = takeExamBehavior(isContest ? "CONTEST" : session?.examMode, takeAs);
+  const practice = behavior.kind === "PRACTICE";
   const instantCheck = behavior.instantCheck;
   const [loadError, setLoadError] = useState<string | null>(null);
   const [reload, setReload] = useState(0);
@@ -139,16 +157,18 @@ function ExamAttemptScreen() {
   const [answers, setAnswers] = useState<Record<number, AnswerResponse | null>>({});
   const [current, setCurrent] = useState(0);
   const [flagged, setFlagged] = useState<Set<number>>(() => new Set());
-  const [saveState, setSaveState] = useState<SaveState>('saved');
+  const [saveState, setSaveState] = useState<SaveState>("saved");
   const [remaining, setRemaining] = useState<number | null>(null);
 
-  const [confirm, setConfirm] = useState<'submit' | 'cancel' | null>(null);
-  const [busy, setBusy] = useState<'submit' | 'save' | 'cancel' | null>(null);
+  const [confirm, setConfirm] = useState<"submit" | "cancel" | null>(null);
+  const [busy, setBusy] = useState<"submit" | "save" | "cancel" | null>(null);
   /** CD-05 is running: the sandbox judges every test case, which can take a while. */
   const [grading, setGrading] = useState(false);
   const [actionError, setActionError] = useState<string | null>(null);
   /** Answers the last autosave batch had refused (SA-03 `rejected`): shown, kept dirty, retried. */
-  const [saveRejections, setSaveRejections] = useState<{ questionId: number; reason: string; detail: string }[]>([]);
+  const [saveRejections, setSaveRejections] = useState<
+    { questionId: number; reason: string; detail: string }[]
+  >([]);
   const [checks, setChecks] = useState<Record<number, AnswerCheck>>({});
   const [checking, setChecking] = useState<number | null>(null);
   /** Question just checked: its "Next question" button takes the focus. */
@@ -163,8 +183,8 @@ function ExamAttemptScreen() {
   const keyHandlerRef = useRef<((e: KeyboardEvent) => void) | null>(null);
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => keyHandlerRef.current?.(e);
-    window.addEventListener('keydown', onKey);
-    return () => window.removeEventListener('keydown', onKey);
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
   }, []);
 
   // Draft bookkeeping lives in refs: the autosave timer must see the latest values.
@@ -182,16 +202,18 @@ function ExamAttemptScreen() {
   useEffect(() => {
     if (session && String(session.attemptId) === attemptIdParam) return;
     if (!attemptIdParam && !examIdParam) {
-      setLoadError('No exam was selected.');
+      setLoadError("No exam was selected.");
       return;
     }
     let cancelled = false;
     setLoadError(null);
-    const load = attemptIdParam ? studentAttemptService.get(attemptIdParam) : studentAttemptService.start(examIdParam!);
+    const load = attemptIdParam
+      ? studentAttemptService.get(attemptIdParam)
+      : studentAttemptService.start(examIdParam!);
     load
-      .then(s => {
+      .then((s) => {
         if (cancelled) return;
-        if (s.status !== 'IN_PROGRESS') {
+        if (s.status !== "IN_PROGRESS") {
           navigate(studentExamResultPath(s.attemptId, s.examId), { replace: true });
           return;
         }
@@ -204,10 +226,14 @@ function ExamAttemptScreen() {
         seqRef.current = seqs;
         dirtyRef.current = new Set();
         setAnswers(initial);
-        setSession({ ...s, deadlineAt: contestEndsAt ?? s.deadlineAt, questions: [...s.questions].sort((a, b) => a.orderIndex - b.orderIndex) });
+        setSession({
+          ...s,
+          deadlineAt: contestEndsAt ?? s.deadlineAt,
+          questions: [...s.questions].sort((a, b) => a.orderIndex - b.orderIndex),
+        });
         // A reload reopens the question the student was on (remembered per attempt in this tab).
         setCurrent(Math.min(readCurrentQuestion(s.attemptId), Math.max(0, s.questions.length - 1)));
-        setSaveState('saved');
+        setSaveState("saved");
         const chosen = canChooseTakeMode(s.examMode)
           ? (parseTakeAs(s.takeAs) ?? takeAsOf(s.attemptId) ?? parseTakeAs(takeAsParam))
           : null;
@@ -216,8 +242,8 @@ function ExamAttemptScreen() {
         setChecks(takeExamBehavior(s.examMode, chosen).instantCheck ? restoreChecks(s) : {});
         if (!attemptIdParam) setSearchParams({ attemptId: String(s.attemptId) }, { replace: true });
       })
-      .catch(err => {
-        if (!cancelled) setLoadError(getApiErrorMessage(err, 'Failed to open the exam.'));
+      .catch((err) => {
+        if (!cancelled) setLoadError(getApiErrorMessage(err, "Failed to open the exam."));
       });
     return () => {
       cancelled = true;
@@ -236,16 +262,20 @@ function ExamAttemptScreen() {
   useEffect(() => {
     if (sessionExamId != null) invalidateCached(examDetailCacheKey(sessionExamId));
   }, [sessionExamId]);
-  const hasCode = Boolean(session?.questions.some(q => q.questionType === 'CODE'));
+  const hasCode = Boolean(session?.questions.some((q) => q.questionType === "CODE"));
   useEffect(() => {
     if (sessionExamId == null || !hasCode) return;
     let cancelled = false;
     setCodeMetaLoading(true);
-    Promise.allSettled([studentCodeExamService.getQuestions(sessionExamId), studentCodeExamService.getLanguages()])
+    Promise.allSettled([
+      studentCodeExamService.getQuestions(sessionExamId),
+      studentCodeExamService.getLanguages(),
+    ])
       .then(([qs, langs]) => {
         if (cancelled) return;
-        if (qs.status === 'fulfilled') setCodeMeta(new Map((qs.value?.questions ?? []).map(c => [c.questionId, c])));
-        if (langs.status === 'fulfilled') setCodeLanguages(langs.value);
+        if (qs.status === "fulfilled")
+          setCodeMeta(new Map((qs.value?.questions ?? []).map((c) => [c.questionId, c])));
+        if (langs.status === "fulfilled") setCodeLanguages(langs.value);
       })
       .finally(() => {
         if (!cancelled) setCodeMetaLoading(false);
@@ -266,22 +296,24 @@ function ExamAttemptScreen() {
     }
     const ids = [...dirtyRef.current];
     if (ids.length === 0) {
-      setSaveState('saved');
+      setSaveState("saved");
       return;
     }
-    const entries = ids.map(questionId => ({
+    const entries = ids.map((questionId) => ({
       questionId,
       seq: seqRef.current[questionId] ?? 0,
       response: answersRef.current[questionId] ?? null,
     }));
-    setSaveState('saving');
+    setSaveState("saving");
     const run = (async () => {
       try {
         for (let i = 0; i < entries.length; i += DRAFT_BATCH_LIMIT) {
           const chunk = entries.slice(i, i + DRAFT_BATCH_LIMIT);
           const res = await studentAttemptService.saveDrafts(session.attemptId, chunk);
-          const saved = new Set(res.saved.map(s => s.questionId));
-          const lockedRejected = new Set(res.rejected.filter(r => r.reason === 'LOCKED').map(r => r.questionId));
+          const saved = new Set(res.saved.map((s) => s.questionId));
+          const lockedRejected = new Set(
+            res.rejected.filter((r) => r.reason === "LOCKED").map((r) => r.questionId),
+          );
           for (const e of chunk) {
             // Edited again while saving → stays dirty with its newer seq.
             if (lockedRejected.has(e.questionId)) {
@@ -290,17 +322,19 @@ function ExamAttemptScreen() {
               dirtyRef.current.delete(e.questionId);
             }
           }
-          const actionableRejections = res.rejected.filter(r => r.reason !== 'LOCKED');
+          const actionableRejections = res.rejected.filter((r) => r.reason !== "LOCKED");
           // A rejected answer was NOT saved: unlike before, it is not treated as done. It stays
           // dirty (the next autosave or flush retries it) and the student is told about it.
-          setSaveRejections(prev => [
-            ...prev.filter(rejection => !chunk.some(entry => entry.questionId === rejection.questionId)),
+          setSaveRejections((prev) => [
+            ...prev.filter(
+              (rejection) => !chunk.some((entry) => entry.questionId === rejection.questionId),
+            ),
             ...actionableRejections,
           ]);
         }
-        setSaveState(dirtyRef.current.size > 0 ? 'dirty' : 'saved');
+        setSaveState(dirtyRef.current.size > 0 ? "dirty" : "saved");
       } catch (err) {
-        setSaveState('error');
+        setSaveState("error");
         throw err;
       }
     })();
@@ -320,8 +354,8 @@ function ExamAttemptScreen() {
     dirtyRef.current.add(questionId);
     // Updated now, not on the next render: a practice check flushes right after.
     answersRef.current = { ...answersRef.current, [questionId]: response };
-    setAnswers(prev => ({ ...prev, [questionId]: response }));
-    setSaveState('dirty');
+    setAnswers((prev) => ({ ...prev, [questionId]: response }));
+    setSaveState("dirty");
   };
 
   useEffect(() => {
@@ -337,8 +371,8 @@ function ExamAttemptScreen() {
     const onBeforeUnload = (e: BeforeUnloadEvent) => {
       if (dirtyRef.current.size > 0 && !finishedRef.current) e.preventDefault();
     };
-    window.addEventListener('beforeunload', onBeforeUnload);
-    return () => window.removeEventListener('beforeunload', onBeforeUnload);
+    window.addEventListener("beforeunload", onBeforeUnload);
+    return () => window.removeEventListener("beforeunload", onBeforeUnload);
   }, []);
 
   /* ── Submit / cancel ──────────────────────────────────────────────────── */
@@ -346,28 +380,36 @@ function ExamAttemptScreen() {
     async (auto = false, skipCode = false) => {
       if (!session || finishedRef.current || submittingRef.current) return;
       submittingRef.current = true;
-      setBusy('submit');
+      setBusy("submit");
       setActionError(null);
       try {
         // A failed flush on auto-submit must not block it: the BE keeps the last stored drafts.
-        await flush().catch(err => {
+        await flush().catch((err) => {
           if (!auto) throw err;
         });
         // CODE answers are graded on the test cases (CD-05) before the attempt is closed.
         const written = skipCode
           ? []
           : session.questions
-              .filter(q => q.questionType === 'CODE')
-              .map(q => currentCodeAnswer(q.questionId, codeMeta.get(q.questionId) ?? null, answersRef.current[q.questionId]))
-              .filter(a => a != null);
+              .filter((q) => q.questionType === "CODE")
+              .map((q) =>
+                currentCodeAnswer(
+                  q.questionId,
+                  codeMeta.get(q.questionId) ?? null,
+                  answersRef.current[q.questionId],
+                ),
+              )
+              .filter((a) => a != null);
         // Code whose language is not known is never graded in a guessed one.
-        if (!auto && written.some(a => a.language === '')) {
+        if (!auto && written.some((a) => a.language === "")) {
           setCodeGradeFailed(true);
-          setActionError('The language of a code question could not be loaded, so your code was not graded. Reload the page and try again.');
+          setActionError(
+            "The language of a code question could not be loaded, so your code was not graded. Reload the page and try again.",
+          );
           setBusy(null);
           return;
         }
-        const codeAnswers = written.filter(a => a.language !== '');
+        const codeAnswers = written.filter((a) => a.language !== "");
         if (codeAnswers.length > 0) {
           setGrading(true);
           try {
@@ -376,7 +418,7 @@ function ExamAttemptScreen() {
             // Time is up: never hold the attempt back for grading.
             if (!auto) {
               setCodeGradeFailed(true);
-              setActionError(getApiErrorMessage(err, 'Your code could not be graded.'));
+              setActionError(getApiErrorMessage(err, "Your code could not be graded."));
               setBusy(null);
               return;
             }
@@ -388,12 +430,22 @@ function ExamAttemptScreen() {
         finishedRef.current = true;
         clearChecks(session.attemptId);
         forgetTakeAs(session.attemptId);
-        if (contestId != null || session.examMode === 'CONTEST') {
-          toast.info('You can take this contest again, but your result will not change.', { title: 'Contest submitted', duration: 10_000 });
+        if (contestId != null || session.examMode === "CONTEST") {
+          toast.info("You can take this contest again, but your result will not change.", {
+            title: "Contest submitted",
+            duration: 10_000,
+          });
         }
         navigate(studentExamResultPath(session.attemptId, session.examId), { replace: true });
       } catch (err) {
-        setActionError(getApiErrorMessage(err, instantCheck ? 'Failed to finish. Please try again.' : 'Failed to submit. Please try again.'));
+        setActionError(
+          getApiErrorMessage(
+            err,
+            instantCheck
+              ? "Failed to finish. Please try again."
+              : "Failed to submit. Please try again.",
+          ),
+        );
         setBusy(null);
       } finally {
         submittingRef.current = false;
@@ -407,7 +459,7 @@ function ExamAttemptScreen() {
    * PRACTICE kind (practice exam, material quiz) has none, so its Attempts screen — which offers Continue — instead.
    */
   const timed = behavior.timed;
-  const historyPath = `${ROUTES.studentExams}${behavior.historyType ? `?type=${behavior.historyType}` : ''}`;
+  const historyPath = `${ROUTES.studentExams}${behavior.historyType ? `?type=${behavior.historyType}` : ""}`;
   const exitPath = (examId: number) =>
     isContest
       ? contestId != null
@@ -420,7 +472,7 @@ function ExamAttemptScreen() {
   const exitAfterDiscard = async (examId: number) => {
     if (!practice) return exitPath(examId);
     const left = await studentAttemptService.getAllHistory(examId).catch(() => []);
-    return left.some(a => a.status !== 'IN_PROGRESS') ? exitPath(examId) : historyPath;
+    return left.some((a) => a.status !== "IN_PROGRESS") ? exitPath(examId) : historyPath;
   };
 
   /**
@@ -430,14 +482,14 @@ function ExamAttemptScreen() {
    */
   const saveAndExit = async () => {
     if (!session) return;
-    setBusy('save');
+    setBusy("save");
     setActionError(null);
     try {
       await flush();
       finishedRef.current = true;
       navigate(exitPath(session.examId), { replace: true });
     } catch (err) {
-      setActionError(getApiErrorMessage(err, 'Failed to save your answers. Please try again.'));
+      setActionError(getApiErrorMessage(err, "Failed to save your answers. Please try again."));
       setBusy(null);
     }
   };
@@ -445,7 +497,7 @@ function ExamAttemptScreen() {
   /** Cancel → "Discard": the attempt and its drafts are deleted (SA-07). */
   const cancelAttempt = async () => {
     if (!session) return;
-    setBusy('cancel');
+    setBusy("cancel");
     setActionError(null);
     // Stop autosave and the leave prompt first: the drafts are being thrown away.
     finishedRef.current = true;
@@ -456,7 +508,7 @@ function ExamAttemptScreen() {
       navigate(await exitAfterDiscard(session.examId), { replace: true });
     } catch (err) {
       finishedRef.current = false;
-      setActionError(getApiErrorMessage(err, 'Failed to cancel this attempt. Please try again.'));
+      setActionError(getApiErrorMessage(err, "Failed to cancel this attempt. Please try again."));
       setBusy(null);
     }
   };
@@ -478,7 +530,7 @@ function ExamAttemptScreen() {
       const left = Math.max(0, Math.round((deadline - (Date.now() + offset)) / 1000));
       setRemaining(left);
       const codeWritten = session.questions.some(
-        q => q.questionType === 'CODE' && Boolean(answersRef.current[q.questionId]?.text?.trim()),
+        (q) => q.questionType === "CODE" && Boolean(answersRef.current[q.questionId]?.text?.trim()),
       );
       if (left === 0 || (codeWritten && left <= CODE_SUBMIT_LEAD_SECONDS)) submitRef.current(true);
     };
@@ -489,8 +541,8 @@ function ExamAttemptScreen() {
 
   /* ── Derived ──────────────────────────────────────────────────────────── */
   const questions = session?.questions ?? [];
-  const isEssay = questions.length > 0 && questions.every(q => RUBRIC_TYPES.has(q.questionType));
-  const isCodeExam = questions.length > 0 && questions.every(q => q.questionType === 'CODE');
+  const isEssay = questions.length > 0 && questions.every((q) => RUBRIC_TYPES.has(q.questionType));
+  const isCodeExam = questions.length > 0 && questions.every((q) => q.questionType === "CODE");
   const answeredSet = useMemo(() => {
     const s = new Set<number>();
     questions.forEach((q, i) => {
@@ -510,11 +562,15 @@ function ExamAttemptScreen() {
   }, [questions, checks, answers]);
 
   const examPages = useMemo(() => {
-    type ExamSessionQuestion = AttemptSession['questions'][number];
-    type PageItem = { question: ExamSessionQuestion; questionIndex: number; questionNumber: number };
+    type ExamSessionQuestion = AttemptSession["questions"][number];
+    type PageItem = {
+      question: ExamSessionQuestion;
+      questionIndex: number;
+      questionNumber: number;
+    };
     type Page = {
       key: string;
-      group: ExamSessionQuestion['group'];
+      group: ExamSessionQuestion["group"];
       isGroup: boolean;
       items: PageItem[];
     };
@@ -540,8 +596,8 @@ function ExamAttemptScreen() {
   const scrollToQuestionElement = useCallback((questionId: number, smooth = true) => {
     requestAnimationFrame(() => {
       document.getElementById(`exam-q-${questionId}`)?.scrollIntoView({
-        behavior: smooth ? 'smooth' : 'auto',
-        block: 'start',
+        behavior: smooth ? "smooth" : "auto",
+        block: "start",
       });
     });
   }, []);
@@ -566,7 +622,10 @@ function ExamAttemptScreen() {
             Go back
           </Button>
           {(attemptIdParam || examIdParam) && (
-            <Button icon={<Icon.RefreshCw className="w-4 h-4" />} onClick={() => setReload(r => r + 1)}>
+            <Button
+              icon={<Icon.RefreshCw className="w-4 h-4" />}
+              onClick={() => setReload((r) => r + 1)}
+            >
               Retry
             </Button>
           )}
@@ -598,7 +657,7 @@ function ExamAttemptScreen() {
   const q = questions[current];
   const currentPageIndex = Math.max(
     0,
-    examPages.findIndex(p => p.items.some(it => it.questionIndex === current)),
+    examPages.findIndex((p) => p.items.some((it) => it.questionIndex === current)),
   );
   const currentPage = examPages[currentPageIndex] ?? {
     key: `q-${q.questionId}`,
@@ -607,16 +666,16 @@ function ExamAttemptScreen() {
     items: [{ question: q, questionIndex: current, questionNumber: current + 1 }],
   };
   const isMultiGroupPage = currentPage.items.length > 1;
-  const pageNumberSet = new Set(currentPage.items.map(it => it.questionNumber));
+  const pageNumberSet = new Set(currentPage.items.map((it) => it.questionNumber));
   const isFirstPage = currentPageIndex === 0;
   const isLastPage = currentPageIndex === examPages.length - 1;
-  const pageHasCode = currentPage.items.some(it => it.question.questionType === 'CODE');
-  const pageHasEssay = currentPage.items.some(it => RUBRIC_TYPES.has(it.question.questionType));
+  const pageHasCode = currentPage.items.some((it) => it.question.questionType === "CODE");
+  const pageHasEssay = currentPage.items.some((it) => RUBRIC_TYPES.has(it.question.questionType));
   /** A written standalone essay: question on top, the answer box filling the rest of the column (md+). */
-  const fillEssay = !isMultiGroupPage && isEssay && q?.questionType === 'ESSAY';
+  const fillEssay = !isMultiGroupPage && isEssay && q?.questionType === "ESSAY";
   const isFlagged = flagged.has(current + 1);
   const toggleFlagNumber = (questionNumber: number) =>
-    setFlagged(prev => {
+    setFlagged((prev) => {
       const next = new Set(prev);
       if (next.has(questionNumber)) next.delete(questionNumber);
       else next.add(questionNumber);
@@ -627,25 +686,25 @@ function ExamAttemptScreen() {
   const checkable = instantCheck && CHECKABLE_TYPES.has(q.questionType);
   const progress = checkProgress(q, answers[q.questionId]);
   const isLast = current === questions.length - 1;
-  const isCode = !isMultiGroupPage && q.questionType === 'CODE';
+  const isCode = !isMultiGroupPage && q.questionType === "CODE";
   const goPrevPage = () => {
     if (isFirstPage) return;
     goTo(examPages[currentPageIndex - 1].items[0].questionIndex);
   };
   const goNextPage = () => {
     if (isLastPage) {
-      setConfirm('submit');
+      setConfirm("submit");
     } else {
       goTo(examPages[currentPageIndex + 1].items[0].questionIndex);
     }
   };
 
-  const checkAnswerFor = async (targetQ: AttemptSession['questions'][number]) => {
+  const checkAnswerFor = async (targetQ: AttemptSession["questions"][number]) => {
     if (checking != null || checks[targetQ.questionId]) return;
     const questionId = targetQ.questionId;
     const response = answersRef.current[questionId] ?? null;
     const store = (res: AnswerCheck) =>
-      setChecks(prev => {
+      setChecks((prev) => {
         const next = { ...prev, [questionId]: res };
         saveChecks(session.attemptId, next);
         return next;
@@ -660,24 +719,36 @@ function ExamAttemptScreen() {
     setActionError(null);
     try {
       // checkAnswer itself persists and locks the answer on the server, so mark it clean once checked (avoids racing with saveDrafts -> REASON_LOCKED).
-      const res = await studentPracticeExamService.checkAnswer(session.attemptId, targetQ, response);
+      const res = await studentPracticeExamService.checkAnswer(
+        session.attemptId,
+        targetQ,
+        response,
+      );
       dirtyRef.current.delete(questionId);
-      setSaveRejections(prev => prev.filter(r => r.questionId !== questionId));
-      setSaveState(dirtyRef.current.size > 0 ? 'dirty' : 'saved');
+      setSaveRejections((prev) => prev.filter((r) => r.questionId !== questionId));
+      setSaveState(dirtyRef.current.size > 0 ? "dirty" : "saved");
       store(res);
       if (!local) setJustChecked(questionId);
     } catch (err) {
-      setActionError(getApiErrorMessage(err, 'Could not check this answer.'));
+      setActionError(getApiErrorMessage(err, "Could not check this answer."));
     } finally {
       setChecking(null);
     }
   };
 
   /** Practice single choice / true-false: picking an option is the answer, check it at once. */
-  const changeAnswerFor = (targetQ: AttemptSession['questions'][number], targetIndex: number, response: AnswerResponse) => {
+  const changeAnswerFor = (
+    targetQ: AttemptSession["questions"][number],
+    targetIndex: number,
+    response: AnswerResponse,
+  ) => {
     setCurrent(targetIndex);
     setAnswer(targetQ.questionId, response);
-    if (instantCheck && !checks[targetQ.questionId] && INSTANT_CHECK_TYPES.has(targetQ.questionType)) {
+    if (
+      instantCheck &&
+      !checks[targetQ.questionId] &&
+      INSTANT_CHECK_TYPES.has(targetQ.questionType)
+    ) {
       void checkAnswerFor(targetQ);
     }
   };
@@ -685,29 +756,35 @@ function ExamAttemptScreen() {
   const checkAnswer = () => checkAnswerFor(q);
   const changeAnswer = (response: AnswerResponse) => changeAnswerFor(q, current, response);
 
-  keyHandlerRef.current = e => {
-    if (!instantCheck || confirm || e.defaultPrevented || e.ctrlKey || e.metaKey || e.altKey) return;
+  keyHandlerRef.current = (e) => {
+    if (!instantCheck || confirm || e.defaultPrevented || e.ctrlKey || e.metaKey || e.altKey)
+      return;
     const target = e.target as HTMLElement | null;
-    if (target?.closest('input, textarea, select, [contenteditable="true"], [role="dialog"]')) return;
-    if (e.key === 'Enter') {
+    if (target?.closest('input, textarea, select, [contenteditable="true"], [role="dialog"]'))
+      return;
+    if (e.key === "Enter") {
       // A focused button already reacts to Enter by itself.
-      if (target?.closest('button, a')) return;
+      if (target?.closest("button, a")) return;
       // Last question: Enter does not finish — that is the header button's job.
       if (check) {
         if (isLast) return;
         if (current < questions.length - 1) goTo(current + 1);
-      }
-      else if (checkable && progress.ready) void checkAnswer();
+      } else if (checkable && progress.ready) void checkAnswer();
       else return;
       e.preventDefault();
       return;
     }
     if (check || !CHOICE_TYPES.has(q.questionType) || e.key.length !== 1) return;
-    const index = /[1-9]/.test(e.key) ? Number(e.key) - 1 : /[a-z]/i.test(e.key) ? e.key.toLowerCase().charCodeAt(0) - 97 : -1;
+    const index = /[1-9]/.test(e.key)
+      ? Number(e.key) - 1
+      : /[a-z]/i.test(e.key)
+        ? e.key.toLowerCase().charCodeAt(0) - 97
+        : -1;
     const option = q.options?.[index];
     if (!option) return;
     e.preventDefault();
-    if (q.questionType !== 'MULTIPLE_CHOICE') return changeAnswer({ selectedOptionIds: [option.optionId] });
+    if (q.questionType !== "MULTIPLE_CHOICE")
+      return changeAnswer({ selectedOptionIds: [option.optionId] });
     const picked = new Set(answers[q.questionId]?.selectedOptionIds ?? []);
     if (picked.has(option.optionId)) picked.delete(option.optionId);
     else picked.add(option.optionId);
@@ -721,29 +798,31 @@ function ExamAttemptScreen() {
           <Icon.Logo className="w-7 h-7 flex-shrink-0 text-brand-ink" aria-hidden="true" />
           <span className="text-base font-bold text-content truncate">{session.title}</span>
           <span className="hidden sm:inline-flex flex-shrink-0 rounded-[6px] border border-line px-2 py-0.5 text-2xs font-medium text-content-soft">
-            {isCodeExam ? 'Code' : isEssay ? 'Essay' : 'Quiz'}
+            {isCodeExam ? "Code" : isEssay ? "Essay" : "Quiz"}
           </span>
           {/* A self-made exam taken as an exam says so; a course exam needs no badge. */}
           {practice && (
-            <Badge variant={instantCheck ? 'info' : 'warning'} size="sm">
-              {instantCheck ? 'Practice' : 'Exam'}
+            <Badge variant={instantCheck ? "info" : "warning"} size="sm">
+              {instantCheck ? "Practice" : "Exam"}
             </Badge>
           )}
         </div>
         <div className="flex items-center gap-3 flex-wrap">
-          {grading && confirm !== 'submit' && (
+          {grading && confirm !== "submit" && (
             <span role="status" className="text-xs text-content-soft">
               Grading your code…
             </span>
           )}
           <SaveIndicator state={saveState} />
-          {remaining != null && <TimerDisplay seconds={remaining} warning={remaining < WARN_SECONDS} />}
+          {remaining != null && (
+            <TimerDisplay seconds={remaining} warning={remaining < WARN_SECONDS} />
+          )}
           <Button
             size="sm"
             variant="outline"
             disabled={busy != null}
-            loading={busy === 'cancel' || busy === 'save'}
-            onClick={() => setConfirm('cancel')}
+            loading={busy === "cancel" || busy === "save"}
+            onClick={() => setConfirm("cancel")}
           >
             Cancel
           </Button>
@@ -753,16 +832,21 @@ function ExamAttemptScreen() {
           <Button
             size="sm"
             disabled={busy != null}
-            loading={busy === 'submit'}
-            onClick={() => (instantCheck ? void submit(false, codeGradeFailed) : setConfirm('submit'))}
+            loading={busy === "submit"}
+            onClick={() =>
+              instantCheck ? void submit(false, codeGradeFailed) : setConfirm("submit")
+            }
           >
-            {instantCheck ? (codeGradeFailed ? 'Finish anyway' : 'Finish') : 'Submit'}
+            {instantCheck ? (codeGradeFailed ? "Finish anyway" : "Finish") : "Submit"}
           </Button>
         </div>
       </header>
 
       {actionError && !confirm && (
-        <div role="alert" className="bg-danger-light text-danger text-sm px-6 py-2 flex items-center gap-2">
+        <div
+          role="alert"
+          className="bg-danger-light text-danger text-sm px-6 py-2 flex items-center gap-2"
+        >
           <Icon.AlertCircle className="w-4 h-4 flex-shrink-0" /> {actionError}
         </div>
       )}
@@ -770,16 +854,21 @@ function ExamAttemptScreen() {
       {/* Rejected drafts: the server refused these answers, so they are neither saved nor dropped
           silently. Each one keeps retrying on the next autosave until it is accepted or replaced. */}
       {saveRejections.length > 0 && (
-        <div role="alert" className="bg-warning-light text-warning-strong text-sm px-6 py-2 flex flex-wrap items-center gap-x-2 gap-y-1">
+        <div
+          role="alert"
+          className="bg-warning-light text-warning-strong text-sm px-6 py-2 flex flex-wrap items-center gap-x-2 gap-y-1"
+        >
           <Icon.AlertCircle className="w-4 h-4 flex-shrink-0" />
           <span>
-            Not saved:{' '}
+            Not saved:{" "}
             {saveRejections
-              .map(rejection => {
-                const index = questions.findIndex(question => question.questionId === rejection.questionId);
+              .map((rejection) => {
+                const index = questions.findIndex(
+                  (question) => question.questionId === rejection.questionId,
+                );
                 return `Question ${index >= 0 ? index + 1 : rejection.questionId} (${rejection.detail})`;
               })
-              .join('; ')}
+              .join("; ")}
             . Retrying automatically — edit the answer or keep this tab open until it saves.
           </span>
         </div>
@@ -790,18 +879,24 @@ function ExamAttemptScreen() {
         {/* A question of a group: its passage in a column of its own (left), the question on the right. */}
         <GroupPassageSplit
           group={pageHasCode && !isMultiGroupPage ? null : currentPage.group}
-          mainClassName={isCode ? 'p-[clamp(0.75rem,1.5vw,1.25rem)]' : (isEssay || pageHasEssay) ? 'p-[30px]' : 'p-[clamp(1rem,2.5vw,1.5rem)]'}
+          mainClassName={
+            isCode
+              ? "p-[clamp(0.75rem,1.5vw,1.25rem)]"
+              : isEssay || pageHasEssay
+                ? "p-[30px]"
+                : "p-[clamp(1rem,2.5vw,1.5rem)]"
+          }
         >
           {/* CODE: the workspace fills the height between the question header and the nav buttons. */}
           <div
             className={
               isCode
-                ? 'w-full space-y-3 md:h-full md:flex md:flex-col'
+                ? "w-full space-y-3 md:h-full md:flex md:flex-col"
                 : fillEssay
-                  ? 'w-full flex flex-col gap-3 md:h-full'
-                  : (isEssay || pageHasEssay)
-                    ? 'w-full space-y-5'
-                    : 'max-w-3xl mx-auto space-y-5'
+                  ? "w-full flex flex-col gap-3 md:h-full"
+                  : isEssay || pageHasEssay
+                    ? "w-full space-y-5"
+                    : "max-w-3xl mx-auto space-y-5"
             }
           >
             {isMultiGroupPage && (
@@ -809,7 +904,9 @@ function ExamAttemptScreen() {
                 <div className="flex flex-wrap items-center gap-2">
                   <Badge variant="purple">Passage Group</Badge>
                   <span className="text-sm font-semibold text-content">
-                    Questions {currentPage.items[0].questionNumber}–{currentPage.items[currentPage.items.length - 1].questionNumber} of {questions.length}
+                    Questions {currentPage.items[0].questionNumber}–
+                    {currentPage.items[currentPage.items.length - 1].questionNumber} of{" "}
+                    {questions.length}
                   </span>
                 </div>
                 <span className="text-xs text-content-subtle">
@@ -818,30 +915,32 @@ function ExamAttemptScreen() {
               </div>
             )}
 
-            {currentPage.items.map(item => {
+            {currentPage.items.map((item) => {
               const itemQ = item.question;
               const itemCheck = checks[itemQ.questionId];
               const itemCheckable = instantCheck && CHECKABLE_TYPES.has(itemQ.questionType);
               const itemProgress = checkProgress(itemQ, answers[itemQ.questionId]);
               const itemIsFlagged = flagged.has(item.questionNumber);
-              const itemIsCode = itemQ.questionType === 'CODE';
+              const itemIsCode = itemQ.questionType === "CODE";
               const itemUseFill = fillEssay && !isMultiGroupPage;
 
               return (
                 <div
                   key={itemQ.questionId}
                   id={`exam-q-${itemQ.questionId}`}
-                  onFocusCapture={() => { if (current !== item.questionIndex) setCurrent(item.questionIndex); }}
+                  onFocusCapture={() => {
+                    if (current !== item.questionIndex) setCurrent(item.questionIndex);
+                  }}
                   className={
                     isMultiGroupPage
                       ? `rounded-[12px] border p-4 md:p-5 space-y-4 bg-surface transition-colors ${
-                          current === item.questionIndex ? 'border-brand-line' : 'border-line'
+                          current === item.questionIndex ? "border-brand-line" : "border-line"
                         }`
                       : itemIsCode
-                        ? 'space-y-3 md:min-h-0 md:flex-1 md:flex md:flex-col'
+                        ? "space-y-3 md:min-h-0 md:flex-1 md:flex md:flex-col"
                         : itemUseFill
-                          ? 'flex flex-col gap-3 md:flex-1 md:min-h-0'
-                          : 'space-y-5'
+                          ? "flex flex-col gap-3 md:flex-1 md:min-h-0"
+                          : "space-y-5"
                   }
                 >
                   {/* Question header: number, type, points, per-question flag (in group) & report issue */}
@@ -849,8 +948,14 @@ function ExamAttemptScreen() {
                     <h2 className="text-sm font-semibold text-content uppercase tracking-wide">
                       Question {item.questionNumber}
                     </h2>
-                    <Badge variant="info">{QUESTION_TYPE_LABEL[itemQ.questionType] ?? itemQ.questionType}</Badge>
-                    {itemQ.maxPoints != null && <span className="text-xs text-content-subtle">{Number(itemQ.maxPoints)} pts</span>}
+                    <Badge variant="info">
+                      {QUESTION_TYPE_LABEL[itemQ.questionType] ?? itemQ.questionType}
+                    </Badge>
+                    {itemQ.maxPoints != null && (
+                      <span className="text-xs text-content-subtle">
+                        {Number(itemQ.maxPoints)} pts
+                      </span>
+                    )}
                     {!isMultiGroupPage && (
                       <span className="text-xs text-content-subtle">
                         {item.questionNumber} / {questions.length}
@@ -864,27 +969,39 @@ function ExamAttemptScreen() {
                           onClick={() => toggleFlagNumber(item.questionNumber)}
                           className={`inline-flex items-center gap-1 px-2 py-1 rounded-[6px] border text-xs font-medium transition-colors cursor-pointer ${
                             itemIsFlagged
-                              ? 'border-warning-line bg-warning-light text-warning-strong'
-                              : 'border-line bg-surface text-content-subtle hover:bg-accent hover:text-content'
+                              ? "border-warning-line bg-warning-light text-warning-strong"
+                              : "border-line bg-surface text-content-subtle hover:bg-accent hover:text-content"
                           }`}
                         >
-                          <Icon.Flag className={`w-3.5 h-3.5 ${itemIsFlagged ? 'text-warning' : ''}`} />
-                          {itemIsFlagged ? 'Flagged' : 'Flag'}
+                          <Icon.Flag
+                            className={`w-3.5 h-3.5 ${itemIsFlagged ? "text-warning" : ""}`}
+                          />
+                          {itemIsFlagged ? "Flagged" : "Flag"}
                         </button>
                       )}
-                      <ReportQuestionIssueButton questionId={itemQ.questionId} attemptId={session.attemptId} options={itemQ.options ?? []} />
+                      <ReportQuestionIssueButton
+                        questionId={itemQ.questionId}
+                        attemptId={session.attemptId}
+                        options={itemQ.options ?? []}
+                      />
                     </div>
                   </div>
 
                   {itemIsCode ? (
-                    <div className={isMultiGroupPage ? 'h-[540px] flex flex-col' : 'min-h-[480px] md:min-h-0 md:flex-1 md:flex md:flex-col'}>
+                    <div
+                      className={
+                        isMultiGroupPage
+                          ? "h-[540px] flex flex-col"
+                          : "min-h-[480px] md:min-h-0 md:flex-1 md:flex md:flex-col"
+                      }
+                    >
                       <CodeQuestionWorkspace
                         key={itemQ.questionId}
                         question={itemQ}
                         meta={codeMeta.get(itemQ.questionId) ?? null}
                         languages={codeLanguages}
                         value={answers[itemQ.questionId] ?? null}
-                        onChange={resp => changeAnswerFor(itemQ, item.questionIndex, resp)}
+                        onChange={(resp) => changeAnswerFor(itemQ, item.questionIndex, resp)}
                         loadingMeta={codeMetaLoading}
                       />
                     </div>
@@ -893,45 +1010,57 @@ function ExamAttemptScreen() {
                       {itemUseFill ? (
                         <EssayQuestionPrompt key={itemQ.questionId} content={itemQ.content} />
                       ) : (
-                        <div className={`card ${RUBRIC_TYPES.has(itemQ.questionType) && !isMultiGroupPage ? 'px-3 py-2 max-h-[12vh] overflow-y-auto' : 'p-[clamp(1rem,2.2vw,1.35rem)]'}`}>
+                        <div
+                          className={`card ${RUBRIC_TYPES.has(itemQ.questionType) && !isMultiGroupPage ? "px-3 py-2 max-h-[12vh] overflow-y-auto" : "p-[clamp(1rem,2.2vw,1.35rem)]"}`}
+                        >
                           <QuestionText
                             content={itemQ.content}
-                            className={`text-content font-medium ${RUBRIC_TYPES.has(itemQ.questionType) && !isMultiGroupPage ? 'text-xs leading-normal' : 'text-lg leading-relaxed'}`}
+                            className={`text-content font-medium ${RUBRIC_TYPES.has(itemQ.questionType) && !isMultiGroupPage ? "text-xs leading-normal" : "text-lg leading-relaxed"}`}
                           />
                         </div>
                       )}
 
                       <fieldset
                         disabled={Boolean(itemCheck) && !itemCheck?.supported}
-                        className={itemUseFill ? 'min-w-0 md:flex-1 md:min-h-0 md:flex md:flex-col' : 'min-w-0'}
+                        className={
+                          itemUseFill
+                            ? "min-w-0 md:flex-1 md:min-h-0 md:flex md:flex-col"
+                            : "min-w-0"
+                        }
                       >
                         <QuestionAnswerInput
                           key={itemQ.questionId}
                           question={itemQ}
                           value={answers[itemQ.questionId] ?? null}
-                          onChange={resp => changeAnswerFor(itemQ, item.questionIndex, resp)}
+                          onChange={(resp) => changeAnswerFor(itemQ, item.questionIndex, resp)}
                           roomy={isEssay}
                           fill={itemUseFill}
                           practice={instantCheck}
                           reveal={itemCheck?.supported ? itemCheck : null}
-                          onEnter={itemCheckable && !itemCheck && itemProgress.ready ? () => void checkAnswerFor(itemQ) : undefined}
+                          onEnter={
+                            itemCheckable && !itemCheck && itemProgress.ready
+                              ? () => void checkAnswerFor(itemQ)
+                              : undefined
+                          }
                         />
                       </fieldset>
                     </>
                   )}
 
-                  {instantCheck && !RUBRIC_TYPES.has(itemQ.questionType) && itemQ.questionType !== 'CODE' && (
-                    <PracticeCheck
-                      key={itemQ.questionId}
-                      question={itemQ}
-                      check={itemCheck}
-                      checking={checking === itemQ.questionId}
-                      progress={itemProgress}
-                      checkable={CHECKABLE_TYPES.has(itemQ.questionType)}
-                      focusNext={justChecked === itemQ.questionId}
-                      onCheck={() => checkAnswerFor(itemQ)}
-                    />
-                  )}
+                  {instantCheck &&
+                    !RUBRIC_TYPES.has(itemQ.questionType) &&
+                    itemQ.questionType !== "CODE" && (
+                      <PracticeCheck
+                        key={itemQ.questionId}
+                        question={itemQ}
+                        check={itemCheck}
+                        checking={checking === itemQ.questionId}
+                        progress={itemProgress}
+                        checkable={CHECKABLE_TYPES.has(itemQ.questionType)}
+                        focusNext={justChecked === itemQ.questionId}
+                        onCheck={() => checkAnswerFor(itemQ)}
+                      />
+                    )}
                 </div>
               );
             })}
@@ -951,20 +1080,30 @@ function ExamAttemptScreen() {
                     variant="outline"
                     aria-pressed={isFlagged}
                     onClick={toggleFlag}
-                    icon={<Icon.Flag className={`w-4 h-4 ${isFlagged ? 'text-warning' : ''}`} />}
-                    className={isFlagged ? '!border-warning-line !bg-warning-light' : ''}
+                    icon={<Icon.Flag className={`w-4 h-4 ${isFlagged ? "text-warning" : ""}`} />}
+                    className={isFlagged ? "!border-warning-line !bg-warning-light" : ""}
                   >
-                    {isFlagged ? 'Flagged' : 'Flag for review'}
+                    {isFlagged ? "Flagged" : "Flag for review"}
                   </Button>
                 )}
                 {!isLastPage ? (
-                  <Button data-next-question iconRight={<Icon.ChevronRight className="w-4 h-4" />} onClick={goNextPage}>
-                    {examPages[currentPageIndex + 1]?.items.length > 1 ? 'Next group' : 'Next question'}
+                  <Button
+                    data-next-question
+                    iconRight={<Icon.ChevronRight className="w-4 h-4" />}
+                    onClick={goNextPage}
+                  >
+                    {examPages[currentPageIndex + 1]?.items.length > 1
+                      ? "Next group"
+                      : "Next question"}
                   </Button>
                 ) : (
                   // Practice finishes from the header only.
                   !instantCheck && (
-                    <Button data-next-question icon={<Icon.Check className="w-4 h-4" />} onClick={goNextPage}>
+                    <Button
+                      data-next-question
+                      icon={<Icon.Check className="w-4 h-4" />}
+                      onClick={goNextPage}
+                    >
                       Finish
                     </Button>
                   )
@@ -978,7 +1117,8 @@ function ExamAttemptScreen() {
           <h2 className="text-base font-semibold text-content mb-2">Question navigator</h2>
           {isMultiGroupPage && (
             <p className="text-xs text-content-subtle mb-3">
-              Group page: Questions {currentPage.items[0].questionNumber}–{currentPage.items[currentPage.items.length - 1].questionNumber}
+              Group page: Questions {currentPage.items[0].questionNumber}–
+              {currentPage.items[currentPage.items.length - 1].questionNumber}
             </p>
           )}
           <QuestionPalette
@@ -988,26 +1128,26 @@ function ExamAttemptScreen() {
             answered={answeredSet}
             flagged={flagged}
             results={instantCheck ? results : undefined}
-            onSelect={n => goTo(n - 1)}
+            onSelect={(n) => goTo(n - 1)}
           />
         </aside>
       </div>
 
       <ConfirmDialog
         error={actionError && <Alert type="error" message={actionError} />}
-        open={confirm === 'submit'}
+        open={confirm === "submit"}
         onClose={() => {
           setConfirm(null);
           setCodeGradeFailed(false);
         }}
         // CD-05 failed: submitting anyway closes the attempt without the test-case grading.
         onConfirm={() => submit(false, codeGradeFailed)}
-        loading={busy === 'submit'}
+        loading={busy === "submit"}
         confirmDisabled={busy != null}
         title="Submit this exam?"
         description="You can't change your answers after submitting."
         cancelLabel="Keep working"
-        confirmLabel={codeGradeFailed ? 'Submit anyway' : 'Submit exam'}
+        confirmLabel={codeGradeFailed ? "Submit anyway" : "Submit exam"}
       >
         {grading && (
           <p role="status" className="text-center text-content-soft">
@@ -1016,11 +1156,14 @@ function ExamAttemptScreen() {
         )}
         <dl className="mt-4 grid grid-cols-3 gap-2 text-center">
           {[
-            { label: 'Answered', value: answeredSet.size },
-            { label: 'Unanswered', value: unanswered },
-            { label: 'Flagged', value: flagged.size },
-          ].map(s => (
-            <div key={s.label} className="flex flex-col-reverse rounded-[10px] border border-line py-3">
+            { label: "Answered", value: answeredSet.size },
+            { label: "Unanswered", value: unanswered },
+            { label: "Flagged", value: flagged.size },
+          ].map((s) => (
+            <div
+              key={s.label}
+              className="flex flex-col-reverse rounded-[10px] border border-line py-3"
+            >
               <dt className="text-xs text-content-soft">{s.label}</dt>
               <dd className="text-xl font-semibold text-content">{s.value}</dd>
             </div>
@@ -1028,13 +1171,13 @@ function ExamAttemptScreen() {
         </dl>
         {unanswered > 0 && (
           <p className="mt-3 text-center text-warning">
-            {unanswered} question{unanswered === 1 ? ' is' : 's are'} still unanswered.
+            {unanswered} question{unanswered === 1 ? " is" : "s are"} still unanswered.
           </p>
         )}
       </ConfirmDialog>
 
       <Modal
-        open={confirm === 'cancel'}
+        open={confirm === "cancel"}
         error={actionError && <Alert type="error" message={actionError} />}
         onClose={() => busy == null && setConfirm(null)}
         title="Exit this attempt?"
@@ -1042,10 +1185,15 @@ function ExamAttemptScreen() {
         // Closing the dialog (×, backdrop) keeps working.
         footer={
           <>
-            <Button variant="danger" loading={busy === 'cancel'} disabled={busy != null} onClick={cancelAttempt}>
+            <Button
+              variant="danger"
+              loading={busy === "cancel"}
+              disabled={busy != null}
+              onClick={cancelAttempt}
+            >
               Discard
             </Button>
-            <Button loading={busy === 'save'} disabled={busy != null} onClick={saveAndExit}>
+            <Button loading={busy === "save"} disabled={busy != null} onClick={saveAndExit}>
               Save and exit
             </Button>
           </>
@@ -1053,15 +1201,16 @@ function ExamAttemptScreen() {
       >
         <div className="space-y-2 text-base text-content-secondary leading-relaxed">
           <p>
-            <span className="font-semibold text-content">Save and exit</span> keeps your {answeredSet.size} answer
-            {answeredSet.size === 1 ? '' : 's'} so you can continue later.{' '}
+            <span className="font-semibold text-content">Save and exit</span> keeps your{" "}
+            {answeredSet.size} answer
+            {answeredSet.size === 1 ? "" : "s"} so you can continue later.{" "}
             {!timed
-              ? 'This practice has no time limit — it stays open until you come back.'
-              : 'The timer keeps running: when time is up, the exam is submitted automatically.'}
+              ? "This practice has no time limit — it stays open until you come back."
+              : "The timer keeps running: when time is up, the exam is submitted automatically."}
           </p>
           <p>
-            <span className="font-semibold text-content">Discard</span> deletes this attempt and its answers — it will not count
-            in your history. This cannot be undone.
+            <span className="font-semibold text-content">Discard</span> deletes this attempt and its
+            answers — it will not count in your history. This cannot be undone.
           </p>
         </div>
       </Modal>
@@ -1069,7 +1218,7 @@ function ExamAttemptScreen() {
   );
 }
 
-const CHECKS_PREFIX = 'practice-checks:';
+const CHECKS_PREFIX = "practice-checks:";
 
 // localStorage, not sessionStorage: a saved practice attempt is resumed later, often in another tab.
 function loadChecks(attemptId: number): Record<number, AnswerCheck> {
@@ -1110,25 +1259,51 @@ function clearChecks(attemptId: number) {
   }
 }
 
-const CHOICE_TYPES: ReadonlySet<string> = new Set(['SINGLE_CHOICE', 'MULTIPLE_CHOICE', 'TRUE_FALSE']);
+const CHOICE_TYPES: ReadonlySet<string> = new Set([
+  "SINGLE_CHOICE",
+  "MULTIPLE_CHOICE",
+  "TRUE_FALSE",
+]);
 
 function FullScreenMessage({ children }: { children: React.ReactNode }) {
-  return <div className="h-[100dvh] flex flex-col items-center justify-center gap-4 bg-surface-alt px-6">{children}</div>;
+  return (
+    <div className="h-[100dvh] flex flex-col items-center justify-center gap-4 bg-surface-alt px-6">
+      {children}
+    </div>
+  );
 }
 
 function SaveIndicator({ state }: { state: SaveState }) {
   const map: Record<SaveState, { text: string; cls: string; icon: React.ReactNode }> = {
-    saved: { text: 'All changes saved', cls: 'text-content-subtle', icon: <Icon.CheckCircle className="w-3.5 h-3.5" /> },
-    dirty: { text: 'Unsaved changes', cls: 'text-content-subtle', icon: <Icon.Clock className="w-3.5 h-3.5" /> },
-    saving: { text: 'Saving…', cls: 'text-content-subtle', icon: <Icon.RefreshCw className="w-3.5 h-3.5 animate-spin" /> },
-    error: { text: 'Not saved — retrying', cls: 'text-danger', icon: <Icon.AlertCircle className="w-3.5 h-3.5" /> },
+    saved: {
+      text: "All changes saved",
+      cls: "text-content-subtle",
+      icon: <Icon.CheckCircle className="w-3.5 h-3.5" />,
+    },
+    dirty: {
+      text: "Unsaved changes",
+      cls: "text-content-subtle",
+      icon: <Icon.Clock className="w-3.5 h-3.5" />,
+    },
+    saving: {
+      text: "Saving…",
+      cls: "text-content-subtle",
+      icon: <Icon.RefreshCw className="w-3.5 h-3.5 animate-spin" />,
+    },
+    error: {
+      text: "Not saved — retrying",
+      cls: "text-danger",
+      icon: <Icon.AlertCircle className="w-3.5 h-3.5" />,
+    },
   };
   const s = map[state];
   return (
-    <span className={`hidden sm:inline-flex items-center gap-1 text-xs ${s.cls}`} aria-live="polite">
+    <span
+      className={`hidden sm:inline-flex items-center gap-1 text-xs ${s.cls}`}
+      aria-live="polite"
+    >
       {s.icon}
       {s.text}
     </span>
   );
 }
-

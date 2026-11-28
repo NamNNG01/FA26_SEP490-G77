@@ -1,12 +1,12 @@
-import React, { useState } from 'react';
-import { useNavigate } from 'react-router';
-import { Icon } from '@/assets/icons';
-import { Container } from '@/features/landing/components/Container';
-import { Reveal } from '@/components/common/Reveal';
-import { ROUTES } from '@/app/routes';
-import { CourseCatalogCard, CourseCatalogCardSkeleton } from '../components/CourseCatalogCard';
-import { CourseFilterChips, type CategoryFilter } from '../components/CourseFilterChips';
-import { useCatalogCourses, usePublicCategories } from '../hooks/usePublicCatalog';
+import React, { useState } from "react";
+import { useNavigate } from "react-router";
+import { Icon } from "@/assets/icons";
+import { Container } from "@/features/landing/components/Container";
+import { Reveal } from "@/components/common/Reveal";
+import { ROUTES } from "@/app/routes";
+import { CourseCatalogCard, CourseCatalogCardSkeleton } from "../components/CourseCatalogCard";
+import { CourseFilterChips, type CategoryFilter } from "../components/CourseFilterChips";
+import { useCatalogCourses, usePublicCategories } from "../hooks/usePublicCatalog";
 
 /**
  * PopularCoursesSection
@@ -25,11 +25,11 @@ export function PopularCoursesSection({
   showViewAll?: boolean;
 }) {
   const navigate = useNavigate();
-  const [category, setCategory] = useState<CategoryFilter>('all');
+  const [category, setCategory] = useState<CategoryFilter>("all");
   const { categories } = usePublicCategories();
   const { data, loading, error, reload } = useCatalogCourses({
-    categoryId: category === 'all' ? undefined : category,
-    sort: 'newest',
+    categoryId: category === "all" ? undefined : category,
+    sort: "newest",
     size: limit,
   });
 
@@ -44,8 +44,8 @@ export function PopularCoursesSection({
               Popular Courses
             </h2>
             <p className="mt-[clamp(0.5rem,1vw,0.75rem)] text-[clamp(0.9rem,0.85rem+0.25vw,1rem)] text-content-soft">
-              Browse exam preparation courses, check what each one covers, and start practising questions and mock
-              exams.
+              Browse exam preparation courses, check what each one covers, and start practising
+              questions and mock exams.
             </p>
           </div>
 
@@ -94,7 +94,7 @@ export function PopularCoursesSection({
           </div>
         ) : (
           <p className="mt-[clamp(1.5rem,3vw,2rem)] rounded-[14px] border border-dashed border-line px-5 py-10 text-center text-base text-content-soft">
-            {category === 'all' ? 'No courses published yet.' : 'No courses in this category yet.'}
+            {category === "all" ? "No courses published yet." : "No courses in this category yet."}
           </p>
         )}
       </Container>

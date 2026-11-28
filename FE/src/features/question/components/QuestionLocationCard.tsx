@@ -1,14 +1,26 @@
-import React, { useEffect, useState } from 'react';
-import { SearchableSelect } from '@/components/ui/SearchableSelect';
-import { Icon } from '@/assets/icons';
-import { courseService, type CourseModuleResponse, type CourseSummaryItem } from '@/services/course.service';
+import React, { useEffect, useState } from "react";
+import { SearchableSelect } from "@/components/ui/SearchableSelect";
+import { Icon } from "@/assets/icons";
+import {
+  courseService,
+  type CourseModuleResponse,
+  type CourseSummaryItem,
+} from "@/services/course.service";
 
 /**
  * Course / Module pickers for where new questions are saved. The course is
  * required; the module too with `moduleRequired` (new questions). Module
  * options load for the selected course; switching course clears the module.
  */
-export function QuestionLocationCard({ courseId, moduleId, onChange, courseLocked, showErrors, hideHeading, moduleRequired }: {
+export function QuestionLocationCard({
+  courseId,
+  moduleId,
+  onChange,
+  courseLocked,
+  showErrors,
+  hideHeading,
+  moduleRequired,
+}: {
   courseId: string;
   moduleId: string;
   onChange: (courseId: string, moduleId: string) => void;
@@ -26,10 +38,12 @@ export function QuestionLocationCard({ courseId, moduleId, onChange, courseLocke
 
   useEffect(() => {
     let cancelled = false;
-    courseService.getCourses({ size: 100 }).then(res => {
+    courseService.getCourses({ size: 100 }).then((res) => {
       if (!cancelled) setCourses(res.content);
     });
-    return () => { cancelled = true; };
+    return () => {
+      cancelled = true;
+    };
   }, []);
 
   useEffect(() => {
@@ -41,20 +55,24 @@ export function QuestionLocationCard({ courseId, moduleId, onChange, courseLocke
     setLoadingModules(true);
     courseService
       .getCourseModules(courseId)
-      .then(res => {
+      .then((res) => {
         if (!cancelled) setModules([...res].sort((a, b) => a.orderIndex - b.orderIndex));
       })
       .finally(() => {
         if (!cancelled) setLoadingModules(false);
       });
-    return () => { cancelled = true; };
+    return () => {
+      cancelled = true;
+    };
   }, [courseId]);
 
-  const courseOptions = courses.map(c => ({ label: c.title, value: String(c.courseId) }));
+  const courseOptions = courses.map((c) => ({ label: c.title, value: String(c.courseId) }));
   // Keep the current value selectable even if it isn't in the loaded list.
-  if (courseId && !courseOptions.some(o => o.value === courseId)) courseOptions.unshift({ label: `Course #${courseId}`, value: courseId });
-  const moduleOptions = modules.map(m => ({ label: m.title, value: String(m.moduleId) }));
-  if (moduleId && !loadingModules && !moduleOptions.some(o => o.value === moduleId)) moduleOptions.unshift({ label: `Module #${moduleId}`, value: moduleId });
+  if (courseId && !courseOptions.some((o) => o.value === courseId))
+    courseOptions.unshift({ label: `Course #${courseId}`, value: courseId });
+  const moduleOptions = modules.map((m) => ({ label: m.title, value: String(m.moduleId) }));
+  if (moduleId && !loadingModules && !moduleOptions.some((o) => o.value === moduleId))
+    moduleOptions.unshift({ label: `Module #${moduleId}`, value: moduleId });
 
   return (
     <div className="space-y-3">
@@ -67,30 +85,55 @@ export function QuestionLocationCard({ courseId, moduleId, onChange, courseLocke
         <SearchableSelect
           label="Course *"
           value={courseId}
-          onChange={v => onChange(v, '')}
+          onChange={(v) => onChange(v, "")}
           disabled={courseLocked}
           placeholder="Select course"
           searchPlaceholder="Search courses…"
           emptyText="No courses found"
-          options={[{ label: 'Select course', value: '' }, ...courseOptions]}
+          options={[{ label: "Select course", value: "" }, ...courseOptions]}
         />
         {showErrors && !courseId && <p className="text-xs text-danger mt-1">Select a course.</p>}
       </div>
       <div>
         <SearchableSelect
-          label={moduleRequired ? 'Module *' : 'Module (optional)'}
+          label={moduleRequired ? "Module *" : "Module (optional)"}
           value={moduleId}
-          onChange={v => onChange(courseId, v)}
+          onChange={(v) => onChange(courseId, v)}
           disabled={!courseId || loadingModules}
-          placeholder={!courseId ? 'Select a course first' : loadingModules ? 'Loading…' : moduleRequired ? 'Select module' : 'No module'}
+          placeholder={
+            !courseId
+              ? "Select a course first"
+              : loadingModules
+                ? "Loading…"
+                : moduleRequired
+                  ? "Select module"
+                  : "No module"
+          }
           searchPlaceholder="Search modules…"
           emptyText="No modules found"
-          options={[{ label: !courseId ? 'Select a course first' : loadingModules ? 'Loading…' : moduleRequired ? 'Select module' : 'No module', value: '' }, ...moduleOptions]}
+          options={[
+            {
+              label: !courseId
+                ? "Select a course first"
+                : loadingModules
+                  ? "Loading…"
+                  : moduleRequired
+                    ? "Select module"
+                    : "No module",
+              value: "",
+            },
+            ...moduleOptions,
+          ]}
         />
         {moduleRequired && courseId && !loadingModules && modules.length === 0 ? (
-          <p className="text-xs text-warning mt-1">This course has no modules yet — add one to the course first.</p>
+          <p className="text-xs text-warning mt-1">
+            This course has no modules yet — add one to the course first.
+          </p>
         ) : (
-          moduleRequired && showErrors && courseId && !moduleId && <p className="text-xs text-danger mt-1">Select a module.</p>
+          moduleRequired &&
+          showErrors &&
+          courseId &&
+          !moduleId && <p className="text-xs text-danger mt-1">Select a module.</p>
         )}
       </div>
     </div>

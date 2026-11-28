@@ -43,9 +43,7 @@ export function QuestionBankSelectModal({
   const [questionType, setQuestionType] = useState<string>("all");
   const [moduleFilter, setModuleFilter] = useState<string>("");
   const [defaultWeight, setDefaultWeight] = useState<number>(1);
-  const [selectedMap, setSelectedMap] = useState<Map<number, QuestionListItem>>(
-    new Map(),
-  );
+  const [selectedMap, setSelectedMap] = useState<Map<number, QuestionListItem>>(new Map());
   const [fetching, setFetching] = useState(false);
   const [page, setPage] = useState(0);
   const [totalPages, setTotalPages] = useState(1);
@@ -120,9 +118,7 @@ export function QuestionBankSelectModal({
   };
 
   const selectAllVisible = () => {
-    const visibleQuestions = questions.filter(
-      (q) => !existingQuestionIds.has(q.questionId),
-    );
+    const visibleQuestions = questions.filter((q) => !existingQuestionIds.has(q.questionId));
     setSelectedMap((prev) => {
       const next = new Map(prev);
       visibleQuestions.forEach((q) => next.set(q.questionId, q));
@@ -155,24 +151,18 @@ export function QuestionBankSelectModal({
       footer={
         <div className="flex w-full flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
           <div className="flex min-w-0 flex-wrap items-center gap-2">
-            <span className="text-sm text-content-secondary font-medium">
-              Default Weight:
-            </span>
+            <span className="text-sm text-content-secondary font-medium">Default Weight:</span>
             <input
               type="number"
               min={0}
               max={1000}
               step={1}
               value={defaultWeight}
-              onChange={(e) =>
-                setDefaultWeight(Math.max(0.01, Number(e.target.value) || 0.01))
-              }
+              onChange={(e) => setDefaultWeight(Math.max(0.01, Number(e.target.value) || 0.01))}
               className="w-16 px-2.5 py-1 text-sm rounded-[8px] border border-line bg-surface focus:outline-none focus:ring-1 focus:ring-brand-ink"
             />
             <span className="text-xs text-content-subtle ml-2">
-              Selected:{" "}
-              <strong className="text-content">{selectedMap.size}</strong>{" "}
-              questions
+              Selected: <strong className="text-content">{selectedMap.size}</strong> questions
             </span>
           </div>
           <div className="flex flex-wrap items-center justify-end gap-2">
@@ -192,7 +182,9 @@ export function QuestionBankSelectModal({
       }
     >
       <div className="space-y-4">
-        {questionsError && <Alert type="error" title="Could not load questions" message={questionsError} />}
+        {questionsError && (
+          <Alert type="error" title="Could not load questions" message={questionsError} />
+        )}
         <div className="grid min-w-0 grid-cols-1 gap-2.5 sm:grid-cols-2 lg:grid-cols-4">
           <div className="min-w-0 sm:col-span-2 lg:col-span-2">
             <SearchInput
@@ -255,10 +247,7 @@ export function QuestionBankSelectModal({
             variant="outline"
             size="sm"
             onClick={selectAllVisible}
-            disabled={
-              fetching ||
-              questions.every((q) => existingQuestionIds.has(q.questionId))
-            }
+            disabled={fetching || questions.every((q) => existingQuestionIds.has(q.questionId))}
           >
             Select All
           </Button>
@@ -306,10 +295,7 @@ export function QuestionBankSelectModal({
                       {questionPlainText(q.content)}
                     </p>
                     <div className="flex flex-wrap items-center gap-2 mt-1.5">
-                      <Badge
-                        variant="default"
-                        className="text-2xs font-semibold"
-                      >
+                      <Badge variant="default" className="text-2xs font-semibold">
                         {q.questionType.replace("_", " ")}
                       </Badge>
                       <Badge
@@ -325,9 +311,7 @@ export function QuestionBankSelectModal({
                         {q.difficulty}
                       </Badge>
                       {q.moduleName && (
-                        <span className="text-2xs text-content-subtle">
-                          Module: {q.moduleName}
-                        </span>
+                        <span className="text-2xs text-content-subtle">Module: {q.moduleName}</span>
                       )}
                       {q.optionCount !== undefined && q.optionCount > 0 && (
                         <span className="text-2xs text-content-subtle">

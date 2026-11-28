@@ -1,5 +1,5 @@
-@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=Space+Grotesk:wght@500;600;700&family=JetBrains+Mono:wght@400;500&display=swap');
-@import 'tailwindcss';
+@import url("https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=Space+Grotesk:wght@500;600;700&family=JetBrains+Mono:wght@400;500&display=swap");
+@import "tailwindcss";
 
 /* Class-based dark mode (toggled on <html> by ThemeProvider). */
 @custom-variant dark (&:where(.dark, .dark *));
@@ -15,21 +15,21 @@
   }
 
   button:not(:disabled),
-  [role='button']:not([aria-disabled='true']),
+  [role="button"]:not([aria-disabled="true"]),
   summary,
   select:not(:disabled),
-  input[type='checkbox']:not(:disabled),
-  input[type='radio']:not(:disabled),
-  input[type='file']:not(:disabled),
-  label:has(> input[type='checkbox']:not(:disabled)),
-  label:has(> input[type='radio']:not(:disabled)) {
+  input[type="checkbox"]:not(:disabled),
+  input[type="radio"]:not(:disabled),
+  input[type="file"]:not(:disabled),
+  label:has(> input[type="checkbox"]:not(:disabled)),
+  label:has(> input[type="radio"]:not(:disabled)) {
     cursor: pointer;
   }
 }
 
 @theme inline {
-  --color-primary: #F27124;
-  --color-primary-hover: #D95F14;
+  --color-primary: #f27124;
+  --color-primary-hover: #d95f14;
   /* Status colors + their tinted backgrounds follow the theme (see :root /
      .dark below) — a fixed light tint under dark-mode text was what made
      toasts and alerts render white-on-white. */
@@ -42,33 +42,33 @@
   --color-danger-light: var(--danger-light);
   --color-info: var(--info);
   --color-info-light: var(--info-light);
-  --color-gray-50: #F9FAFB;
-  --color-gray-100: #F3F4F6;
-  --color-gray-200: #E5E7EB;
-  --color-gray-300: #D1D5DB;
-  --color-gray-400: #9CA3AF;
-  --color-gray-500: #6B7280;
-  --color-gray-600: #4B5563;
+  --color-gray-50: #f9fafb;
+  --color-gray-100: #f3f4f6;
+  --color-gray-200: #e5e7eb;
+  --color-gray-300: #d1d5db;
+  --color-gray-400: #9ca3af;
+  --color-gray-500: #6b7280;
+  --color-gray-600: #4b5563;
   --color-gray-700: #374151;
-  --color-gray-800: #1F2937;
+  --color-gray-800: #1f2937;
   --color-gray-900: #111827;
-  --font-sans: 'Inter', system-ui, sans-serif;
-  --font-mono: 'JetBrains Mono', monospace;
+  --font-sans: "Inter", system-ui, sans-serif;
+  --font-mono: "JetBrains Mono", monospace;
   /* Display face for page/section headings — gives the product a voice of
      its own instead of Inter-everywhere. Body copy stays on Inter. */
-  --font-display: 'Space Grotesk', 'Inter', system-ui, sans-serif;
+  --font-display: "Space Grotesk", "Inter", system-ui, sans-serif;
   /* Type scale — the only font sizes the UI uses. Tailwind's default
      text-* steps are cleared so nobody reaches for an off-scale size, and
      no line-height is bundled: elements keep inheriting it (or set
      leading-*), exactly as the old text-[Npx] utilities did. */
   --text-*: initial;
-  --text-2xs: 11px;  /* micro labels, badges, table meta */
-  --text-xs: 12px;   /* captions, helper text */
-  --text-sm: 13px;   /* default UI text: table cells, nav, form labels */
+  --text-2xs: 11px; /* micro labels, badges, table meta */
+  --text-xs: 12px; /* captions, helper text */
+  --text-sm: 13px; /* default UI text: table cells, nav, form labels */
   --text-base: 14px; /* body copy, inputs */
-  --text-lg: 16px;   /* card titles, large buttons */
-  --text-xl: 20px;   /* page titles, section headings */
-  --text-2xl: 28px;  /* stat numbers, display figures */
+  --text-lg: 16px; /* card titles, large buttons */
+  --text-xl: 20px; /* page titles, section headings */
+  --text-2xl: 28px; /* stat numbers, display figures */
   --radius-sm: 6px;
   --radius-md: 10px;
   --radius-lg: 14px;
@@ -124,135 +124,135 @@
   --color-purple: var(--purple);
   --color-purple-light: var(--purple-light);
   /* Solid status fills (buttons, dots) — the same in both themes. */
-  --color-success-solid: #16A34A;
-  --color-danger-solid: #DC2626;
-  --color-danger-solid-hover: #B91C1C;
+  --color-success-solid: #16a34a;
+  --color-danger-solid: #dc2626;
+  --color-danger-solid-hover: #b91c1c;
   --color-accent: var(--accent);
   --color-accent-foreground: var(--accent-foreground);
-  --color-brand: #F27124;
+  --color-brand: #f27124;
   /* FPT orange scale (brand #F27124) — the brand ramp every hard-coded brand hex maps to. */
-  --color-brand-50: #FEF4EC;
-  --color-brand-100: #FDE6D3;
-  --color-brand-200: #FBC9A3;
-  --color-brand-300: #F7A466;
-  --color-brand-600: #F27124;
-  --color-brand-700: #D95F14;
-  --color-brand-800: #B34C0F;
-  --color-brand-900: #8A3A0D;
-  --color-brand-950: #4A1E06;
+  --color-brand-50: #fef4ec;
+  --color-brand-100: #fde6d3;
+  --color-brand-200: #fbc9a3;
+  --color-brand-300: #f7a466;
+  --color-brand-600: #f27124;
+  --color-brand-700: #d95f14;
+  --color-brand-800: #b34c0f;
+  --color-brand-900: #8a3a0d;
+  --color-brand-950: #4a1e06;
   /* Star-rating gold. */
-  --color-rating: #F59E0B;
+  --color-rating: #f59e0b;
   /* Warm accent, used sparingly (highlights, the exam-day marker). */
-  --color-highlight: #F2A93B;
+  --color-highlight: #f2a93b;
 }
 
 /* Light theme (default) */
 :root {
-  --surface: #F8F9F7;
-  --surface-alt: #EFF1EE;
+  --surface: #f8f9f7;
+  --surface-alt: #eff1ee;
   --content: #111827;
   --content-muted: #374151;
   --content-subtle: #374151;
-  --content-placeholder: #6B7280;
-  --line: #D9DED9;
-  --accent: #E7EAE7;
+  --content-placeholder: #6b7280;
+  --line: #d9ded9;
+  --accent: #e7eae7;
   --accent-foreground: #111827;
-  --primary-light: #FEF1E7;
-  --success: #16A34A;
-  --success-light: #EAF4EC;
-  --warning: #D97706;
-  --warning-light: #F5F0E5;
-  --danger: #DC2626;
-  --danger-light: #F5EAEA;
-  --info: #0891B2;
-  --info-light: #E7F1F1;
-  --purple: #7C3AED;
-  --purple-light: #EFECF5;
-  --surface-muted: #E7EAE7;
-  --surface-hover: #EAEEEA;
-  --surface-pressed: #DDE2DD;
-  --surface-pressed-strong: #CDD4CE;
-  --surface-brand: #FEF1E7;
-  --surface-violet: #EFECF5;
-  --fill: #DDE2DD;
-  --fill-strong: #CDD4CE;
+  --primary-light: #fef1e7;
+  --success: #16a34a;
+  --success-light: #eaf4ec;
+  --warning: #d97706;
+  --warning-light: #f5f0e5;
+  --danger: #dc2626;
+  --danger-light: #f5eaea;
+  --info: #0891b2;
+  --info-light: #e7f1f1;
+  --purple: #7c3aed;
+  --purple-light: #efecf5;
+  --surface-muted: #e7eae7;
+  --surface-hover: #eaeeea;
+  --surface-pressed: #dde2dd;
+  --surface-pressed-strong: #cdd4ce;
+  --surface-brand: #fef1e7;
+  --surface-violet: #efecf5;
+  --fill: #dde2dd;
+  --fill-strong: #cdd4ce;
   --fill-inverse: #111827;
   --content-secondary: #374151;
   --content-soft: #374151;
-  --content-faint: #6B7280;
-  --content-ghost: #E7EAE7;
-  --line-soft: #E1E5E1;
-  --line-faint: #EAEEEA;
-  --line-strong: #CDD4CE;
+  --content-faint: #6b7280;
+  --content-ghost: #e7eae7;
+  --line-soft: #e1e5e1;
+  --line-faint: #eaeeea;
+  --line-strong: #cdd4ce;
   /* Text on light surfaces: a darker orange so small copy keeps ~4.5:1 contrast. */
-  --brand-ink: #C2540F;
-  --brand-ink-strong: #B34C0F;
-  --brand-ink-hover: #D95F14;
-  --brand-line: #FBC9A3;
-  --primary-hover-tint: #FEF1E7;
-  --success-strong: #15803D;
-  --success-line: #BBF7D0;
-  --warning-strong: #92400E;
-  --warning-line: #FDE68A;
-  --danger-strong: #B91C1C;
-  --danger-line: #FECACA;
+  --brand-ink: #c2540f;
+  --brand-ink-strong: #b34c0f;
+  --brand-ink-hover: #d95f14;
+  --brand-line: #fbc9a3;
+  --primary-hover-tint: #fef1e7;
+  --success-strong: #15803d;
+  --success-line: #bbf7d0;
+  --warning-strong: #92400e;
+  --warning-line: #fde68a;
+  --danger-strong: #b91c1c;
+  --danger-line: #fecaca;
   /* Two-series chart palette (course sales / AI subscription), CVD-checked. */
-  --chart-1: #0A8F7A;
-  --chart-2: #D97706;
+  --chart-1: #0a8f7a;
+  --chart-2: #d97706;
 }
 
 /* Dark theme — same design tokens, dark values. */
 .dark {
   --surface: #111827;
-  --surface-alt: #0B1220;
-  --content: #F9FAFB;
-  --content-muted: #D1D5DB;
-  --content-subtle: #6B7280;
-  --content-placeholder: #9CA3AF;
-  --line: #1F2937;
-  --accent: #26324A;
-  --accent-foreground: #F9FAFB;
+  --surface-alt: #0b1220;
+  --content: #f9fafb;
+  --content-muted: #d1d5db;
+  --content-subtle: #6b7280;
+  --content-placeholder: #9ca3af;
+  --line: #1f2937;
+  --accent: #26324a;
+  --accent-foreground: #f9fafb;
   /* Lighter status hues + deep tints keep >= 4.5:1 on dark surfaces. */
-  --primary-light: #4A1E06;
-  --success: #4ADE80;
-  --success-light: #052E16;
-  --warning: #FBBF24;
+  --primary-light: #4a1e06;
+  --success: #4ade80;
+  --success-light: #052e16;
+  --warning: #fbbf24;
   --warning-light: #422006;
-  --danger: #F87171;
-  --danger-light: #450A0A;
-  --info: #22D3EE;
+  --danger: #f87171;
+  --danger-light: #450a0a;
+  --info: #22d3ee;
   --info-light: #083344;
-  --purple: #C4B5FD;
-  --purple-light: #2E1065;
-  --chart-1: #14A38B;
-  --chart-2: #D97706;
-  --surface-muted: #1F2937;
-  --surface-hover: #26324A;
-  --surface-pressed: #26324A;
-  --surface-pressed-strong: #26324A;
-  --surface-brand: #0B1220;
+  --purple: #c4b5fd;
+  --purple-light: #2e1065;
+  --chart-1: #14a38b;
+  --chart-2: #d97706;
+  --surface-muted: #1f2937;
+  --surface-hover: #26324a;
+  --surface-pressed: #26324a;
+  --surface-pressed-strong: #26324a;
+  --surface-brand: #0b1220;
   --surface-violet: #111827;
   --fill: #374151;
   --fill-strong: #374151;
   --fill-inverse: #374151;
-  --content-secondary: #F9FAFB;
-  --content-soft: #D1D5DB;
-  --content-faint: #6B7280;
-  --content-ghost: #1F2937;
-  --line-soft: #1F2937;
-  --line-faint: #1F2937;
+  --content-secondary: #f9fafb;
+  --content-soft: #d1d5db;
+  --content-faint: #6b7280;
+  --content-ghost: #1f2937;
+  --line-soft: #1f2937;
+  --line-faint: #1f2937;
   --line-strong: #374151;
-  --brand-ink: #F7A466;
-  --brand-ink-strong: #F7A466;
-  --brand-ink-hover: #F7A466;
-  --brand-line: #8A3A0D;
+  --brand-ink: #f7a466;
+  --brand-ink-strong: #f7a466;
+  --brand-ink-hover: #f7a466;
+  --brand-line: #8a3a0d;
   --primary-hover-tint: rgba(242, 113, 36, 0.15);
-  --success-strong: #4ADE80;
-  --success-line: #14532D;
-  --warning-strong: #FBBF24;
-  --warning-line: #78350F;
-  --danger-strong: #F87171;
-  --danger-line: #7F1D1D;
+  --success-strong: #4ade80;
+  --success-line: #14532d;
+  --warning-strong: #fbbf24;
+  --warning-line: #78350f;
+  --danger-strong: #f87171;
+  --danger-line: #7f1d1d;
 }
 
 * {
@@ -266,7 +266,9 @@ input::-ms-clear {
   display: none;
 }
 
-html, body, #root {
+html,
+body,
+#root {
   height: 100%;
   overflow: hidden;
   margin: 0;
@@ -274,7 +276,7 @@ html, body, #root {
 }
 
 body {
-  font-family: 'Inter', system-ui, sans-serif;
+  font-family: "Inter", system-ui, sans-serif;
   background: var(--surface-alt);
   color: var(--content);
   -webkit-font-smoothing: antialiased;
@@ -289,11 +291,11 @@ body {
   background: transparent;
 }
 ::-webkit-scrollbar-thumb {
-  background: #D1D5DB;
+  background: #d1d5db;
   border-radius: 999px;
 }
 ::-webkit-scrollbar-thumb:hover {
-  background: #9CA3AF;
+  background: #9ca3af;
 }
 
 .sidebar-link {
@@ -315,18 +317,18 @@ body {
   color: var(--content);
 }
 .sidebar-link.active {
-  background: #FEF4EC;
-  color: #F27124;
+  background: #fef4ec;
+  color: #f27124;
 }
 .dark .sidebar-link.active {
   background: rgba(242, 113, 36, 0.18);
-  color: #F7A466;
+  color: #f7a466;
 }
 .dark .sidebar-link.active svg {
-  color: #F7A466;
+  color: #f7a466;
 }
 .sidebar-link.active svg {
-  color: #F27124;
+  color: #f27124;
 }
 
 /* Dashboard content: the layout owns the gutter (side/bottom padding and a
@@ -375,7 +377,7 @@ body {
 }
 .prose-block:empty::before {
   content: attr(data-placeholder);
-  color: #9CA3AF;
+  color: #9ca3af;
 }
 
 .animate-pulse-slow {
@@ -383,18 +385,24 @@ body {
 }
 
 @keyframes shimmer {
-  0% { background-position: -200% 0; }
-  100% { background-position: 200% 0; }
+  0% {
+    background-position: -200% 0;
+  }
+  100% {
+    background-position: 200% 0;
+  }
 }
 .skeleton {
-  background: linear-gradient(90deg, #F3F4F6 25%, #E5E7EB 50%, #F3F4F6 75%);
+  background: linear-gradient(90deg, #f3f4f6 25%, #e5e7eb 50%, #f3f4f6 75%);
   background-size: 200% 100%;
   animation: shimmer 1.5s infinite;
   border-radius: 6px;
 }
 
 @keyframes spin {
-  to { transform: rotate(360deg); }
+  to {
+    transform: rotate(360deg);
+  }
 }
 .spinner {
   animation: spin 0.8s linear infinite;
@@ -404,8 +412,14 @@ body {
    wrapper via key={tabName} and the fade restarts. `both` fill-mode keeps the
    panel transparent until the first frame instead of flashing at full opacity. */
 @keyframes fade-in-up {
-  from { opacity: 0; transform: translateY(4px); }
-  to { opacity: 1; transform: none; }
+  from {
+    opacity: 0;
+    transform: translateY(4px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
 }
 .animate-fade-in {
   animation: fade-in-up 0.2s ease-out both;
@@ -428,27 +442,45 @@ body {
    in @theme (surface/content/line/status) — no per-hex remaps. */
 .dark input,
 .dark select,
-.dark textarea { background-color: var(--surface); color: var(--content); border-color: var(--line); }
+.dark textarea {
+  background-color: var(--surface);
+  color: var(--content);
+  border-color: var(--line);
+}
 .dark input::placeholder,
-.dark textarea::placeholder { color: var(--content-placeholder); }
+.dark textarea::placeholder {
+  color: var(--content-placeholder);
+}
 
 /* Theme-aware pieces of the plain-CSS helpers above. */
-.dark ::-webkit-scrollbar-thumb { background: #374151; }
-.dark ::-webkit-scrollbar-thumb:hover { background: #4B5563; }
+.dark ::-webkit-scrollbar-thumb {
+  background: #374151;
+}
+.dark ::-webkit-scrollbar-thumb:hover {
+  background: #4b5563;
+}
 .dark .skeleton {
-  background: linear-gradient(90deg, #1F2937 25%, #26324A 50%, #1F2937 75%);
+  background: linear-gradient(90deg, #1f2937 25%, #26324a 50%, #1f2937 75%);
   background-size: 200% 100%;
 }
-.dark .prose-block h2 { color: var(--content); }
-.dark .prose-block h3 { color: var(--content-muted); }
-.dark .prose-block:empty::before { color: var(--content-subtle); }
+.dark .prose-block h2 {
+  color: var(--content);
+}
+.dark .prose-block h3 {
+  color: var(--content-muted);
+}
+.dark .prose-block:empty::before {
+  color: var(--content-subtle);
+}
 
 /* --------------------------------------------------------------------- */
 /* Typography — headings use the display face. One place, so every page  */
 /* title, section title and card heading picks it up without per-file     */
 /* class edits.                                                           */
 /* --------------------------------------------------------------------- */
-h1, h2, h3 {
+h1,
+h2,
+h3 {
   font-family: var(--font-display);
   letter-spacing: -0.015em;
 }
@@ -456,18 +488,20 @@ h1, h2, h3 {
 /* Visible keyboard focus everywhere. Many components drop the native
    outline (`focus:outline-none`) for a mouse-friendly look; this restores
    a clear ring for keyboard users only. */
-:where(a, button, [role='button'], [role='tab'], [role='menuitem'], summary):focus-visible {
-  outline: 2px solid #F27124;
+:where(a, button, [role="button"], [role="tab"], [role="menuitem"], summary):focus-visible {
+  outline: 2px solid #f27124;
   outline-offset: 2px;
 }
-.dark :where(a, button, [role='button'], [role='tab'], [role='menuitem'], summary):focus-visible {
-  outline-color: #F7A466;
+.dark :where(a, button, [role="button"], [role="tab"], [role="menuitem"], summary):focus-visible {
+  outline-color: #f7a466;
 }
 
 /* Respect reduced-motion for every transition/animation, not just the
    tab fade above. */
 @media (prefers-reduced-motion: reduce) {
-  *, *::before, *::after {
+  *,
+  *::before,
+  *::after {
     animation-duration: 0.01ms !important;
     animation-iteration-count: 1 !important;
     transition-duration: 0.01ms !important;

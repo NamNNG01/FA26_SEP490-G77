@@ -1,4 +1,4 @@
-import type { UserResponse } from '@/types/auth';
+import type { UserResponse } from "@/types/auth";
 
 /**
  * Single source of truth for auth persistence.
@@ -11,9 +11,9 @@ import type { UserResponse } from '@/types/auth';
  * localStorage call elsewhere — always go through this module so save,
  * read and remove stay in sync.
  */
-const ACCESS_TOKEN_KEY = 'accessToken';
-const REFRESH_TOKEN_KEY = 'refreshToken';
-const USER_KEY = 'user';
+const ACCESS_TOKEN_KEY = "accessToken";
+const REFRESH_TOKEN_KEY = "refreshToken";
+const USER_KEY = "user";
 
 export function getAccessToken(): string | null {
   return localStorage.getItem(ACCESS_TOKEN_KEY);
@@ -30,9 +30,9 @@ export function getUser(): UserResponse | null {
     const user = JSON.parse(raw) as UserResponse & { role?: unknown };
     // Backward compat: sessions stored before the backend migration kept
     // role as { code, name }. Normalize to the new plain-string shape.
-    if (user && typeof user.role !== 'string') {
+    if (user && typeof user.role !== "string") {
       const legacy = user.role as { code?: unknown } | null;
-      const code = typeof legacy?.code === 'string' ? legacy.code : '';
+      const code = typeof legacy?.code === "string" ? legacy.code : "";
       return { ...user, role: code } as UserResponse;
     }
     return user as UserResponse;
@@ -42,7 +42,7 @@ export function getUser(): UserResponse | null {
 }
 
 export function getUserRoleCode(): string {
-  return getUser()?.role ?? '';
+  return getUser()?.role ?? "";
 }
 
 export function saveAuth(params: {
@@ -74,19 +74,19 @@ export function saveTokens(params: { accessToken: string; refreshToken: string }
  *  - 'userChanged' — a user was written (sign-in, profile edit, account switch)
  */
 export function onExternalAuthChange(
-  cb: (change: 'signedOut' | 'userChanged') => void,
+  cb: (change: "signedOut" | "userChanged") => void,
 ): () => void {
   function handle(e: StorageEvent) {
     if (e.storageArea !== localStorage) return;
     // key === null → localStorage.clear() in the other tab.
     if (e.key === null || (e.key === REFRESH_TOKEN_KEY && e.newValue === null)) {
-      cb('signedOut');
+      cb("signedOut");
     } else if (e.key === USER_KEY && e.newValue !== null) {
-      cb('userChanged');
+      cb("userChanged");
     }
   }
-  window.addEventListener('storage', handle);
-  return () => window.removeEventListener('storage', handle);
+  window.addEventListener("storage", handle);
+  return () => window.removeEventListener("storage", handle);
 }
 
 /**

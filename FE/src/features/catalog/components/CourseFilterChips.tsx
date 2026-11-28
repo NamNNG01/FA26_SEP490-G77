@@ -1,8 +1,8 @@
-import React from 'react';
-import type { CategoryResponse } from '@/services/course.service';
+import React from "react";
+import type { CategoryResponse } from "@/services/course.service";
 
 /** Selected category id, or 'all'. */
-export type CategoryFilter = number | 'all';
+export type CategoryFilter = number | "all";
 
 /**
  * CourseFilterChips
@@ -14,7 +14,7 @@ export function CourseFilterChips({
   categories,
   value,
   onChange,
-  className = '',
+  className = "",
 }: {
   categories: CategoryResponse[];
   value: CategoryFilter;
@@ -23,8 +23,12 @@ export function CourseFilterChips({
 }) {
   if (categories.length === 0) return null;
   return (
-    <div role="group" aria-label="Filter courses by category" className={`flex flex-wrap gap-2 ${className}`}>
-      <FilterChip label="All" active={value === 'all'} onClick={() => onChange('all')} />
+    <div
+      role="group"
+      aria-label="Filter courses by category"
+      className={`flex flex-wrap gap-2 ${className}`}
+    >
+      <FilterChip label="All" active={value === "all"} onClick={() => onChange("all")} />
       {categories.map((category) => (
         <FilterChip
           key={category.categoryId}
@@ -37,7 +41,15 @@ export function CourseFilterChips({
   );
 }
 
-function FilterChip({ label, active, onClick }: { label: string; active: boolean; onClick: () => void }) {
+function FilterChip({
+  label,
+  active,
+  onClick,
+}: {
+  label: string;
+  active: boolean;
+  onClick: () => void;
+}) {
   return (
     <button
       type="button"
@@ -45,8 +57,8 @@ function FilterChip({ label, active, onClick }: { label: string; active: boolean
       onClick={onClick}
       className={`h-9 rounded-full border px-4 text-sm font-medium transition-all cursor-pointer ${
         active
-          ? 'border-brand-600 bg-brand-600 text-white shadow-sm shadow-brand-600/25'
-          : 'border-line bg-surface text-content-secondary hover:border-brand-line hover:text-brand-ink'
+          ? "border-brand-600 bg-brand-600 text-white shadow-sm shadow-brand-600/25"
+          : "border-line bg-surface text-content-secondary hover:border-brand-line hover:text-brand-ink"
       }`}
     >
       {label}

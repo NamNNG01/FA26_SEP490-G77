@@ -1,10 +1,4 @@
-import React, {
-  createContext,
-  useContext,
-  useEffect,
-  useState,
-  type ReactNode,
-} from 'react';
+import React, { createContext, useContext, useEffect, useState, type ReactNode } from "react";
 
 /**
  * ThemeProvider — centralized theme manager.
@@ -19,27 +13,23 @@ import React, {
  */
 
 /** Registered themes. Extend this list to add more. */
-export const THEMES = ['light', 'dark'] as const;
+export const THEMES = ["light", "dark"] as const;
 export type Theme = (typeof THEMES)[number];
 
 /** Persisted preference. 'system' follows the OS setting. */
-export type ThemePreference = Theme | 'system';
+export type ThemePreference = Theme | "system";
 
-const THEME_KEY = 'theme';
+const THEME_KEY = "theme";
 
 function readStoredPreference(): ThemePreference {
   const raw = localStorage.getItem(THEME_KEY);
-  return (THEMES as readonly string[]).includes(raw ?? '')
-    ? (raw as Theme)
-    : 'system';
+  return (THEMES as readonly string[]).includes(raw ?? "") ? (raw as Theme) : "system";
 }
 
 /** Resolve a preference against the OS setting to a concrete theme. */
 function resolveTheme(pref: ThemePreference): Theme {
-  if (pref !== 'system') return pref;
-  return window.matchMedia('(prefers-color-scheme: dark)').matches
-    ? 'dark'
-    : 'light';
+  if (pref !== "system") return pref;
+  return window.matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light";
 }
 
 function applyTheme(resolved: Theme) {
@@ -60,12 +50,8 @@ interface ThemeContextValue {
 const ThemeContext = createContext<ThemeContextValue | null>(null);
 
 export function ThemeProvider({ children }: { children: ReactNode }) {
-  const [preference, setPreferenceState] = useState<ThemePreference>(() =>
-    readStoredPreference(),
-  );
-  const [resolved, setResolved] = useState<Theme>(() =>
-    resolveTheme(readStoredPreference()),
-  );
+  const [preference, setPreferenceState] = useState<ThemePreference>(() => readStoredPreference());
+  const [resolved, setResolved] = useState<Theme>(() => resolveTheme(readStoredPreference()));
 
   // Apply on mount and whenever the preference changes.
   useEffect(() => {
@@ -76,15 +62,15 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
 
   // 'system' follows the OS live.
   useEffect(() => {
-    if (preference !== 'system') return;
-    const mql = window.matchMedia('(prefers-color-scheme: dark)');
+    if (preference !== "system") return;
+    const mql = window.matchMedia("(prefers-color-scheme: dark)");
     const onChange = () => {
-      const next = resolveTheme('system');
+      const next = resolveTheme("system");
       setResolved(next);
       applyTheme(next);
     };
-    mql.addEventListener('change', onChange);
-    return () => mql.removeEventListener('change', onChange);
+    mql.addEventListener("change", onChange);
+    return () => mql.removeEventListener("change", onChange);
   }, [preference]);
 
   function setPreference(pref: ThemePreference) {
@@ -103,9 +89,7 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
   }
 
   return (
-    <ThemeContext.Provider
-      value={{ preference, resolved, setPreference, toggleTheme }}
-    >
+    <ThemeContext.Provider value={{ preference, resolved, setPreference, toggleTheme }}>
       {children}
     </ThemeContext.Provider>
   );
@@ -113,6 +97,6 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
 
 export function useTheme(): ThemeContextValue {
   const ctx = useContext(ThemeContext);
-  if (!ctx) throw new Error('useTheme must be used within a ThemeProvider');
+  if (!ctx) throw new Error("useTheme must be used within a ThemeProvider");
   return ctx;
 }

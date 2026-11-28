@@ -1,14 +1,24 @@
-import type { ReactNode } from 'react';
-import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
+import type { ReactNode } from "react";
+import { ConfirmDialog } from "@/components/ui/ConfirmDialog";
 
 /** Small confirmation layered over the review modal, for actions that change data or close a ticket. */
-export function ConfirmActionModal({ open, title, children, confirmLabel, cancelLabel = 'Cancel', variant = 'primary', busy, onConfirm, onCancel }: {
+export function ConfirmActionModal({
+  open,
+  title,
+  children,
+  confirmLabel,
+  cancelLabel = "Cancel",
+  variant = "primary",
+  busy,
+  onConfirm,
+  onCancel,
+}: {
   open: boolean;
   title: string;
   children: ReactNode;
   confirmLabel: string;
   cancelLabel?: string;
-  variant?: 'primary' | 'danger';
+  variant?: "primary" | "danger";
   busy?: boolean;
   onConfirm: () => void;
   onCancel: () => void;
@@ -22,7 +32,7 @@ export function ConfirmActionModal({ open, title, children, confirmLabel, cancel
       description={<div className="space-y-2">{children}</div>}
       confirmLabel={confirmLabel}
       cancelLabel={cancelLabel}
-      tone={variant === 'danger' ? 'danger' : 'warning'}
+      tone={variant === "danger" ? "danger" : "warning"}
       loading={busy}
     />
   );

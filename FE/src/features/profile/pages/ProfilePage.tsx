@@ -1,10 +1,10 @@
-import React, { useState } from 'react';
-import { useAuth } from '@/auth/authContext';
-import { Alert } from '@/components/ui/Alert';
-import { ProfileHeaderCard } from '../components/ProfileHeaderCard';
-import { PersonalInfoCard } from '../components/PersonalInfoCard';
-import { ProgressOverviewCard, FinishedCoursesCard } from '../components/LearningWidgets';
-import { useProfileOverview } from '../hooks/useProfileOverview';
+import React, { useState } from "react";
+import { useAuth } from "@/auth/authContext";
+import { Alert } from "@/components/ui/Alert";
+import { ProfileHeaderCard } from "../components/ProfileHeaderCard";
+import { PersonalInfoCard } from "../components/PersonalInfoCard";
+import { ProgressOverviewCard, FinishedCoursesCard } from "../components/LearningWidgets";
+import { useProfileOverview } from "../hooks/useProfileOverview";
 
 /**
  * ProfilePage

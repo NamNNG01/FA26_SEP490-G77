@@ -1,8 +1,8 @@
-import React from 'react';
-import { Icon } from '@/assets/icons';
-import { Progress } from '@/components/ui/Progress';
-import type { StudentDeck } from '@/services/studentCourse.service';
-import type { StudentDeckView } from '@/services/studentDeck.service';
+import React from "react";
+import { Icon } from "@/assets/icons";
+import { Progress } from "@/components/ui/Progress";
+import type { StudentDeck } from "@/services/studentCourse.service";
+import type { StudentDeckView } from "@/services/studentDeck.service";
 
 /** Router state the deck page reads until (or instead of) FC-14 answers. */
 export interface DeckStudyState {
@@ -12,7 +12,7 @@ export interface DeckStudyState {
   /** The deck as the list / create call saw it; `isOwner` marks the student's own deck. */
   deck?: StudentDeckView;
   /** Flashcards tab to return to. */
-  tab?: 'mine' | 'course' | 'bookmarked';
+  tab?: "mine" | "course" | "bookmarked";
 }
 
 export function DeckCard({ deck, onOpen }: { deck: StudentDeck; onOpen: () => void }) {
@@ -27,13 +27,22 @@ export function DeckCard({ deck, onOpen }: { deck: StudentDeck; onOpen: () => vo
           <Icon.Layers className="w-4.5 h-4.5 text-primary" />
         </div>
         <div className="min-w-0">
-          <h3 className="text-sm font-semibold text-content leading-snug line-clamp-2">{deck.title}</h3>
+          <h3 className="text-sm font-semibold text-content leading-snug line-clamp-2">
+            {deck.title}
+          </h3>
           <p className="text-xs text-content-subtle mt-0.5">{deck.cardCount} cards</p>
         </div>
       </div>
-      {deck.description && <p className="text-xs text-content-soft line-clamp-2">{deck.description}</p>}
+      {deck.description && (
+        <p className="text-xs text-content-soft line-clamp-2">{deck.description}</p>
+      )}
       <div className="mt-auto space-y-2">
-        <Progress value={deck.learnedCount} max={Math.max(deck.cardCount, 1)} label="Learned" size="sm" />
+        <Progress
+          value={deck.learnedCount}
+          max={Math.max(deck.cardCount, 1)}
+          label="Learned"
+          size="sm"
+        />
         {deck.starredCount > 0 && (
           <p className="inline-flex items-center gap-1 text-xs text-content-soft">
             <Icon.Star className="w-3.5 h-3.5" /> {deck.starredCount} starred

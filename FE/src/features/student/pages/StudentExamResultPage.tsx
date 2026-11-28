@@ -1,19 +1,24 @@
-import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { useNavigate, useSearchParams } from 'react-router';
-import { Badge } from '@/components/ui/Badge';
-import { Button } from '@/components/ui/Button';
-import { Breadcrumb } from '@/components/ui/Breadcrumb';
-import { Progress } from '@/components/ui/Progress';
-import { Modal } from '@/components/ui/Modal';
-import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
-import { Alert } from '@/components/ui/Alert';
-import { Select } from '@/components/ui/Select';
-import { Skeleton } from '@/components/ui/Skeleton';
-import { Spinner } from '@/components/ui/Spinner';
-import { Icon } from '@/assets/icons';
-import { ROUTES, studentExamPath, studentResumeAttemptPath, studentTakeExamPath } from '@/app/routes';
-import { canChooseTakeMode, examModeBehavior, takeAsOf } from '../examModes';
-import { getApiErrorMessage } from '@/utils/apiError';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useNavigate, useSearchParams } from "react-router";
+import { Badge } from "@/components/ui/Badge";
+import { Button } from "@/components/ui/Button";
+import { Breadcrumb } from "@/components/ui/Breadcrumb";
+import { Progress } from "@/components/ui/Progress";
+import { Modal } from "@/components/ui/Modal";
+import { ConfirmDialog } from "@/components/ui/ConfirmDialog";
+import { Alert } from "@/components/ui/Alert";
+import { Select } from "@/components/ui/Select";
+import { Skeleton } from "@/components/ui/Skeleton";
+import { Spinner } from "@/components/ui/Spinner";
+import { Icon } from "@/assets/icons";
+import {
+  ROUTES,
+  studentExamPath,
+  studentResumeAttemptPath,
+  studentTakeExamPath,
+} from "@/app/routes";
+import { canChooseTakeMode, examModeBehavior, takeAsOf } from "../examModes";
+import { getApiErrorMessage } from "@/utils/apiError";
 import {
   RUBRIC_TYPES,
   studentAttemptService,
@@ -21,23 +26,31 @@ import {
   type AttemptResult,
   type DeepExplanation,
   type ResultQuestion,
-} from '@/services/studentAttempt.service';
-import { DeepAiExplanation } from '../components/DeepAiExplanation';
-import { EmptyState } from '@/components/ui/Card';
-import { LoadError, STUDENT_PAGE_CLASS, formatDateTime } from '../components/studentUi';
-import { QUESTION_TYPE_LABEL, QuestionText, isAnswered } from '../components/QuestionAnswerInput';
-import { AnswerReview } from '../components/result/AnswerReview';
-import { QuestionNav, ResultPalette, useArrowKeyNav, type OutcomeMeta } from '../components/result/ResultNavigator';
-import { SAVABLE_QUESTION_TYPES } from '@/services/studentDeck.service';
-import { SaveToFlashcardsModal } from '../components/flashcards/SaveToFlashcardsModal';
-import { RetryWrongQuestionsModal } from '../components/RetryWrongQuestionsModal';
-import { studentCodeExamService, type CodeSubmission } from '@/services/studentCodeExam.service';
-import { CodeTestCaseStatus, latestSubmissionOfAttempt } from '../components/code/CodeTestCaseStatus';
-import { studentProgressService } from '@/services/studentProgress.service';
-import { ReportQuestionIssueButton } from '../components/ReportQuestionIssueDialog';
+} from "@/services/studentAttempt.service";
+import { DeepAiExplanation } from "../components/DeepAiExplanation";
+import { EmptyState } from "@/components/ui/Card";
+import { LoadError, STUDENT_PAGE_CLASS, formatDateTime } from "../components/studentUi";
+import { QUESTION_TYPE_LABEL, QuestionText, isAnswered } from "../components/QuestionAnswerInput";
+import { AnswerReview } from "../components/result/AnswerReview";
+import {
+  QuestionNav,
+  ResultPalette,
+  useArrowKeyNav,
+  type OutcomeMeta,
+} from "../components/result/ResultNavigator";
+import { SAVABLE_QUESTION_TYPES } from "@/services/studentDeck.service";
+import { SaveToFlashcardsModal } from "../components/flashcards/SaveToFlashcardsModal";
+import { RetryWrongQuestionsModal } from "../components/RetryWrongQuestionsModal";
+import { studentCodeExamService, type CodeSubmission } from "@/services/studentCodeExam.service";
+import {
+  CodeTestCaseStatus,
+  latestSubmissionOfAttempt,
+} from "../components/code/CodeTestCaseStatus";
+import { studentProgressService } from "@/services/studentProgress.service";
+import { ReportQuestionIssueButton } from "../components/ReportQuestionIssueDialog";
 
 /** FC-12 needs the attempt submitted (or completed). */
-const SAVABLE_ATTEMPT_STATUSES: ReadonlySet<string> = new Set(['SUBMITTED', 'COMPLETED']);
+const SAVABLE_ATTEMPT_STATUSES: ReadonlySet<string> = new Set(["SUBMITTED", "COMPLETED"]);
 
 /** While the AI grades, the result is re-read this often. */
 const POLL_MS = 4_000;
@@ -47,31 +60,56 @@ const POLL_MS = 4_000;
  * the student to ask (SE-02) — the worker never starts on its own — then
  * QUEUED → GRADING → AI_GRADED, or FAILED (can be asked again).
  */
-const GRADING_WAITING = 'PENDING_AI';
-const GRADING_RUNNING: ReadonlySet<string> = new Set(['QUEUED', 'GRADING']);
-const GRADING_FAILED = 'FAILED';
+const GRADING_WAITING = "PENDING_AI";
+const GRADING_RUNNING: ReadonlySet<string> = new Set(["QUEUED", "GRADING"]);
+const GRADING_FAILED = "FAILED";
 
-const isGradingOpen = (q: ResultQuestion) => q.gradingStatus === GRADING_WAITING || GRADING_RUNNING.has(q.gradingStatus ?? '');
+const isGradingOpen = (q: ResultQuestion) =>
+  q.gradingStatus === GRADING_WAITING || GRADING_RUNNING.has(q.gradingStatus ?? "");
 
-type Outcome = 'correct' | 'incorrect' | 'graded' | 'unanswered' | 'pending';
+type Outcome = "correct" | "incorrect" | "graded" | "unanswered" | "pending";
 
-const OUTCOME: Record<Outcome, { label: string; badge: 'success' | 'danger' | 'info' | 'default' | 'warning'; icon: React.ReactNode }> = {
-  correct: { label: 'Correct', badge: 'success', icon: <Icon.CheckCircle className="w-5 h-5 text-success" /> },
-  incorrect: { label: 'Incorrect', badge: 'danger', icon: <Icon.XCircle className="w-5 h-5 text-danger" /> },
-  graded: { label: 'Scored', badge: 'info', icon: <Icon.Award className="w-5 h-5 text-primary" /> },
-  unanswered: { label: 'Unanswered', badge: 'default', icon: <Icon.HelpCircle className="w-5 h-5 text-content-subtle" /> },
-  pending: { label: 'Not graded', badge: 'warning', icon: <Icon.Clock className="w-5 h-5 text-warning" /> },
+const OUTCOME: Record<
+  Outcome,
+  {
+    label: string;
+    badge: "success" | "danger" | "info" | "default" | "warning";
+    icon: React.ReactNode;
+  }
+> = {
+  correct: {
+    label: "Correct",
+    badge: "success",
+    icon: <Icon.CheckCircle className="w-5 h-5 text-success" />,
+  },
+  incorrect: {
+    label: "Incorrect",
+    badge: "danger",
+    icon: <Icon.XCircle className="w-5 h-5 text-danger" />,
+  },
+  graded: { label: "Scored", badge: "info", icon: <Icon.Award className="w-5 h-5 text-primary" /> },
+  unanswered: {
+    label: "Unanswered",
+    badge: "default",
+    icon: <Icon.HelpCircle className="w-5 h-5 text-content-subtle" />,
+  },
+  pending: {
+    label: "Not graded",
+    badge: "warning",
+    icon: <Icon.Clock className="w-5 h-5 text-warning" />,
+  },
 };
 
 /** Right / wrong of one answer — an exam shows it too once submitted; rubric answers only get their points. */
 function outcomeOf(q: ResultQuestion): Outcome {
-  if (isGradingOpen(q)) return 'pending';
-  if (!isAnswered(q.yourResponse)) return 'unanswered';
+  if (isGradingOpen(q)) return "pending";
+  if (!isAnswered(q.yourResponse)) return "unanswered";
   // Essay / code / diagram answers carry rubric points, not a right/wrong verdict.
-  if (RUBRIC_TYPES.has(q.questionType)) return 'graded';
-  if (q.isCorrect != null) return q.isCorrect ? 'correct' : 'incorrect';
-  if (q.scoreEarned != null && q.maxPoints != null) return Number(q.scoreEarned) >= Number(q.maxPoints) ? 'correct' : 'incorrect';
-  return 'incorrect';
+  if (RUBRIC_TYPES.has(q.questionType)) return "graded";
+  if (q.isCorrect != null) return q.isCorrect ? "correct" : "incorrect";
+  if (q.scoreEarned != null && q.maxPoints != null)
+    return Number(q.scoreEarned) >= Number(q.maxPoints) ? "correct" : "incorrect";
+  return "incorrect";
 }
 
 /** Every question type supports explanations: basic (SE-01) when available, and Deep AI Explanation (SE-03). */
@@ -82,19 +120,34 @@ const EXPLAIN_BATCH = 20;
 
 /** Palette cell per outcome — solid fills, so the status reads at a glance in both themes. */
 const PALETTE: OutcomeMeta<Outcome> = {
-  correct: { label: OUTCOME.correct.label, cell: 'bg-success-solid text-white' },
-  incorrect: { label: OUTCOME.incorrect.label, cell: 'bg-danger-solid text-white' },
-  graded: { label: OUTCOME.graded.label, cell: 'bg-brand-600 text-white' },
-  unanswered: { label: OUTCOME.unanswered.label, cell: 'bg-content-subtle text-white' },
-  pending: { label: OUTCOME.pending.label, cell: 'bg-highlight text-brand-950' },
+  correct: { label: OUTCOME.correct.label, cell: "bg-success-solid text-white" },
+  incorrect: { label: OUTCOME.incorrect.label, cell: "bg-danger-solid text-white" },
+  graded: { label: OUTCOME.graded.label, cell: "bg-brand-600 text-white" },
+  unanswered: { label: OUTCOME.unanswered.label, cell: "bg-content-subtle text-white" },
+  pending: { label: OUTCOME.pending.label, cell: "bg-highlight text-brand-950" },
 };
 
 /** Score colour: green ≥ 80 %, amber ≥ 50 %, red below. */
-const toneOf = (pct: number | null) => (pct == null ? 'text-content' : pct >= 80 ? 'text-success' : pct >= 50 ? 'text-warning' : 'text-danger');
+const toneOf = (pct: number | null) =>
+  pct == null
+    ? "text-content"
+    : pct >= 80
+      ? "text-success"
+      : pct >= 50
+        ? "text-warning"
+        : "text-danger";
 const barColorOf = (pct: number | null) =>
-  pct == null ? 'var(--color-primary)' : pct >= 80 ? 'var(--color-success-solid)' : pct >= 50 ? 'var(--color-warning)' : 'var(--color-danger-solid)';
+  pct == null
+    ? "var(--color-primary)"
+    : pct >= 80
+      ? "var(--color-success-solid)"
+      : pct >= 50
+        ? "var(--color-warning)"
+        : "var(--color-danger-solid)";
 const pctOf = (earned: number | null | undefined, max: number | null | undefined) =>
-  max != null && Number(max) > 0 && earned != null ? Math.round((Number(earned) / Number(max)) * 100) : null;
+  max != null && Number(max) > 0 && earned != null
+    ? Math.round((Number(earned) / Number(max)) * 100)
+    : null;
 
 /** Score of one module of the exam (questions carrying its moduleId). */
 interface ModuleScore {
@@ -114,9 +167,16 @@ function moduleScores(questions: ResultQuestion[], outcomes: Outcome[]): ModuleS
   questions.forEach((q, i) => {
     if (q.moduleId == null && !q.moduleName) return;
     const key = String(q.moduleId ?? q.moduleName);
-    const m = byKey.get(key) ?? { key, name: q.moduleName || `Module ${q.moduleId}`, earned: 0, max: 0, pending: 0, first: i };
+    const m = byKey.get(key) ?? {
+      key,
+      name: q.moduleName || `Module ${q.moduleId}`,
+      earned: 0,
+      max: 0,
+      pending: 0,
+      first: i,
+    };
     m.max += Number(q.maxPoints ?? 0);
-    if (outcomes[i] === 'pending') m.pending++;
+    if (outcomes[i] === "pending") m.pending++;
     else m.earned += Number(q.scoreEarned ?? 0);
     byKey.set(key, m);
   });
@@ -136,7 +196,7 @@ const sortResult = (res: AttemptResult): AttemptResult => ({
 });
 
 function num(v: number | null | undefined): string {
-  return v == null ? '—' : String(Math.round(Number(v) * 100) / 100);
+  return v == null ? "—" : String(Math.round(Number(v) * 100) / 100);
 }
 
 /**
@@ -163,8 +223,8 @@ function num(v: number | null | undefined): string {
 export function StudentExamResultPage() {
   const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
-  const attemptId = searchParams.get('attemptId');
-  const examId = searchParams.get('examId');
+  const attemptId = searchParams.get("attemptId");
+  const examId = searchParams.get("examId");
   /** SA-06 answered 403: the course was left (EN-04), so none of its attempts are shown. */
   const [notEnrolled, setNotEnrolled] = useState(false);
 
@@ -196,20 +256,20 @@ export function StudentExamResultPage() {
 
   const toggleQuestionBookmark = async (questionId: number) => {
     if (bookmarkBusy.has(questionId)) return;
-    setBookmarkBusy(current => new Set(current).add(questionId));
+    setBookmarkBusy((current) => new Set(current).add(questionId));
     setBookmarkError(null);
     try {
       const updated = await studentProgressService.toggleBookmark(questionId);
-      setBookmarkedQuestions(current => {
+      setBookmarkedQuestions((current) => {
         const next = new Set(current);
         if (updated.isBookmarked) next.add(questionId);
         else next.delete(questionId);
         return next;
       });
     } catch (err) {
-      setBookmarkError(getApiErrorMessage(err, 'Could not update the bookmark.'));
+      setBookmarkError(getApiErrorMessage(err, "Could not update the bookmark."));
     } finally {
-      setBookmarkBusy(current => {
+      setBookmarkBusy((current) => {
         const next = new Set(current);
         next.delete(questionId);
         return next;
@@ -227,22 +287,27 @@ export function StudentExamResultPage() {
   /** From the exam's mode in the DB; with no submitted attempt yet, the unfinished one tells it. */
   const behavior = examModeBehavior(result?.examMode ?? unfinished?.examMode);
   /** A self-made exam (practice kind): its home is Exam History, it offers "Retry wrong questions" and counts right answers. */
-  const practice = behavior.kind === 'PRACTICE';
-  const historyPath = `${ROUTES.studentExams}${behavior.historyType ? `?type=${behavior.historyType}` : ''}`;
+  const practice = behavior.kind === "PRACTICE";
+  const historyPath = `${ROUTES.studentExams}${behavior.historyType ? `?type=${behavior.historyType}` : ""}`;
   useEffect(() => {
     if (!examId) return;
     let cancelled = false;
     studentAttemptService
       .getExamDetail(examId)
-      .then(async detail => {
+      .then(async (detail) => {
         const id = detail.actions?.activeAttemptId;
         if (id == null) return null;
         const s = await studentAttemptService.get(id);
-        if (s.status !== 'IN_PROGRESS') return null;
-        const answered = (s.answers ?? []).filter(a => isAnswered(a.response)).length;
-        return { attemptId: s.attemptId, answered, total: s.questions.length, examMode: s.examMode ?? null };
+        if (s.status !== "IN_PROGRESS") return null;
+        const answered = (s.answers ?? []).filter((a) => isAnswered(a.response)).length;
+        return {
+          attemptId: s.attemptId,
+          answered,
+          total: s.questions.length,
+          examMode: s.examMode ?? null,
+        };
       })
-      .then(u => {
+      .then((u) => {
         if (!cancelled) setUnfinished(u);
       })
       // Not knowing just hides the banner; Retake still resumes it (SA-01 answers with the active attempt).
@@ -264,17 +329,21 @@ export function StudentExamResultPage() {
     }
     studentAttemptService
       .getAllHistory(examId)
-      .then(items => {
+      .then((items) => {
         if (cancelled) return;
-        const submitted = items.filter(a => a.status !== 'IN_PROGRESS');
+        const submitted = items.filter((a) => a.status !== "IN_PROGRESS");
         setAttempts(submitted);
         setNoSubmitted(submitted.length === 0);
         if (!attemptId) {
-          if (submitted.length > 0) setSearchParams({ examId, attemptId: String(submitted[0].attemptId) }, { replace: true });
+          if (submitted.length > 0)
+            setSearchParams(
+              { examId, attemptId: String(submitted[0].attemptId) },
+              { replace: true },
+            );
           else setLoading(false);
         }
       })
-      .catch(err => {
+      .catch((err) => {
         if (cancelled) return;
         setAttempts([]);
         if ((err as { response?: { status?: number } })?.response?.status === 403) {
@@ -283,7 +352,7 @@ export function StudentExamResultPage() {
           return;
         }
         if (!attemptId) {
-          setError(getApiErrorMessage(err, 'Failed to load your attempts.'));
+          setError(getApiErrorMessage(err, "Failed to load your attempts."));
           setLoading(false);
         }
       });
@@ -296,12 +365,14 @@ export function StudentExamResultPage() {
 
   /** CD-07 of the exam (every attempt, picked per attempt below); null until loaded, or when the exam has no CODE question / it failed. */
   const [codeSubs, setCodeSubs] = useState<CodeSubmission[] | null>(null);
-  const resultHasCode = Boolean(result?.questions.some(x => x.questionType === 'CODE'));
+  const resultHasCode = Boolean(result?.questions.some((x) => x.questionType === "CODE"));
   useEffect(() => {
     if (!examId || !resultHasCode || !attemptId) return;
     let cancelled = false;
     studentCodeExamService.getAllSubmissions(examId, attemptId).then(
-      subs => !cancelled && setCodeSubs(subs.filter(s => s.attemptId == null || String(s.attemptId) === attemptId)),
+      (subs) =>
+        !cancelled &&
+        setCodeSubs(subs.filter((s) => s.attemptId == null || String(s.attemptId) === attemptId)),
       () => !cancelled && setCodeSubs(null),
     );
     return () => {
@@ -309,7 +380,9 @@ export function StudentExamResultPage() {
     };
   }, [examId, resultHasCode, attemptId]);
   /** SA-06 row of the attempt on screen: its time window keeps other attempts' CD-07 verdicts out. */
-  const viewedAttempt = result ? (attempts?.find(a => a.attemptId === result.attemptId) ?? null) : null;
+  const viewedAttempt = result
+    ? (attempts?.find((a) => a.attemptId === result.attemptId) ?? null)
+    : null;
 
   /** Questions to save as flashcards (modal open while set). */
   const [saveQuestions, setSaveQuestions] = useState<number[] | null>(null);
@@ -332,7 +405,7 @@ export function StudentExamResultPage() {
   useEffect(() => {
     if (!attemptId) {
       if (!examId) {
-        setError('No attempt was selected.');
+        setError("No attempt was selected.");
         setLoading(false);
       }
       return;
@@ -341,11 +414,11 @@ export function StudentExamResultPage() {
     setError(null);
     studentAttemptService
       .getResult(attemptId)
-      .then(res => {
+      .then((res) => {
         if (!cancelled) setResult(sortResult(res));
       })
-      .catch(err => {
-        if (!cancelled) setError(getApiErrorMessage(err, 'Failed to load the result.'));
+      .catch((err) => {
+        if (!cancelled) setError(getApiErrorMessage(err, "Failed to load the result."));
       })
       .finally(() => {
         if (!cancelled) setLoading(false);
@@ -355,10 +428,16 @@ export function StudentExamResultPage() {
     };
   }, [attemptId, reload]);
 
-  const outcomes = useMemo(() => (result?.questions ?? []).map(x => outcomeOf(x)), [result]);
+  const outcomes = useMemo(() => (result?.questions ?? []).map((x) => outcomeOf(x)), [result]);
   const counts = useMemo(() => {
-    const c: Record<Outcome, number> = { correct: 0, incorrect: 0, graded: 0, unanswered: 0, pending: 0 };
-    outcomes.forEach(o => c[o]++);
+    const c: Record<Outcome, number> = {
+      correct: 0,
+      incorrect: 0,
+      graded: 0,
+      unanswered: 0,
+      pending: 0,
+    };
+    outcomes.forEach((o) => c[o]++);
     return c;
   }, [outcomes]);
 
@@ -381,26 +460,29 @@ export function StudentExamResultPage() {
     } catch (err) {
       const status = (err as { response?: { status?: number } }).response?.status;
       // 409 NOTHING_TO_GRADE: already queued/graded elsewhere — just re-read.
-      if (status !== 409) setGradingError(getApiErrorMessage(err, 'Could not start the AI grading.'));
+      if (status !== 409)
+        setGradingError(getApiErrorMessage(err, "Could not start the AI grading."));
     }
     // Re-read before dropping `requesting`, so the modal doesn't blink shut in between.
     try {
       const res = await studentAttemptService.getResult(id);
       if (attemptIdRef.current === String(id)) setResult(sortResult(res));
     } catch {
-      setReload(r => r + 1);
+      setReload((r) => r + 1);
     }
     setRequesting(false);
   }, []);
 
-  const waiting = result?.questions.some(q => q.gradingStatus === GRADING_WAITING) ?? false;
-  const running = result?.questions.some(q => GRADING_RUNNING.has(q.gradingStatus ?? '')) ?? false;
-  const showGrading = !dismissed && (requesting || running || (gradingAsked && gradingError != null));
+  const waiting = result?.questions.some((q) => q.gradingStatus === GRADING_WAITING) ?? false;
+  const running =
+    result?.questions.some((q) => GRADING_RUNNING.has(q.gradingStatus ?? "")) ?? false;
+  const showGrading =
+    !dismissed && (requesting || running || (gradingAsked && gradingError != null));
 
   // Poll while the AI is working, until every answer is graded or failed.
   useEffect(() => {
     if (!running) return;
-    const id = window.setTimeout(() => setReload(r => r + 1), POLL_MS);
+    const id = window.setTimeout(() => setReload((r) => r + 1), POLL_MS);
     return () => window.clearTimeout(id);
   }, [running, result]);
 
@@ -415,8 +497,8 @@ export function StudentExamResultPage() {
     async (questionIds: number[]) => {
       if (!result) return;
       const forAttempt = String(result.attemptId);
-      const need = questionIds.filter(id => {
-        const q = result.questions.find(x => x.questionId === id);
+      const need = questionIds.filter((id) => {
+        const q = result.questions.find((x) => x.questionId === id);
         const e = explanationsRef.current[id];
         return q != null && hasExplanation(q) && !q.explanation?.text && !e?.text && !e?.loading;
       });
@@ -427,27 +509,30 @@ export function StudentExamResultPage() {
         explanationsRef.current = { ...explanationsRef.current, ...Object.fromEntries(entries) };
         setExplanations(explanationsRef.current);
       };
-      patch(need.map(id => [id, { text: null, loading: true, error: null }]));
+      patch(need.map((id) => [id, { text: null, loading: true, error: null }]));
       const chunks: number[][] = [];
-      for (let i = 0; i < need.length; i += EXPLAIN_BATCH) chunks.push(need.slice(i, i + EXPLAIN_BATCH));
+      for (let i = 0; i < need.length; i += EXPLAIN_BATCH)
+        chunks.push(need.slice(i, i + EXPLAIN_BATCH));
       await Promise.all(
-        chunks.map(async chunk => {
+        chunks.map(async (chunk) => {
           try {
             const res = await studentAttemptService.explain(result.attemptId, chunk);
             patch(
-              chunk.map(id => {
-                const item = res.items.find(x => x.questionId === id);
-                if (item?.explanation) return [id, { text: item.explanation, loading: false, error: null }];
-                if (item?.source === 'NOT_APPLICABLE') return [id, { text: null, loading: false, error: null, notApplicable: true }];
+              chunk.map((id) => {
+                const item = res.items.find((x) => x.questionId === id);
+                if (item?.explanation)
+                  return [id, { text: item.explanation, loading: false, error: null }];
+                if (item?.source === "NOT_APPLICABLE")
+                  return [id, { text: null, loading: false, error: null, notApplicable: true }];
                 const error = item?.reason
-                  ? `No explanation available (${item.reason.replace(/_/g, ' ').toLowerCase()}).`
-                  : 'No explanation available.';
+                  ? `No explanation available (${item.reason.replace(/_/g, " ").toLowerCase()}).`
+                  : "No explanation available.";
                 return [id, { text: null, loading: false, error }];
               }),
             );
           } catch (err) {
-            const error = getApiErrorMessage(err, 'Failed to get an explanation.');
-            patch(chunk.map(id => [id, { text: null, loading: false, error }]));
+            const error = getApiErrorMessage(err, "Failed to get an explanation.");
+            patch(chunk.map((id) => [id, { text: null, loading: false, error }]));
           }
         }),
       );
@@ -458,9 +543,16 @@ export function StudentExamResultPage() {
   const breadcrumb = (
     <Breadcrumb
       items={[
-        { label: 'My Exams', onClick: () => navigate(historyPath) },
-        ...(examId && !notEnrolled && !practice ? [{ label: result?.examTitle ?? 'Exam', onClick: () => navigate(studentExamPath(examId)) }] : []),
-        { label: 'Attempts' },
+        { label: "My Exams", onClick: () => navigate(historyPath) },
+        ...(examId && !notEnrolled && !practice
+          ? [
+              {
+                label: result?.examTitle ?? "Exam",
+                onClick: () => navigate(studentExamPath(examId)),
+              },
+            ]
+          : []),
+        { label: "Attempts" },
       ]}
     />
   );
@@ -503,7 +595,7 @@ export function StudentExamResultPage() {
       onDiscarded={() => {
         // Nothing left to show here: back to Exam History.
         if (noSubmitted) navigate(historyPath, { replace: true });
-        else setUnfinishedReload(r => r + 1);
+        else setUnfinishedReload((r) => r + 1);
       }}
     />
   );
@@ -518,7 +610,11 @@ export function StudentExamResultPage() {
           <EmptyState
             icon={<Icon.FileText className="w-7 h-7" />}
             title="No submitted attempt yet"
-            message={unfinished ? 'Finish your attempt to see its result here.' : 'You have no submitted attempt for this exam yet.'}
+            message={
+              unfinished
+                ? "Finish your attempt to see its result here."
+                : "You have no submitted attempt for this exam yet."
+            }
           />
         </div>
       </div>
@@ -529,17 +625,17 @@ export function StudentExamResultPage() {
     return (
       <div className={`${STUDENT_PAGE_CLASS} space-y-6`}>
         {breadcrumb}
-        <LoadError message={error ?? 'Result not found.'} onRetry={() => setReload(r => r + 1)} />
+        <LoadError message={error ?? "Result not found."} onRetry={() => setReload((r) => r + 1)} />
       </div>
     );
   }
 
-  const failedCount = result.questions.filter(q => q.gradingStatus === GRADING_FAILED).length;
+  const failedCount = result.questions.filter((q) => q.gradingStatus === GRADING_FAILED).length;
   const total = result.questions.length;
 
   const toggle = (questionId: number) => {
     const opening = !open.has(questionId);
-    setOpen(prev => {
+    setOpen((prev) => {
       const next = new Set(prev);
       if (opening) next.add(questionId);
       else next.delete(questionId);
@@ -548,24 +644,26 @@ export function StudentExamResultPage() {
     if (opening) loadExplanations([questionId]);
   };
 
-  const qParam = Number(searchParams.get('q'));
-  const current = total === 0 ? 0 : Number.isInteger(qParam) && qParam >= 1 ? Math.min(qParam, total) - 1 : 0;
+  const qParam = Number(searchParams.get("q"));
+  const current =
+    total === 0 ? 0 : Number.isInteger(qParam) && qParam >= 1 ? Math.min(qParam, total) - 1 : 0;
   const prevIndex = current > 0 ? current - 1 : undefined;
   const nextIndex = current < total - 1 ? current + 1 : undefined;
 
   const goTo = (index: number) => {
     // replace: walking through 40 questions must not fill the Back button's history.
     setSearchParams(
-      prev => {
+      (prev) => {
         const next = new URLSearchParams(prev);
-        next.set('q', String(index + 1));
+        next.set("q", String(index + 1));
         return next;
       },
       { replace: true },
     );
     // From the bottom of a long answer, bring the next question's top into view.
     const top = questionRef.current?.getBoundingClientRect().top;
-    if (top != null && top < 0) questionRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    if (top != null && top < 0)
+      questionRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
   };
   navRef.current = {
     prev: prevIndex != null ? () => goTo(prevIndex) : undefined,
@@ -574,14 +672,21 @@ export function StudentExamResultPage() {
 
   const modules = moduleScores(result.questions, outcomes);
   // A practice essay / diagram paper has no right / wrong to count: it shows its score like an exam.
-  const rubricOnly = total > 0 && result.questions.every(x => RUBRIC_TYPES.has(x.questionType));
+  const rubricOnly = total > 0 && result.questions.every((x) => RUBRIC_TYPES.has(x.questionType));
   const practiceCounts = practice && !rubricOnly;
   const q = result.questions[current];
   const canSave = SAVABLE_ATTEMPT_STATUSES.has(result.status);
-  const savableIds = canSave ? result.questions.filter(x => SAVABLE_QUESTION_TYPES.has(x.questionType)).map(x => x.questionId) : [];
+  const savableIds = canSave
+    ? result.questions
+        .filter((x) => SAVABLE_QUESTION_TYPES.has(x.questionType))
+        .map((x) => x.questionId)
+    : [];
   // PQ-04 takes the same statuses; a rubric answer below full marks counts as wrong there too.
   const hasWrong = result.questions.some(
-    (x, i) => outcomes[i] === 'incorrect' || outcomes[i] === 'unanswered' || (outcomes[i] === 'graded' && Number(x.scoreEarned ?? 0) < Number(x.maxPoints ?? 0)),
+    (x, i) =>
+      outcomes[i] === "incorrect" ||
+      outcomes[i] === "unanswered" ||
+      (outcomes[i] === "graded" && Number(x.scoreEarned ?? 0) < Number(x.maxPoints ?? 0)),
   );
 
   return (
@@ -591,54 +696,63 @@ export function StudentExamResultPage() {
 
       {/* The score is the headline: a full-width header above the question and its navigator. */}
       <ScoreCard
-            result={result}
-            practice={practice}
-            showCounts={practiceCounts}
-            counts={counts}
-            modules={modules}
-            onOpenModule={goTo}
-            failedCount={failedCount}
-            gradingError={gradingError}
-            waitingForGrading={waiting && !running}
-            grading={requesting || running}
-            onRequestGrading={() => requestGrading(result.attemptId)}
-            picker={
-              attempts && attempts.length > 0 ? (
-                <Select
-                  label="Attempt"
-                  maxVisibleOptions={5}
-                  options={attempts.map((a, i) => ({
-                    value: String(a.attemptId),
-                    // Written answers still ungraded: a "0/100" would read as a real score.
-                    label: `#${attempts.length - i} · ${formatDateTime(a.submittedAt ?? a.startTime)}${
-                      practiceCounts ? '' : ` ·${Number(a.pendingPoints ?? 0) > 0 ? 'Not graded' : `${num(a.totalScore)}/${num(a.maxScore)}`}`
-                    }`,
-                  }))}
-                  value={String(result.attemptId)}
-                  onChange={v => examId && setSearchParams({ examId, attemptId: v })}
-                />
-              ) : undefined
-            }
-            onSaveAll={savableIds.length > 0 ? () => setSaveQuestions(savableIds) : undefined}
-            // "Retry wrong questions" (PQ-04) takes self-made exams only.
-            onRetryWrong={practice && canSave && hasWrong ? () => setRetrying(true) : undefined}
-            // While an attempt is unfinished SA-01 cannot open a new one: the banner's Continue replaces Retake.
-            // A self-made exam is taken again the way this attempt was (Exam or Practice); with that choice
-            // unknown (or a course exam) it starts in the exam's own mode.
-            onRetake={
-              examId && !unfinished
-                ? () =>
-                    navigate(studentTakeExamPath(examId, canChooseTakeMode(result.examMode) ? (takeAsOf(result.attemptId) ?? undefined) : undefined))
-                : undefined
-            }
-            onBack={
-              practice
-                ? () => navigate(historyPath)
-                : examId
-                  ? () => navigate(studentExamPath(examId))
-                  : () => navigate(ROUTES.studentExams)
-            }
-          />
+        result={result}
+        practice={practice}
+        showCounts={practiceCounts}
+        counts={counts}
+        modules={modules}
+        onOpenModule={goTo}
+        failedCount={failedCount}
+        gradingError={gradingError}
+        waitingForGrading={waiting && !running}
+        grading={requesting || running}
+        onRequestGrading={() => requestGrading(result.attemptId)}
+        picker={
+          attempts && attempts.length > 0 ? (
+            <Select
+              label="Attempt"
+              maxVisibleOptions={5}
+              options={attempts.map((a, i) => ({
+                value: String(a.attemptId),
+                // Written answers still ungraded: a "0/100" would read as a real score.
+                label: `#${attempts.length - i} · ${formatDateTime(a.submittedAt ?? a.startTime)}${
+                  practiceCounts
+                    ? ""
+                    : ` ·${Number(a.pendingPoints ?? 0) > 0 ? "Not graded" : `${num(a.totalScore)}/${num(a.maxScore)}`}`
+                }`,
+              }))}
+              value={String(result.attemptId)}
+              onChange={(v) => examId && setSearchParams({ examId, attemptId: v })}
+            />
+          ) : undefined
+        }
+        onSaveAll={savableIds.length > 0 ? () => setSaveQuestions(savableIds) : undefined}
+        // "Retry wrong questions" (PQ-04) takes self-made exams only.
+        onRetryWrong={practice && canSave && hasWrong ? () => setRetrying(true) : undefined}
+        // While an attempt is unfinished SA-01 cannot open a new one: the banner's Continue replaces Retake.
+        // A self-made exam is taken again the way this attempt was (Exam or Practice); with that choice
+        // unknown (or a course exam) it starts in the exam's own mode.
+        onRetake={
+          examId && !unfinished
+            ? () =>
+                navigate(
+                  studentTakeExamPath(
+                    examId,
+                    canChooseTakeMode(result.examMode)
+                      ? (takeAsOf(result.attemptId) ?? undefined)
+                      : undefined,
+                  ),
+                )
+            : undefined
+        }
+        onBack={
+          practice
+            ? () => navigate(historyPath)
+            : examId
+              ? () => navigate(studentExamPath(examId))
+              : () => navigate(ROUTES.studentExams)
+        }
+      />
 
       <div className="grid lg:grid-cols-[minmax(0,1fr)_300px] gap-[clamp(1rem,2vw,1.5rem)] items-start">
         {/* Navigator above the question on small screens (folded); beside it, top-aligned, from lg. */}
@@ -648,14 +762,27 @@ export function StudentExamResultPage() {
           </aside>
         )}
 
-        <section ref={questionRef} className="lg:order-1 space-y-3 min-w-0 scroll-mt-[85px]" aria-label="Question">
+        <section
+          ref={questionRef}
+          className="lg:order-1 space-y-3 min-w-0 scroll-mt-[85px]"
+          aria-label="Question"
+        >
           {!q ? (
-            <div className="card px-5 py-10 text-center text-sm text-content-soft">This attempt has no question.</div>
+            <div className="card px-5 py-10 text-center text-sm text-content-soft">
+              This attempt has no question.
+            </div>
           ) : (
             <>
               <ResultQuestionCard
                 key={q.questionId}
-                nav={<QuestionNav current={current} total={total} onPrev={navRef.current.prev} onNext={navRef.current.next} />}
+                nav={
+                  <QuestionNav
+                    current={current}
+                    total={total}
+                    onPrev={navRef.current.prev}
+                    onNext={navRef.current.next}
+                  />
+                }
                 question={q}
                 index={current}
                 practice={practice}
@@ -664,32 +791,67 @@ export function StudentExamResultPage() {
                 explanationOpen={open.has(q.questionId)}
                 onToggleExplanation={() => toggle(q.questionId)}
                 onRetryExplanation={() => loadExplanations([q.questionId])}
-                onDeepExplain={() => studentAttemptService.deepExplain(result.attemptId, q.questionId)}
+                onDeepExplain={() =>
+                  studentAttemptService.deepExplain(result.attemptId, q.questionId)
+                }
                 attemptKey={result.attemptId}
                 bookmarkAction={
-                  <div className="flex flex-wrap gap-2"><Button size="sm" variant={bookmarkedQuestions.has(q.questionId) ? 'primary' : 'outline'} disabled={bookmarkBusy.has(q.questionId)} aria-pressed={bookmarkedQuestions.has(q.questionId)} aria-label={bookmarkedQuestions.has(q.questionId) ? 'Remove bookmark' : 'Bookmark question'} icon={<Icon.Star className={`w-4 h-4 ${bookmarkedQuestions.has(q.questionId) ? 'fill-current' : ''}`} />} onClick={() => toggleQuestionBookmark(q.questionId)}>
-                    {bookmarkedQuestions.has(q.questionId) ? 'Bookmarked' : 'Bookmark'}
-                  </Button><ReportQuestionIssueButton questionId={q.questionId} attemptId={result.attemptId} options={q.options ?? []} /></div>
+                  <div className="flex flex-wrap gap-2">
+                    <Button
+                      size="sm"
+                      variant={bookmarkedQuestions.has(q.questionId) ? "primary" : "outline"}
+                      disabled={bookmarkBusy.has(q.questionId)}
+                      aria-pressed={bookmarkedQuestions.has(q.questionId)}
+                      aria-label={
+                        bookmarkedQuestions.has(q.questionId)
+                          ? "Remove bookmark"
+                          : "Bookmark question"
+                      }
+                      icon={
+                        <Icon.Star
+                          className={`w-4 h-4 ${bookmarkedQuestions.has(q.questionId) ? "fill-current" : ""}`}
+                        />
+                      }
+                      onClick={() => toggleQuestionBookmark(q.questionId)}
+                    >
+                      {bookmarkedQuestions.has(q.questionId) ? "Bookmarked" : "Bookmark"}
+                    </Button>
+                    <ReportQuestionIssueButton
+                      questionId={q.questionId}
+                      attemptId={result.attemptId}
+                      options={q.options ?? []}
+                    />
+                  </div>
                 }
                 saveAction={
                   savableIds.includes(q.questionId) ? (
                     savedIds.has(q.questionId) ? (
-                      <Button size="sm" variant="ghost" icon={<Icon.Check className="w-4 h-4" />} onClick={() => setSaveQuestions([q.questionId])}>
+                      <Button
+                        size="sm"
+                        variant="ghost"
+                        icon={<Icon.Check className="w-4 h-4" />}
+                        onClick={() => setSaveQuestions([q.questionId])}
+                      >
                         Saved to flashcards
                       </Button>
                     ) : (
-                      <Button size="sm" variant="outline" icon={<Icon.Layers className="w-4 h-4" />} onClick={() => setSaveQuestions([q.questionId])}>
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        icon={<Icon.Layers className="w-4 h-4" />}
+                        onClick={() => setSaveQuestions([q.questionId])}
+                      >
                         Save to flashcards
                       </Button>
                     )
                   ) : undefined
                 }
                 gradeDetail={
-                  q.questionType === 'CODE' && codeSubs
+                  q.questionType === "CODE" && codeSubs
                     ? (() => {
                         const attemptRef = viewedAttempt ?? {
                           attemptId: result.attemptId,
-                          startTime: '',
+                          startTime: "",
                           submittedAt: result.submittedAt,
                         };
                         const sub = latestSubmissionOfAttempt(codeSubs, q.questionId, attemptRef);
@@ -702,9 +864,18 @@ export function StudentExamResultPage() {
                     : undefined
                 }
               />
-              {bookmarkError && <p role="alert" className="text-sm text-danger">{bookmarkError}</p>}
+              {bookmarkError && (
+                <p role="alert" className="text-sm text-danger">
+                  {bookmarkError}
+                </p>
+              )}
               <div className="flex items-center justify-between gap-3">
-                <Button variant="outline" icon={<Icon.ChevronLeft className="w-4 h-4" />} disabled={!navRef.current.prev} onClick={navRef.current.prev}>
+                <Button
+                  variant="outline"
+                  icon={<Icon.ChevronLeft className="w-4 h-4" />}
+                  disabled={!navRef.current.prev}
+                  onClick={navRef.current.prev}
+                >
                   Previous
                 </Button>
                 <Button disabled={!navRef.current.next} onClick={navRef.current.next}>
@@ -724,7 +895,7 @@ export function StudentExamResultPage() {
           examId={examId}
           examTitle={result.examTitle}
           onClose={() => setSaveQuestions(null)}
-          onSaved={ids => setSavedIds(prev => new Set([...prev, ...ids]))}
+          onSaved={(ids) => setSavedIds((prev) => new Set([...prev, ...ids]))}
         />
       )}
 
@@ -758,8 +929,10 @@ function GradingScreen({
   onRetry: () => void;
   onClose: () => void;
 }) {
-  const rubric = result.questions.filter(q => RUBRIC_TYPES.has(q.questionType) && q.gradingStatus !== 'AUTO');
-  const done = rubric.filter(q => !isGradingOpen(q)).length;
+  const rubric = result.questions.filter(
+    (q) => RUBRIC_TYPES.has(q.questionType) && q.gradingStatus !== "AUTO",
+  );
+  const done = rubric.filter((q) => !isGradingOpen(q)).length;
   const total = Math.max(rubric.length, 1);
   return (
     <div className="py-6 flex flex-col items-center text-center gap-5" aria-live="polite">
@@ -790,7 +963,8 @@ function GradingScreen({
           <div className="space-y-1.5">
             <h2 className="text-lg font-bold text-content">AI is grading your answers…</h2>
             <p className="text-sm text-content-soft">
-              {result.examTitle} — your written answers are being scored against the rubric. This usually takes under a minute.
+              {result.examTitle} — your written answers are being scored against the rubric. This
+              usually takes under a minute.
             </p>
           </div>
           <div className="w-full max-w-xs space-y-1.5">
@@ -856,7 +1030,8 @@ function ScoreCard({
   const tone = toneOf(pct);
 
   const showScore = !waitingForGrading && !grading;
-  const stillGrading = counts.pending > 0 || (result.pendingPoints != null && Number(result.pendingPoints) > 0);
+  const stillGrading =
+    counts.pending > 0 || (result.pendingPoints != null && Number(result.pendingPoints) > 0);
 
   return (
     <div className="card p-5 min-w-0 space-y-4">
@@ -866,7 +1041,11 @@ function ScoreCard({
       <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)] lg:items-center">
         <div className="min-w-0 lg:max-w-xs space-y-1">
           {picker}
-          {result.autoSubmitted && <p className="text-xs text-content-subtle">Submitted automatically when time ran out.</p>}
+          {result.autoSubmitted && (
+            <p className="text-xs text-content-subtle">
+              Submitted automatically when time ran out.
+            </p>
+          )}
         </div>
 
         {/* No score until the written answers are graded — "0 / 100" would read as a real result. */}
@@ -874,11 +1053,14 @@ function ScoreCard({
           // Practice quiz has no score: how many were right, wrong and left out.
           <dl className="grid grid-cols-3 gap-2 text-center lg:min-w-[18rem]">
             {[
-              { label: 'Correct', value: counts.correct, tone: 'text-success' },
-              { label: 'Wrong', value: counts.incorrect, tone: 'text-danger' },
-              { label: 'Unanswered', value: counts.unanswered, tone: 'text-content' },
-            ].map(s => (
-              <div key={s.label} className="flex flex-col-reverse rounded-[10px] border border-line py-3">
+              { label: "Correct", value: counts.correct, tone: "text-success" },
+              { label: "Wrong", value: counts.incorrect, tone: "text-danger" },
+              { label: "Unanswered", value: counts.unanswered, tone: "text-content" },
+            ].map((s) => (
+              <div
+                key={s.label}
+                className="flex flex-col-reverse rounded-[10px] border border-line py-3"
+              >
                 <dt className="text-xs text-content-soft">{s.label}</dt>
                 <dd className={`text-2xl font-bold ${s.tone}`}>{s.value}</dd>
               </div>
@@ -887,10 +1069,16 @@ function ScoreCard({
         ) : showScore ? (
           // As tall as the Retake / Back pair beside it (~80px): label, one score line, bar.
           <div className="text-center space-y-1.5 lg:min-w-[16rem]">
-            <p className="text-xs font-semibold text-content-subtle uppercase tracking-wide leading-4">Your score</p>
-            <p className={`flex flex-wrap items-baseline justify-center gap-x-1.5 leading-none ${tone}`}>
+            <p className="text-xs font-semibold text-content-subtle uppercase tracking-wide leading-4">
+              Your score
+            </p>
+            <p
+              className={`flex flex-wrap items-baseline justify-center gap-x-1.5 leading-none ${tone}`}
+            >
               <span className="text-[2.5rem] font-black break-all">{num(score)}</span>
-              <span className="text-lg font-semibold text-content-subtle whitespace-nowrap">/ {num(max)}</span>
+              <span className="text-lg font-semibold text-content-subtle whitespace-nowrap">
+                / {num(max)}
+              </span>
               {pct != null && <span className="text-sm font-semibold ml-1">{pct}%</span>}
             </p>
             <div className="mx-auto max-w-[14rem]">
@@ -899,7 +1087,9 @@ function ScoreCard({
           </div>
         ) : (
           // Just the button while waiting; the warning box only when there is something to say.
-          <div className={`w-full lg:w-64 lg:justify-self-center ${grading || gradingError ? 'space-y-2 rounded-[10px] border border-warning-line bg-warning-light p-3' : ''}`}>
+          <div
+            className={`w-full lg:w-64 lg:justify-self-center ${grading || gradingError ? "space-y-2 rounded-[10px] border border-warning-line bg-warning-light p-3" : ""}`}
+          >
             {grading && (
               <p className="flex items-start gap-2 text-xs text-warning">
                 <Icon.Clock className="w-4 h-4 flex-shrink-0" />
@@ -908,8 +1098,15 @@ function ScoreCard({
             )}
             {gradingError && <p className="text-xs text-danger">{gradingError}</p>}
             {/* Button's `loading` shows its spinner while SE-02 is sent and the AI is working. */}
-            <Button size="sm" className="w-full" icon={<Icon.Brain className="w-4 h-4" />} loading={grading} disabled={grading} onClick={onRequestGrading}>
-              {grading ? 'Grading…' : 'Grade with AI'}
+            <Button
+              size="sm"
+              className="w-full"
+              icon={<Icon.Brain className="w-4 h-4" />}
+              loading={grading}
+              disabled={grading}
+              onClick={onRequestGrading}
+            >
+              {grading ? "Grading…" : "Grade with AI"}
             </Button>
           </div>
         )}
@@ -921,17 +1118,29 @@ function ScoreCard({
             </Button>
           )}
           {onRetryWrong && (
-            <Button variant="outline" icon={<Icon.XCircle className="w-4 h-4" />} onClick={onRetryWrong}>
+            <Button
+              variant="outline"
+              icon={<Icon.XCircle className="w-4 h-4" />}
+              onClick={onRetryWrong}
+            >
               Retry wrong questions
             </Button>
           )}
           {onSaveAll && (
-            <Button variant="outline" icon={<Icon.Layers className="w-4 h-4" />} onClick={onSaveAll}>
+            <Button
+              variant="outline"
+              icon={<Icon.Layers className="w-4 h-4" />}
+              onClick={onSaveAll}
+            >
               Save all to flashcards
             </Button>
           )}
-          <Button variant="outline" icon={<Icon.ChevronLeft className="w-4 h-4" />} onClick={onBack}>
-            {practice ? 'Back to Exam History' : 'Back to exam'}
+          <Button
+            variant="outline"
+            icon={<Icon.ChevronLeft className="w-4 h-4" />}
+            onClick={onBack}
+          >
+            {practice ? "Back to Exam History" : "Back to exam"}
           </Button>
         </div>
       </div>
@@ -939,7 +1148,8 @@ function ScoreCard({
       {showScore && stillGrading && (
         <p className="flex items-start gap-2 text-xs text-warning">
           <Icon.Clock className="w-4 h-4 flex-shrink-0" />
-          {num(result.pendingPoints)} points are still being graded by AI. This page refreshes on its own.
+          {num(result.pendingPoints)} points are still being graded by AI. This page refreshes on
+          its own.
         </p>
       )}
 
@@ -947,9 +1157,17 @@ function ScoreCard({
         <div className="flex flex-wrap items-center justify-between gap-2 rounded-[10px] border border-danger-solid bg-danger-light p-3">
           <p className="flex items-start gap-2 text-xs text-danger">
             <Icon.AlertCircle className="w-4 h-4 flex-shrink-0" />
-            {gradingError ?? `AI grading failed for ${failedCount} question${failedCount === 1 ? '' : 's'}.`}
+            {gradingError ??
+              `AI grading failed for ${failedCount} question${failedCount === 1 ? "" : "s"}.`}
           </p>
-          <Button size="sm" variant="outline" icon={<Icon.RefreshCw className="w-4 h-4" />} loading={grading} disabled={grading} onClick={onRequestGrading}>
+          <Button
+            size="sm"
+            variant="outline"
+            icon={<Icon.RefreshCw className="w-4 h-4" />}
+            loading={grading}
+            disabled={grading}
+            onClick={onRequestGrading}
+          >
             Retry AI grading
           </Button>
         </div>
@@ -957,9 +1175,11 @@ function ScoreCard({
 
       {showScore && !practice && modules.length > 0 && (
         <div className="border-t border-line pt-4 min-w-0">
-          <p className="text-xs font-semibold text-content-subtle uppercase tracking-wide mb-2">Score by module</p>
+          <p className="text-xs font-semibold text-content-subtle uppercase tracking-wide mb-2">
+            Score by module
+          </p>
           <ul className="grid gap-x-6 gap-y-1 sm:grid-cols-2 xl:grid-cols-3">
-            {modules.map(m => {
+            {modules.map((m) => {
               const mPct = pctOf(m.earned, m.max);
               return (
                 <li key={m.key} className="min-w-0">
@@ -973,13 +1193,15 @@ function ScoreCard({
                       <span className="text-sm text-content truncate min-w-0">{m.name}</span>
                       <span className={`text-xs font-semibold flex-shrink-0 ${toneOf(mPct)}`}>
                         {num(m.earned)} / {num(m.max)}
-                        {mPct != null && <span className="text-content-subtle font-normal"> · {mPct}%</span>}
+                        {mPct != null && (
+                          <span className="text-content-subtle font-normal"> · {mPct}%</span>
+                        )}
                       </span>
                     </span>
                     <Progress value={mPct ?? 0} size="sm" color={barColorOf(mPct)} />
                     {m.pending > 0 && (
                       <span className="block text-xs text-warning">
-                        {m.pending} question{m.pending === 1 ? '' : 's'} not graded yet
+                        {m.pending} question{m.pending === 1 ? "" : "s"} not graded yet
                       </span>
                     )}
                   </button>
@@ -992,7 +1214,6 @@ function ScoreCard({
     </div>
   );
 }
-
 
 function ResultQuestionCard({
   question: q,
@@ -1052,7 +1273,7 @@ function ResultQuestionCard({
             <Badge variant="danger" size="sm">
               Grading failed
             </Badge>
-          ) : outcome === 'graded' ? (
+          ) : outcome === "graded" ? (
             // Essay / code / diagram: only the score, never right or wrong (practice included).
             <Badge variant={OUTCOME.graded.badge} size="sm">
               {num(q.scoreEarned)} / {num(q.maxPoints)} pts
@@ -1062,10 +1283,10 @@ function ResultQuestionCard({
               {OUTCOME[outcome].label}
             </Badge>
           )}
-          {!practice && outcome !== 'graded' && (
+          {!practice && outcome !== "graded" && (
             <span className="text-xs text-content-subtle">
               {/* Ungraded written answer: only its worth, not a "0 / 100". */}
-              {outcome === 'pending' || q.gradingStatus === GRADING_FAILED
+              {outcome === "pending" || q.gradingStatus === GRADING_FAILED
                 ? `${num(q.maxPoints)} pts`
                 : `${num(q.scoreEarned)} / ${num(q.maxPoints)} pts`}
             </span>
@@ -1073,21 +1294,25 @@ function ResultQuestionCard({
         </div>
       </header>
 
-      {bookmarkAction && <div className="flex justify-end border-t border-line px-4 py-3">{bookmarkAction}</div>}
+      {bookmarkAction && (
+        <div className="flex justify-end border-t border-line px-4 py-3">{bookmarkAction}</div>
+      )}
 
       {RUBRIC_TYPES.has(q.questionType) ? (
         // Written answer beside its grade once the card is wide enough (container query, not viewport:
         // the sidebar and score column eat most of a laptop screen), so the rubric stays in view.
         <div className="@container border-t border-line px-4 py-4">
           <div className="grid gap-4 @3xl:grid-cols-[minmax(0,1fr)_minmax(15rem,20rem)] @3xl:items-start">
-          <div className="min-w-0">
-            <AnswerReview question={q} />
-          </div>
-          {/* Not sticky with test cases under the score: a long list would run past the viewport. */}
-          <div className={`min-w-0 space-y-3 ${gradeDetail ? '' : '@3xl:sticky @3xl:top-[85px]'}`}>
-            <RubricGrade question={q} outcome={outcome} />
-            {gradeDetail}
-          </div>
+            <div className="min-w-0">
+              <AnswerReview question={q} />
+            </div>
+            {/* Not sticky with test cases under the score: a long list would run past the viewport. */}
+            <div
+              className={`min-w-0 space-y-3 ${gradeDetail ? "" : "@3xl:sticky @3xl:top-[85px]"}`}
+            >
+              <RubricGrade question={q} outcome={outcome} />
+              {gradeDetail}
+            </div>
           </div>
           {hasExplanation(q) && (
             <div className="mt-4">
@@ -1104,25 +1329,27 @@ function ResultQuestionCard({
           )}
         </div>
       ) : (
-      /* Answers are always shown; only the explanation is collapsible. */
-      <div className="border-t border-line px-4 py-4 space-y-4">
-        <AnswerReview question={q} />
-        {gradeDetail}
-        {q.gradingError && <p className="text-sm text-danger">Grading failed: {q.gradingError}</p>}
-        {/* Exams and practice alike: the explanation shows once the attempt is submitted. */}
-        {hasExplanation(q) && (
-          <ExplanationBox
-            question={q}
-            state={explanation}
-            open={explanationOpen}
-            onToggle={onToggleExplanation}
-            onRetry={onRetryExplanation}
-            onDeepExplain={onDeepExplain}
-            attemptKey={attemptKey}
-          />
-        )}
-        {saveAction && <div className="flex justify-end">{saveAction}</div>}
-      </div>
+        /* Answers are always shown; only the explanation is collapsible. */
+        <div className="border-t border-line px-4 py-4 space-y-4">
+          <AnswerReview question={q} />
+          {gradeDetail}
+          {q.gradingError && (
+            <p className="text-sm text-danger">Grading failed: {q.gradingError}</p>
+          )}
+          {/* Exams and practice alike: the explanation shows once the attempt is submitted. */}
+          {hasExplanation(q) && (
+            <ExplanationBox
+              question={q}
+              state={explanation}
+              open={explanationOpen}
+              onToggle={onToggleExplanation}
+              onRetry={onRetryExplanation}
+              onDeepExplain={onDeepExplain}
+              attemptKey={attemptKey}
+            />
+          )}
+          {saveAction && <div className="flex justify-end">{saveAction}</div>}
+        </div>
       )}
     </article>
   );
@@ -1135,16 +1362,20 @@ function ResultQuestionCard({
  */
 function RubricGrade({ question: q, outcome }: { question: ResultQuestion; outcome: Outcome }) {
   const failed = q.gradingStatus === GRADING_FAILED;
-  if (outcome === 'pending' || failed) {
+  if (outcome === "pending" || failed) {
     return (
-      <div className={`rounded-[10px] border p-4 space-y-1.5 ${failed ? 'border-danger-line bg-danger-light' : 'border-warning-line bg-warning-light'}`}>
-        <p className={`flex items-center gap-2 text-sm font-semibold ${failed ? 'text-danger' : 'text-warning'}`}>
+      <div
+        className={`rounded-[10px] border p-4 space-y-1.5 ${failed ? "border-danger-line bg-danger-light" : "border-warning-line bg-warning-light"}`}
+      >
+        <p
+          className={`flex items-center gap-2 text-sm font-semibold ${failed ? "text-danger" : "text-warning"}`}
+        >
           {failed ? <Icon.AlertCircle className="w-4 h-4" /> : <Icon.Clock className="w-4 h-4" />}
-          {failed ? 'AI grading failed' : 'Not graded yet'}
+          {failed ? "AI grading failed" : "Not graded yet"}
         </p>
         <p className="text-sm text-content-secondary">
           {failed
-            ? q.gradingError ?? 'Retry the AI grading from the score panel.'
+            ? (q.gradingError ?? "Retry the AI grading from the score panel.")
             : q.gradingStatus === GRADING_WAITING
               ? `Worth ${num(q.maxPoints)} pts. Use “Grade with AI” in the score panel to get your rubric score and feedback.`
               : `Worth ${num(q.maxPoints)} pts. The AI is grading this answer…`}
@@ -1160,7 +1391,7 @@ function RubricGrade({ question: q, outcome }: { question: ResultQuestion; outco
       <div className="space-y-2">
         <div className="flex items-start justify-between gap-2">
           <p className="text-xs font-semibold text-content-subtle uppercase tracking-wide">Score</p>
-          {q.gradingStatus === 'AI_GRADED' && (
+          {q.gradingStatus === "AI_GRADED" && (
             <Badge size="sm" variant="purple">
               <Icon.Brain className="w-3 h-3" /> AI graded
             </Badge>
@@ -1168,7 +1399,9 @@ function RubricGrade({ question: q, outcome }: { question: ResultQuestion; outco
         </div>
         <p className={`flex items-baseline gap-1.5 leading-none ${toneOf(pct)}`}>
           <span className="text-3xl font-black">{num(q.scoreEarned)}</span>
-          <span className="text-sm font-semibold text-content-subtle">/ {num(q.maxPoints)} pts</span>
+          <span className="text-sm font-semibold text-content-subtle">
+            / {num(q.maxPoints)} pts
+          </span>
           {pct != null && <span className="ml-auto text-sm font-semibold">{pct}%</span>}
         </p>
         <Progress value={pct ?? 0} size="sm" color={barColorOf(pct)} />
@@ -1176,9 +1409,11 @@ function RubricGrade({ question: q, outcome }: { question: ResultQuestion; outco
 
       {criteria.length > 0 && (
         <div>
-          <p className="text-xs font-semibold text-content-subtle uppercase tracking-wide mb-2">Rubric</p>
+          <p className="text-xs font-semibold text-content-subtle uppercase tracking-wide mb-2">
+            Rubric
+          </p>
           <ul className="divide-y divide-line">
-            {criteria.map(c => {
+            {criteria.map((c) => {
               const cPct = pctOf(c.points, c.maxPoints);
               return (
                 <li key={c.criterionId} className="py-2.5 first:pt-0 last:pb-0 space-y-1.5">
@@ -1190,7 +1425,11 @@ function RubricGrade({ question: q, outcome }: { question: ResultQuestion; outco
                     </span>
                   </div>
                   <Progress value={cPct ?? 0} size="sm" color={barColorOf(cPct)} />
-                  {c.feedback && <p className="text-sm text-content-soft leading-relaxed whitespace-pre-line">{c.feedback}</p>}
+                  {c.feedback && (
+                    <p className="text-sm text-content-soft leading-relaxed whitespace-pre-line">
+                      {c.feedback}
+                    </p>
+                  )}
                 </li>
               );
             })}
@@ -1203,7 +1442,9 @@ function RubricGrade({ question: q, outcome }: { question: ResultQuestion; outco
           <p className="flex items-center gap-1.5 text-xs font-semibold text-brand-ink uppercase tracking-wide mb-1.5">
             <Icon.Lightbulb className="w-4 h-4" /> Feedback
           </p>
-          <p className="text-sm text-content-secondary leading-relaxed whitespace-pre-line">{q.overallFeedback}</p>
+          <p className="text-sm text-content-secondary leading-relaxed whitespace-pre-line">
+            {q.overallFeedback}
+          </p>
         </div>
       )}
     </div>
@@ -1244,8 +1485,10 @@ function ExplanationBox({
         className="w-full flex items-center gap-1.5 px-3 py-2.5 text-left text-xs font-semibold text-brand-ink uppercase tracking-wide"
       >
         <Icon.Lightbulb className="w-4 h-4" />
-        {open ? 'Hide explanation' : 'Show explanation'}
-        <Icon.ChevronDown className={`w-4 h-4 ml-auto transition-transform ${open ? 'rotate-180' : ''}`} />
+        {open ? "Hide explanation" : "Show explanation"}
+        <Icon.ChevronDown
+          className={`w-4 h-4 ml-auto transition-transform ${open ? "rotate-180" : ""}`}
+        />
       </button>
       {open && (
         <div id={panelId} className="px-3 pb-3">
@@ -1255,7 +1498,7 @@ function ExplanationBox({
                 original={text}
                 initialDeep={q.deepExplanation?.text}
                 request={onDeepExplain}
-                resetKey={`${attemptKey ?? ''}-${q.questionId}`}
+                resetKey={`${attemptKey ?? ""}-${q.questionId}`}
               />
             ) : (
               <p className="text-sm text-content-secondary whitespace-pre-line">{text}</p>
@@ -1263,7 +1506,12 @@ function ExplanationBox({
           ) : state?.error ? (
             <div className="flex flex-wrap items-center gap-3">
               <p className="text-sm text-danger">{state.error}</p>
-              <Button size="sm" variant="outline" icon={<Icon.RefreshCw className="w-4 h-4" />} onClick={onRetry}>
+              <Button
+                size="sm"
+                variant="outline"
+                icon={<Icon.RefreshCw className="w-4 h-4" />}
+                onClick={onRetry}
+              >
                 Try again
               </Button>
             </div>
@@ -1308,26 +1556,39 @@ function UnfinishedAttemptBanner({
       setConfirming(false);
       onDiscarded();
     } catch (err) {
-      setError(getApiErrorMessage(err, 'Failed to discard this attempt. Please try again.'));
+      setError(getApiErrorMessage(err, "Failed to discard this attempt. Please try again."));
     } finally {
       setDiscarding(false);
     }
   };
 
   return (
-    <div role="status" className="card flex flex-wrap items-center gap-3 border-warning-line bg-warning-light px-4 py-3">
+    <div
+      role="status"
+      className="card flex flex-wrap items-center gap-3 border-warning-line bg-warning-light px-4 py-3"
+    >
       <Icon.Clock className="w-5 h-5 flex-shrink-0 text-warning" />
       <div className="flex-1 min-w-[12rem]">
         <p className="text-sm font-semibold text-content">You have an unfinished attempt</p>
         <p className="text-xs text-content-soft">
-          {attempt.answered} of {attempt.total} question{attempt.total === 1 ? '' : 's'} answered. Continue where you left off.
+          {attempt.answered} of {attempt.total} question{attempt.total === 1 ? "" : "s"} answered.
+          Continue where you left off.
         </p>
       </div>
       <div className="flex flex-wrap gap-2">
-        <Button size="sm" variant="outline" disabled={discarding} onClick={() => setConfirming(true)}>
+        <Button
+          size="sm"
+          variant="outline"
+          disabled={discarding}
+          onClick={() => setConfirming(true)}
+        >
           Discard
         </Button>
-        <Button size="sm" iconRight={<Icon.ChevronRight className="w-4 h-4" />} onClick={onContinue}>
+        <Button
+          size="sm"
+          iconRight={<Icon.ChevronRight className="w-4 h-4" />}
+          onClick={onContinue}
+        >
           Continue
         </Button>
       </div>
@@ -1340,7 +1601,7 @@ function UnfinishedAttemptBanner({
         loading={discarding}
         tone="danger"
         title="Discard this attempt?"
-        description={`The attempt and its ${attempt.answered} answer${attempt.answered === 1 ? '' : 's'} are deleted — it will not count in your history. This cannot be undone.`}
+        description={`The attempt and its ${attempt.answered} answer${attempt.answered === 1 ? "" : "s"} are deleted — it will not count in your history. This cannot be undone.`}
         cancelLabel="Keep it"
         confirmLabel="Discard"
       />

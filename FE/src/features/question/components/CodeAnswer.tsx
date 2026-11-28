@@ -1,8 +1,8 @@
-import { Button } from '@/components/ui/Button';
-import { Checkbox } from '@/components/ui/Checkbox';
-import { Radio } from '@/components/ui/Radio';
-import { Select } from '@/components/ui/Select';
-import { Icon } from '@/assets/icons';
+import { Button } from "@/components/ui/Button";
+import { Checkbox } from "@/components/ui/Checkbox";
+import { Radio } from "@/components/ui/Radio";
+import { Select } from "@/components/ui/Select";
+import { Icon } from "@/assets/icons";
 import {
   CODE_LANGUAGE_OPTIONS,
   CODE_MEMORY_LIMIT_KB,
@@ -12,36 +12,58 @@ import {
   type CodeDraft,
   type QuestionDraft,
   type TestCaseDraft,
-} from '../model';
-import { defaultCodeTemplate, isDefaultCodeTemplate, splitTemplate } from '@/utils/codeTemplate';
+} from "../model";
+import { defaultCodeTemplate, isDefaultCodeTemplate, splitTemplate } from "@/utils/codeTemplate";
 
-const MEMORY_OPTIONS = [64, 128, 256, 512].map(mb => ({ label: `${mb} MB`, value: String(mb * 1024) }));
+const MEMORY_OPTIONS = [64, 128, 256, 512].map((mb) => ({
+  label: `${mb} MB`,
+  value: String(mb * 1024),
+}));
 
-const LABEL = 'block mb-1 text-xs font-medium text-content-subtle';
+const LABEL = "block mb-1 text-xs font-medium text-content-subtle";
 const MONO = (invalid: boolean) =>
   `w-full px-3 py-2 rounded-[10px] border font-mono text-sm leading-relaxed text-content bg-surface resize-y focus:outline-none focus:ring-2 transition-all ${
-    invalid ? 'border-danger-solid focus:ring-danger-solid/20' : 'border-line focus:ring-brand-600/20 focus:border-brand-600'
+    invalid
+      ? "border-danger-solid focus:ring-danger-solid/20"
+      : "border-line focus:ring-brand-600/20 focus:border-brand-600"
   }`;
 
 /**
  * CODE answer settings: the one language, starter code, limits and test cases. The question is
  * graded only by the test cases (CD-05): every one passes = full points, otherwise 0.
  */
-export function CodeAnswer({ q, set, error, readOnly = false }: { q: QuestionDraft; set: (patch: Partial<QuestionDraft>) => void; error?: string; readOnly?: boolean }) {
+export function CodeAnswer({
+  q,
+  set,
+  error,
+  readOnly = false,
+}: {
+  q: QuestionDraft;
+  set: (patch: Partial<QuestionDraft>) => void;
+  error?: string;
+  readOnly?: boolean;
+}) {
   const c = q.code;
   const setCode = (patch: Partial<CodeDraft>) => set({ code: { ...c, ...patch } });
   const setCase = (i: number, patch: Partial<TestCaseDraft>) =>
     setCode({ testCases: c.testCases.map((t, ti) => (ti === i ? { ...t, ...patch } : t)) });
-  const firstPublic = c.testCases.findIndex(t => !t.hidden);
-  const timeBad = Boolean(error) && !(Number(c.timeLimitMs) >= CODE_TIME_LIMIT_MS.min && Number(c.timeLimitMs) <= CODE_TIME_LIMIT_MS.max);
-  const memoryValue = MEMORY_OPTIONS.some(o => o.value === c.memoryLimitKb) ? c.memoryLimitKb : String(CODE_MEMORY_LIMIT_KB.default);
+  const firstPublic = c.testCases.findIndex((t) => !t.hidden);
+  const timeBad =
+    Boolean(error) &&
+    !(
+      Number(c.timeLimitMs) >= CODE_TIME_LIMIT_MS.min &&
+      Number(c.timeLimitMs) <= CODE_TIME_LIMIT_MS.max
+    );
+  const memoryValue = MEMORY_OPTIONS.some((o) => o.value === c.memoryLimitKb)
+    ? c.memoryLimitKb
+    : String(CODE_MEMORY_LIMIT_KB.default);
 
   return (
     <div className="space-y-4">
       <div>
         <span className="block text-sm font-medium text-content-secondary mb-1.5">Language *</span>
         <div role="radiogroup" aria-label="Language" className="flex flex-wrap gap-x-5 gap-y-2">
-          {CODE_LANGUAGE_OPTIONS.map(l => (
+          {CODE_LANGUAGE_OPTIONS.map((l) => (
             <Radio
               key={l.value}
               label={l.label}
@@ -49,7 +71,11 @@ export function CodeAnswer({ q, set, error, readOnly = false }: { q: QuestionDra
               disabled={readOnly}
               // An untouched sample follows the language; a template the manager edited is kept.
               onChange={() =>
-                setCode(isDefaultCodeTemplate(c.template) ? { languages: [l.value], template: defaultCodeTemplate(l.value) } : { languages: [l.value] })
+                setCode(
+                  isDefaultCodeTemplate(c.template)
+                    ? { languages: [l.value], template: defaultCodeTemplate(l.value) }
+                    : { languages: [l.value] },
+                )
               }
             />
           ))}
@@ -66,25 +92,41 @@ export function CodeAnswer({ q, set, error, readOnly = false }: { q: QuestionDra
             step={100}
             value={c.timeLimitMs}
             disabled={readOnly}
-            onChange={e => setCode({ timeLimitMs: e.target.value })}
+            onChange={(e) => setCode({ timeLimitMs: e.target.value })}
             className={`w-full h-10 px-3 rounded-[10px] border text-base text-content bg-surface focus:outline-none focus:ring-2 ${
-              timeBad ? 'border-danger-solid focus:ring-danger-solid/20' : 'border-line focus:ring-brand-600/20 focus:border-brand-600'
+              timeBad
+                ? "border-danger-solid focus:ring-danger-solid/20"
+                : "border-line focus:ring-brand-600/20 focus:border-brand-600"
             }`}
           />
         </label>
         <div className="min-w-0">
           <span className={LABEL}>Memory limit</span>
-          <Select aria-label="Memory limit" value={memoryValue} disabled={readOnly} onChange={v => setCode({ memoryLimitKb: v })} options={MEMORY_OPTIONS} />
+          <Select
+            aria-label="Memory limit"
+            value={memoryValue}
+            disabled={readOnly}
+            onChange={(v) => setCode({ memoryLimitKb: v })}
+            options={MEMORY_OPTIONS}
+          />
         </div>
       </div>
 
       <div>
         <div className="flex items-center justify-between gap-2 mb-1.5">
-          <label htmlFor={`${q.key}-template`} className="text-sm font-medium text-content-secondary">
+          <label
+            htmlFor={`${q.key}-template`}
+            className="text-sm font-medium text-content-secondary"
+          >
             Starter code <span className="font-normal text-content-subtle">(optional)</span>
           </label>
           {!readOnly && c.template !== defaultCodeTemplate(c.languages[0]) && (
-            <Button type="button" variant="outline" size="sm" onClick={() => setCode({ template: defaultCodeTemplate(c.languages[0]) })}>
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              onClick={() => setCode({ template: defaultCodeTemplate(c.languages[0]) })}
+            >
               Use sample
             </Button>
           )}
@@ -93,63 +135,93 @@ export function CodeAnswer({ q, set, error, readOnly = false }: { q: QuestionDra
           id={`${q.key}-template`}
           value={c.template}
           readOnly={readOnly}
-          onChange={e => setCode({ template: e.target.value })}
+          onChange={(e) => setCode({ template: e.target.value })}
           rows={14}
           spellCheck={false}
-          className={MONO(Boolean(error) && /STUDENT CODE (START|END)/.test(c.template) && !splitTemplate(c.template))}
+          className={MONO(
+            Boolean(error) &&
+              /STUDENT CODE (START|END)/.test(c.template) &&
+              !splitTemplate(c.template),
+          )}
         />
         <p className="text-xs text-content-subtle mt-1">
-          Students see and edit only the code between the <code className="font-mono">STUDENT CODE START</code> and{' '}
-          <code className="font-mono">STUDENT CODE END</code> lines. The code around them (reading the input, calling the function,
-          printing the result) is hidden and runs with their code. Without these lines, students edit the whole program.
+          Students see and edit only the code between the{" "}
+          <code className="font-mono">STUDENT CODE START</code> and{" "}
+          <code className="font-mono">STUDENT CODE END</code> lines. The code around them (reading
+          the input, calling the function, printing the result) is hidden and runs with their code.
+          Without these lines, students edit the whole program.
         </p>
       </div>
 
       <div>
         <div className="flex items-center justify-between gap-2 mb-1.5">
           <span className="text-sm font-medium text-content-secondary">Test cases *</span>
-          {!readOnly && <Button
-            type="button"
-            variant="outline"
-            size="sm"
-            icon={<Icon.Plus className="w-3.5 h-3.5" />}
-            onClick={() => setCode({ testCases: [...c.testCases, emptyTestCase(c.testCases.length > 0)] })}
-            disabled={c.testCases.length >= MAX_TEST_CASES}
-          >
-            Add Test Case
-          </Button>}
+          {!readOnly && (
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              icon={<Icon.Plus className="w-3.5 h-3.5" />}
+              onClick={() =>
+                setCode({ testCases: [...c.testCases, emptyTestCase(c.testCases.length > 0)] })
+              }
+              disabled={c.testCases.length >= MAX_TEST_CASES}
+            >
+              Add Test Case
+            </Button>
+          )}
         </div>
         <div className="space-y-2">
           {c.testCases.map((t, i) => (
             <div key={t.key} className="rounded-[10px] border border-line-soft overflow-hidden">
               <div className="flex flex-wrap items-center gap-x-3 gap-y-1 bg-surface-muted px-3 py-1.5 border-b border-line-soft">
                 <span className="text-xs font-bold text-content-soft">Test case {i + 1}</span>
-                {i === firstPublic && <span className="text-2xs font-medium text-brand-ink">Sample shown to students</span>}
+                {i === firstPublic && (
+                  <span className="text-2xs font-medium text-brand-ink">
+                    Sample shown to students
+                  </span>
+                )}
                 <div className="ml-auto flex items-center gap-3">
-                  <Checkbox label="Hidden" checked={t.hidden} disabled={readOnly} onChange={hidden => setCase(i, { hidden })} />
-                  {!readOnly && <button
-                    type="button"
-                    onClick={() => setCode({ testCases: c.testCases.filter((_, ti) => ti !== i) })}
-                    disabled={c.testCases.length <= 1}
-                    aria-label={`Delete test case ${i + 1}`}
-                    title="Delete test case"
-                    className="p-1 text-content-subtle hover:text-danger disabled:opacity-30 disabled:cursor-not-allowed"
-                  >
-                    <Icon.Trash className="w-4 h-4" />
-                  </button>}
+                  <Checkbox
+                    label="Hidden"
+                    checked={t.hidden}
+                    disabled={readOnly}
+                    onChange={(hidden) => setCase(i, { hidden })}
+                  />
+                  {!readOnly && (
+                    <button
+                      type="button"
+                      onClick={() =>
+                        setCode({ testCases: c.testCases.filter((_, ti) => ti !== i) })
+                      }
+                      disabled={c.testCases.length <= 1}
+                      aria-label={`Delete test case ${i + 1}`}
+                      title="Delete test case"
+                      className="p-1 text-content-subtle hover:text-danger disabled:opacity-30 disabled:cursor-not-allowed"
+                    >
+                      <Icon.Trash className="w-4 h-4" />
+                    </button>
+                  )}
                 </div>
               </div>
               <div className="grid gap-2 p-2.5 sm:grid-cols-2">
                 <label className="block min-w-0">
                   <span className={LABEL}>Input (stdin)</span>
-                  <textarea value={t.input} readOnly={readOnly} onChange={e => setCase(i, { input: e.target.value })} rows={3} spellCheck={false} className={MONO(false)} />
+                  <textarea
+                    value={t.input}
+                    readOnly={readOnly}
+                    onChange={(e) => setCase(i, { input: e.target.value })}
+                    rows={3}
+                    spellCheck={false}
+                    className={MONO(false)}
+                  />
                 </label>
                 <label className="block min-w-0">
                   <span className={LABEL}>Expected output</span>
                   <textarea
                     value={t.expectedOutput}
                     readOnly={readOnly}
-                    onChange={e => setCase(i, { expectedOutput: e.target.value })}
+                    onChange={(e) => setCase(i, { expectedOutput: e.target.value })}
                     rows={3}
                     spellCheck={false}
                     className={MONO(Boolean(error) && !t.expectedOutput.trim())}
@@ -161,8 +233,8 @@ export function CodeAnswer({ q, set, error, readOnly = false }: { q: QuestionDra
         </div>
         {error && <p className="text-xs text-danger mt-1.5">{error}</p>}
         <p className="text-xs text-content-subtle mt-2">
-          Students run their code on the first public test case. On submit, every test case (public and hidden) is run: all
-          pass = full points, otherwise 0.
+          Students run their code on the first public test case. On submit, every test case (public
+          and hidden) is run: all pass = full points, otherwise 0.
         </p>
       </div>
     </div>

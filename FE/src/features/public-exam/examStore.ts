@@ -1,4 +1,4 @@
-import { useCallback, useMemo, useRef, useState } from 'react';
+import { useCallback, useMemo, useRef, useState } from "react";
 import {
   PUBLIC_EXAMS,
   courseMeta,
@@ -6,8 +6,8 @@ import {
   type ExamStatus,
   type ExamType,
   type PublicExam,
-} from './mockPublicExams';
-import { questionsFor, type ExamQuestion, type QuestionGroup } from './mockExamQuestions';
+} from "./mockPublicExams";
+import { questionsFor, type ExamQuestion, type QuestionGroup } from "./mockExamQuestions";
 
 /**
  * Exam editor state — the single source of truth for the detail page.
@@ -52,14 +52,14 @@ function toEditorState(exam: PublicExam): ExamEditorState {
 
 /** Committed state for an exam — the saved value if there is one, else the fixture. */
 export function getCommittedExam(id: string): ExamEditorState | undefined {
-  const exam = PUBLIC_EXAMS.find(e => e.id === id);
+  const exam = PUBLIC_EXAMS.find((e) => e.id === id);
   if (!exam) return undefined;
   return examOverrides.get(id) ?? toEditorState(exam);
 }
 
 /** Write a draft through to the shared fixture so the list page reflects it. */
 export function commitExam(id: string, draft: ExamEditorState): void {
-  const exam = PUBLIC_EXAMS.find(e => e.id === id);
+  const exam = PUBLIC_EXAMS.find((e) => e.id === id);
   if (!exam) return;
   exam.title = draft.title;
   exam.course = draft.course;
@@ -112,22 +112,22 @@ export function useExamEditor(examId: string, readOnly: boolean): UseExamEditorR
   const mutate = useCallback(
     (fn: (prev: ExamEditorState) => ExamEditorState) => {
       if (readOnly) return;
-      setDraft(prev => (prev ? fn(prev) : prev));
+      setDraft((prev) => (prev ? fn(prev) : prev));
       setDirty(true);
     },
     [readOnly],
   );
 
-  const setField: UseExamEditorResult['setField'] = useCallback(
+  const setField: UseExamEditorResult["setField"] = useCallback(
     (key, value) =>
-      mutate(prev => {
+      mutate((prev) => {
         // Changing course re-scopes the module list; keep the two consistent.
-        if (key === 'course' && value !== prev.course) {
+        if (key === "course" && value !== prev.course) {
           const modules = courseMeta(value as string).modules;
           return {
             ...prev,
             course: value as string,
-            module: modules.includes(prev.module) ? prev.module : (modules[0] ?? 'General'),
+            module: modules.includes(prev.module) ? prev.module : (modules[0] ?? "General"),
           };
         }
         return { ...prev, [key]: value };
@@ -135,28 +135,28 @@ export function useExamEditor(examId: string, readOnly: boolean): UseExamEditorR
     [mutate],
   );
 
-  const setGroup = useCallback<UseExamEditorResult['setGroup']>(
+  const setGroup = useCallback<UseExamEditorResult["setGroup"]>(
     (groupId, patch) =>
-      mutate(prev => ({
+      mutate((prev) => ({
         ...prev,
-        groups: prev.groups.map(g => (g.id === groupId ? { ...g, ...patch } : g)),
+        groups: prev.groups.map((g) => (g.id === groupId ? { ...g, ...patch } : g)),
       })),
     [mutate],
   );
 
-  const setQuestion = useCallback<UseExamEditorResult['setQuestion']>(
+  const setQuestion = useCallback<UseExamEditorResult["setQuestion"]>(
     (questionId, patch) =>
-      mutate(prev => ({
+      mutate((prev) => ({
         ...prev,
-        questions: prev.questions.map(q => (q.id === questionId ? { ...q, ...patch } : q)),
+        questions: prev.questions.map((q) => (q.id === questionId ? { ...q, ...patch } : q)),
       })),
     [mutate],
   );
 
   const addQuestion = useCallback(
     () =>
-      mutate(prev => {
-        const type = prev.examType === 'essay' ? 'essay' : 'mcq';
+      mutate((prev) => {
+        const type = prev.examType === "essay" ? "essay" : "mcq";
         return {
           ...prev,
           questions: [
@@ -164,16 +164,16 @@ export function useExamEditor(examId: string, readOnly: boolean): UseExamEditorR
             {
               id: nextQuestionId(examId),
               type,
-              difficulty: 'Medium',
+              difficulty: "Medium",
               points: 2,
-              text: '',
+              text: "",
               options:
-                type === 'mcq'
+                type === "mcq"
                   ? [
-                      { label: 'A', text: '', isCorrect: true },
-                      { label: 'B', text: '', isCorrect: false },
-                      { label: 'C', text: '', isCorrect: false },
-                      { label: 'D', text: '', isCorrect: false },
+                      { label: "A", text: "", isCorrect: true },
+                      { label: "B", text: "", isCorrect: false },
+                      { label: "C", text: "", isCorrect: false },
+                      { label: "D", text: "", isCorrect: false },
                     ]
                   : undefined,
             },
@@ -183,16 +183,16 @@ export function useExamEditor(examId: string, readOnly: boolean): UseExamEditorR
     [mutate, examId],
   );
 
-  const removeQuestion = useCallback<UseExamEditorResult['removeQuestion']>(
-    questionId =>
-      mutate(prev => ({ ...prev, questions: prev.questions.filter(q => q.id !== questionId) })),
+  const removeQuestion = useCallback<UseExamEditorResult["removeQuestion"]>(
+    (questionId) =>
+      mutate((prev) => ({ ...prev, questions: prev.questions.filter((q) => q.id !== questionId) })),
     [mutate],
   );
 
-  const moveQuestion = useCallback<UseExamEditorResult['moveQuestion']>(
+  const moveQuestion = useCallback<UseExamEditorResult["moveQuestion"]>(
     (questionId, direction) =>
-      mutate(prev => {
-        const index = prev.questions.findIndex(q => q.id === questionId);
+      mutate((prev) => {
+        const index = prev.questions.findIndex((q) => q.id === questionId);
         const target = index + direction;
         if (index < 0 || target < 0 || target >= prev.questions.length) return prev;
         const next = [...prev.questions];

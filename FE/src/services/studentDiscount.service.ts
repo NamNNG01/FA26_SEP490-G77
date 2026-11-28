@@ -1,8 +1,8 @@
-import { api } from './api';
-import type { ApiResponse } from '@/types/api';
-import type { StudentPage } from './studentLearning.service';
+import { api } from "./api";
+import type { ApiResponse } from "@/types/api";
+import type { StudentPage } from "./studentLearning.service";
 
-export type StudentDiscountStatus = 'AVAILABLE' | 'USED' | 'EXPIRED' | 'REVOKED';
+export type StudentDiscountStatus = "AVAILABLE" | "USED" | "EXPIRED" | "REVOKED";
 
 export interface StudentDiscount {
   userDiscountId: number;
@@ -37,9 +37,11 @@ export const studentDiscountService = {
   async list(params: { status?: string; source?: string; page?: number; size?: number } = {}) {
     const qs = new URLSearchParams();
     Object.entries(params).forEach(([key, value]) => {
-      if (value !== undefined && value !== '') qs.set(key, String(value));
+      if (value !== undefined && value !== "") qs.set(key, String(value));
     });
-    const res = await api.get<ApiResponse<StudentPage<StudentDiscount>>>(`/student/discounts?${qs}`);
+    const res = await api.get<ApiResponse<StudentPage<StudentDiscount>>>(
+      `/student/discounts?${qs}`,
+    );
     return res.data;
   },
 

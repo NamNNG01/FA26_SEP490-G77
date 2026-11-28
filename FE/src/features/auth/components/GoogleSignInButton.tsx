@@ -1,8 +1,8 @@
-import { useEffect, useRef, useState } from 'react';
-import { useNavigate } from 'react-router';
-import { config } from '@/config';
-import { useAuth, landingPathForRole, AFTER_AUTH_STATE } from '@/auth/authContext';
-import { useToast } from '@/components/ui/ToastHost';
+import { useEffect, useRef, useState } from "react";
+import { useNavigate } from "react-router";
+import { config } from "@/config";
+import { useAuth, landingPathForRole, AFTER_AUTH_STATE } from "@/auth/authContext";
+import { useToast } from "@/components/ui/ToastHost";
 
 /**
  * AUTH-09: "Sign in with Google" via Google Identity Services.
@@ -17,12 +17,12 @@ import { useToast } from '@/components/ui/ToastHost';
  */
 
 interface GsiButtonOptions {
-  type?: 'standard' | 'icon';
-  theme?: 'outline' | 'filled_blue' | 'filled_black';
-  size?: 'large' | 'medium' | 'small';
-  text?: 'signin_with' | 'signup_with' | 'continue_with' | 'signin';
-  shape?: 'rectangular' | 'pill' | 'circle' | 'square';
-  logo_alignment?: 'left' | 'center';
+  type?: "standard" | "icon";
+  theme?: "outline" | "filled_blue" | "filled_black";
+  size?: "large" | "medium" | "small";
+  text?: "signin_with" | "signup_with" | "continue_with" | "signin";
+  shape?: "rectangular" | "pill" | "circle" | "square";
+  logo_alignment?: "left" | "center";
   width?: number;
   locale?: string;
 }
@@ -31,7 +31,7 @@ interface GsiIdApi {
   initialize: (cfg: {
     client_id: string;
     callback: (res: { credential?: string }) => void;
-    ux_mode?: 'popup' | 'redirect';
+    ux_mode?: "popup" | "redirect";
     auto_select?: boolean;
     cancel_on_tap_outside?: boolean;
   }) => void;
@@ -46,7 +46,7 @@ declare global {
 
 // `hl` pins the button text to the app's language; the renderButton `locale`
 // option alone is ignored when the browser prefers another language.
-const GSI_SRC = 'https://accounts.google.com/gsi/client?hl=en';
+const GSI_SRC = "https://accounts.google.com/gsi/client?hl=en";
 let gsiLoading: Promise<GsiIdApi> | null = null;
 
 /** Load the GIS script once per page; later calls reuse the same promise. */
@@ -55,17 +55,17 @@ function loadGsi(): Promise<GsiIdApi> {
   if (gsiLoading) return gsiLoading;
 
   gsiLoading = new Promise<GsiIdApi>((resolve, reject) => {
-    const script = document.createElement('script');
+    const script = document.createElement("script");
     script.src = GSI_SRC;
     script.async = true;
     script.defer = true;
     script.onload = () =>
       window.google?.accounts?.id
         ? resolve(window.google.accounts.id)
-        : reject(new Error('Google Identity Services did not initialise.'));
+        : reject(new Error("Google Identity Services did not initialise."));
     script.onerror = () => {
       script.remove();
-      reject(new Error('Could not load Google Identity Services.'));
+      reject(new Error("Could not load Google Identity Services."));
     };
     document.head.appendChild(script);
   }).catch((err) => {
@@ -82,7 +82,7 @@ const clampGsiWidth = (w: number) => Math.round(Math.min(400, Math.max(200, w)))
 
 interface GoogleSignInButtonProps {
   /** "Sign in with Google" on Login, "Sign up with Google" on Register. */
-  mode: 'signin' | 'signup';
+  mode: "signin" | "signup";
   /** Where to go after signing in; defaults to the role's landing page. */
   redirectTo?: string | null;
   /** Called before the backend call so the page can clear its old error. */
@@ -91,7 +91,12 @@ interface GoogleSignInButtonProps {
   onError: (message: string) => void;
 }
 
-export function GoogleSignInButton({ mode, redirectTo, onStart, onError }: GoogleSignInButtonProps) {
+export function GoogleSignInButton({
+  mode,
+  redirectTo,
+  onStart,
+  onError,
+}: GoogleSignInButtonProps) {
   const { loginWithGoogle } = useAuth();
   const navigate = useNavigate();
   const toast = useToast();
@@ -109,12 +114,17 @@ export function GoogleSignInButton({ mode, redirectTo, onStart, onError }: Googl
     try {
       const { user, newUser } = await loginWithGoogle(idToken);
       if (newUser) {
-        toast.success(`Welcome to ${config.appName}, ${user.fullName}! Your account has been created.`);
+        toast.success(
+          `Welcome to ${config.appName}, ${user.fullName}! Your account has been created.`,
+        );
       }
-      navigate(redirectTo ?? landingPathForRole(user.role), { replace: true, state: AFTER_AUTH_STATE });
+      navigate(redirectTo ?? landingPathForRole(user.role), {
+        replace: true,
+        state: AFTER_AUTH_STATE,
+      });
     } catch (err: unknown) {
       setBusy(false);
-      onError(err instanceof Error ? err.message : 'Google sign-in failed. Please try again.');
+      onError(err instanceof Error ? err.message : "Google sign-in failed. Please try again.");
     }
   };
 
@@ -131,25 +141,25 @@ export function GoogleSignInButton({ mode, redirectTo, onStart, onError }: Googl
           callback: (res) => {
             if (res.credential) void handleCredentialRef.current(res.credential);
           },
-          ux_mode: 'popup',
+          ux_mode: "popup",
           auto_select: false,
           cancel_on_tap_outside: true,
         });
         el.replaceChildren();
         gsi.renderButton(el, {
-          type: 'standard',
-          theme: 'outline',
-          size: 'large',
-          text: mode === 'signup' ? 'signup_with' : 'signin_with',
-          shape: 'rectangular',
-          logo_alignment: 'center',
+          type: "standard",
+          theme: "outline",
+          size: "large",
+          text: mode === "signup" ? "signup_with" : "signin_with",
+          shape: "rectangular",
+          logo_alignment: "center",
           width,
-          locale: 'en',
+          locale: "en",
         });
       })
       .catch((err: unknown) => {
         if (cancelled) return;
-        console.warn('[GoogleSignInButton]', err);
+        console.warn("[GoogleSignInButton]", err);
         setAvailable(false);
       });
 
@@ -162,7 +172,9 @@ export function GoogleSignInButton({ mode, redirectTo, onStart, onError }: Googl
   useEffect(() => {
     const slot = buttonRef.current?.parentElement;
     if (!slot) return;
-    const observer = new ResizeObserver(([entry]) => setWidth(clampGsiWidth(entry.contentRect.width)));
+    const observer = new ResizeObserver(([entry]) =>
+      setWidth(clampGsiWidth(entry.contentRect.width)),
+    );
     observer.observe(slot);
     return () => observer.disconnect();
   }, [available]);
@@ -178,7 +190,7 @@ export function GoogleSignInButton({ mode, redirectTo, onStart, onError }: Googl
       </div>
       {/* GIS only hands out the ID token through its own button, shown as Google renders it. */}
       <div
-        className={`flex min-h-10 w-full justify-center transition-opacity ${busy ? 'opacity-50 pointer-events-none' : ''}`}
+        className={`flex min-h-10 w-full justify-center transition-opacity ${busy ? "opacity-50 pointer-events-none" : ""}`}
         aria-busy={busy}
       >
         <div ref={buttonRef} />

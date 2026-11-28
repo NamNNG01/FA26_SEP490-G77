@@ -1,7 +1,7 @@
-import type { ApiResponse } from '@/types/api';
-import { apiClient } from './axios';
+import type { ApiResponse } from "@/types/api";
+import { apiClient } from "./axios";
 
-export type FlashcardImportFormat = 'docx' | 'xlsx';
+export type FlashcardImportFormat = "docx" | "xlsx";
 
 export interface FlashcardImportError {
   code: string;
@@ -22,7 +22,7 @@ export interface FlashcardImportCard {
 
 export interface FlashcardImportPreview {
   fileName: string;
-  fileType: 'DOCX' | 'XLSX' | 'PDF';
+  fileType: "DOCX" | "XLSX" | "PDF";
   totalRows: number;
   validCount: number;
   invalidCount: number;
@@ -33,8 +33,14 @@ export interface FlashcardImportPreview {
 
 export interface FlashcardBulkRequest {
   deckId?: number;
-  newDeck?: { title: string; description?: string; isPublic: boolean; courseId: number | null; /** A module of courseId; omit for none. */ moduleId?: number };
-  source: 'IMPORT' | 'AI';
+  newDeck?: {
+    title: string;
+    description?: string;
+    isPublic: boolean;
+    courseId: number | null;
+    /** A module of courseId; omit for none. */ moduleId?: number;
+  };
+  source: "IMPORT" | "AI";
   /** Required when source = AI (the API 31 generationId). */
   aiGenerationId: number | null;
   skipDuplicates: boolean;
@@ -54,27 +60,37 @@ export const FLASHCARD_TEXT_MAX = 2000;
 
 export const flashcardImportService = {
   async downloadTemplate(format: FlashcardImportFormat): Promise<{ blob: Blob; filename: string }> {
-    const response = await apiClient.get(`/flashcards/import/template?format=${format}`, { responseType: 'blob' });
-    const disposition = String(response.headers['content-disposition'] ?? '');
-    const filename = disposition.match(/filename\*?=(?:UTF-8''|"?)([^";]+)/i)?.[1]?.replace(/"$/, '')
-      ?? `flashcard-import-template-v1.${format}`;
+    const response = await apiClient.get(`/flashcards/import/template?format=${format}`, {
+      responseType: "blob",
+    });
+    const disposition = String(response.headers["content-disposition"] ?? "");
+    const filename =
+      disposition.match(/filename\*?=(?:UTF-8''|"?)([^";]+)/i)?.[1]?.replace(/"$/, "") ??
+      `flashcard-import-template-v1.${format}`;
     return { blob: response.data as Blob, filename: decodeURIComponent(filename) };
   },
 
   async preview(file: File, deckId?: number): Promise<FlashcardImportPreview> {
     const form = new FormData();
-    form.append('file', file);
-    if (deckId != null) form.append('deckId', String(deckId));
-    const response = await apiClient.post<ApiResponse<FlashcardImportPreview>>('/flashcards/import/preview', form, {
-      // Let the browser/Axios add the multipart boundary.
-      headers: { 'Content-Type': undefined },
-      timeout: 60000,
-    });
+    form.append("file", file);
+    if (deckId != null) form.append("deckId", String(deckId));
+    const response = await apiClient.post<ApiResponse<FlashcardImportPreview>>(
+      "/flashcards/import/preview",
+      form,
+      {
+        // Let the browser/Axios add the multipart boundary.
+        headers: { "Content-Type": undefined },
+        timeout: 60000,
+      },
+    );
     return response.data.data;
   },
 
   async save(payload: FlashcardBulkRequest): Promise<FlashcardBulkResult> {
-    const response = await apiClient.post<ApiResponse<FlashcardBulkResult>>('/flashcards/bulk', payload);
+    const response = await apiClient.post<ApiResponse<FlashcardBulkResult>>(
+      "/flashcards/bulk",
+      payload,
+    );
     return response.data.data;
   },
 };

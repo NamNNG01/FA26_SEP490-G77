@@ -1,13 +1,13 @@
-import { api } from './api';
-import type { ApiResponse } from '@/types/api';
-import type { StudentPage } from './studentLearning.service';
+import { api } from "./api";
+import type { ApiResponse } from "@/types/api";
+import type { StudentPage } from "./studentLearning.service";
 
-export type DiscussionTag = 'question' | 'tip' | 'announcement';
-export type DiscussionSort = 'latest' | 'mostCommented' | 'mostUpvoted';
-export type DiscussionApprovalStatus = 'PENDING' | 'APPROVED' | 'REJECTED';
-export type DiscussionScope = 'PUBLIC' | 'MINE';
-export type DiscussionContentStatus = 'OPEN' | 'CLOSED' | 'HIDDEN' | 'ALL';
-export type DiscussionApprovalFilter = DiscussionApprovalStatus | 'ALL';
+export type DiscussionTag = "question" | "tip" | "announcement";
+export type DiscussionSort = "latest" | "mostCommented" | "mostUpvoted";
+export type DiscussionApprovalStatus = "PENDING" | "APPROVED" | "REJECTED";
+export type DiscussionScope = "PUBLIC" | "MINE";
+export type DiscussionContentStatus = "OPEN" | "CLOSED" | "HIDDEN" | "ALL";
+export type DiscussionApprovalFilter = DiscussionApprovalStatus | "ALL";
 
 export interface DiscussionAuthor {
   userId: number;
@@ -22,12 +22,12 @@ export interface DiscussionComment {
   author: DiscussionAuthor;
   createdAt: string;
   imageUrl?: string | null;
-  status?: 'VISIBLE' | 'HIDDEN';
+  status?: "VISIBLE" | "HIDDEN";
 }
 
 export interface DiscussionDetailComment extends DiscussionComment {
   isAnonymous: boolean;
-  status?: 'VISIBLE' | 'HIDDEN';
+  status?: "VISIBLE" | "HIDDEN";
 }
 
 export interface DiscussionItem {
@@ -47,7 +47,7 @@ export interface DiscussionItem {
   isClosed?: boolean;
   imageUrl?: string | null;
   approvalStatus?: DiscussionApprovalStatus;
-  status?: Exclude<DiscussionContentStatus, 'ALL'>;
+  status?: Exclude<DiscussionContentStatus, "ALL">;
   rejectionReason?: string | null;
   createdAt: string;
   lastCommentAt: string | null;
@@ -68,7 +68,7 @@ export interface DiscussionDetail {
   isBookmarked: boolean;
   isAuthor: boolean;
   isClosed: boolean;
-  status?: Exclude<DiscussionContentStatus, 'ALL'>;
+  status?: Exclude<DiscussionContentStatus, "ALL">;
   imageUrl?: string | null;
   approvalStatus?: DiscussionApprovalStatus;
   rejectionReason?: string | null;
@@ -80,19 +80,32 @@ export interface DiscussionDetail {
 function query(params: Record<string, string | number | undefined | null>) {
   const qs = new URLSearchParams();
   Object.entries(params).forEach(([key, value]) => {
-    if (value !== undefined && value !== null && value !== '') qs.set(key, String(value));
+    if (value !== undefined && value !== null && value !== "") qs.set(key, String(value));
   });
   return qs.toString();
 }
 
 export const studentCommunityService = {
-  async getDiscussions(params: { scope?: DiscussionScope; tag?: DiscussionTag | 'ALL'; approvalStatus?: DiscussionApprovalFilter; status?: DiscussionContentStatus; search?: string; sort?: DiscussionSort; page?: number; size?: number }) {
-    const res = await api.get<ApiResponse<StudentPage<DiscussionItem>>>(`/student/discussions?${query(params)}`);
+  async getDiscussions(params: {
+    scope?: DiscussionScope;
+    tag?: DiscussionTag | "ALL";
+    approvalStatus?: DiscussionApprovalFilter;
+    status?: DiscussionContentStatus;
+    search?: string;
+    sort?: DiscussionSort;
+    page?: number;
+    size?: number;
+  }) {
+    const res = await api.get<ApiResponse<StudentPage<DiscussionItem>>>(
+      `/student/discussions?${query(params)}`,
+    );
     return res.data;
   },
 
   async getTips(params: { page?: number; size?: number }) {
-    const res = await api.get<ApiResponse<StudentPage<DiscussionItem>>>(`/student/tips?${query(params)}`);
+    const res = await api.get<ApiResponse<StudentPage<DiscussionItem>>>(
+      `/student/tips?${query(params)}`,
+    );
     return res.data;
   },
 
@@ -101,18 +114,43 @@ export const studentCommunityService = {
     return res.data;
   },
 
-  async createDiscussion(body: { title: string; content: string; tag: DiscussionTag; isAnonymous: boolean; imageUrl?: string | null }) {
-    const res = await api.post<ApiResponse<DiscussionItem>>('/student/discussions', body);
+  async createDiscussion(body: {
+    title: string;
+    content: string;
+    tag: DiscussionTag;
+    isAnonymous: boolean;
+    imageUrl?: string | null;
+  }) {
+    const res = await api.post<ApiResponse<DiscussionItem>>("/student/discussions", body);
     return res.data;
   },
 
-  async resubmitDiscussion(id: number | string, body: { title: string; content: string; tag: DiscussionTag; isAnonymous: boolean; imageUrl?: string | null }) {
-    const res = await api.request<ApiResponse<DiscussionItem>>({ method: 'put', url: `/student/discussions/${id}/resubmit`, data: body });
+  async resubmitDiscussion(
+    id: number | string,
+    body: {
+      title: string;
+      content: string;
+      tag: DiscussionTag;
+      isAnonymous: boolean;
+      imageUrl?: string | null;
+    },
+  ) {
+    const res = await api.request<ApiResponse<DiscussionItem>>({
+      method: "put",
+      url: `/student/discussions/${id}/resubmit`,
+      data: body,
+    });
     return res.data;
   },
 
-  async addComment(id: number | string, body: { content: string; isAnonymous: boolean; imageUrl?: string | null }) {
-    const res = await api.post<ApiResponse<DiscussionDetailComment>>(`/student/discussions/${id}/comments`, body);
+  async addComment(
+    id: number | string,
+    body: { content: string; isAnonymous: boolean; imageUrl?: string | null },
+  ) {
+    const res = await api.post<ApiResponse<DiscussionDetailComment>>(
+      `/student/discussions/${id}/comments`,
+      body,
+    );
     return res.data;
   },
 
@@ -121,21 +159,32 @@ export const studentCommunityService = {
   },
 
   async reportComment(discussionId: number | string, commentId: number | string, reason: string) {
-    await api.post<ApiResponse<null>>(`/student/discussions/${discussionId}/comments/${commentId}/report`, { reason });
+    await api.post<ApiResponse<null>>(
+      `/student/discussions/${discussionId}/comments/${commentId}/report`,
+      { reason },
+    );
   },
 
   async toggleUpvote(id: number | string) {
-    const res = await api.post<ApiResponse<{ discussionId: number; upvoteCount: number; isUpvoted: boolean }>>(`/student/discussions/${id}/upvote`);
+    const res = await api.post<
+      ApiResponse<{ discussionId: number; upvoteCount: number; isUpvoted: boolean }>
+    >(`/student/discussions/${id}/upvote`);
     return res.data;
   },
 
   async toggleBookmark(id: number | string) {
-    const res = await api.post<ApiResponse<{ discussionId: number; isBookmarked: boolean }>>(`/student/discussions/${id}/bookmark`);
+    const res = await api.post<ApiResponse<{ discussionId: number; isBookmarked: boolean }>>(
+      `/student/discussions/${id}/bookmark`,
+    );
     return res.data;
   },
 
   async setClosed(id: number | string, isClosed: boolean) {
-    const res = await api.request<ApiResponse<{ discussionId: number; isClosed: boolean }>>({ method: 'patch', url: `/student/discussions/${id}`, data: { isClosed } });
+    const res = await api.request<ApiResponse<{ discussionId: number; isClosed: boolean }>>({
+      method: "patch",
+      url: `/student/discussions/${id}`,
+      data: { isClosed },
+    });
     return res.data;
   },
 };

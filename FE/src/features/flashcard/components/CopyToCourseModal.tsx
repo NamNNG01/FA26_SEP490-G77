@@ -1,12 +1,12 @@
-import { useState, type FormEvent } from 'react';
-import { Alert } from '@/components/ui/Alert';
-import { Button } from '@/components/ui/Button';
-import { Input } from '@/components/ui/Input';
-import { Modal } from '@/components/ui/Modal';
-import { SearchableSelect } from '@/components/ui/SearchableSelect';
-import { useToast } from '@/components/ui/ToastHost';
-import { deckService, type Deck } from '@/services/deck.service';
-import { NO_COURSE, errorMessage, useCourseModules, useManagedCourses } from './DeckEditor';
+import { useState, type FormEvent } from "react";
+import { Alert } from "@/components/ui/Alert";
+import { Button } from "@/components/ui/Button";
+import { Input } from "@/components/ui/Input";
+import { Modal } from "@/components/ui/Modal";
+import { SearchableSelect } from "@/components/ui/SearchableSelect";
+import { useToast } from "@/components/ui/ToastHost";
+import { deckService, type Deck } from "@/services/deck.service";
+import { NO_COURSE, errorMessage, useCourseModules, useManagedCourses } from "./DeckEditor";
 
 interface CopyToCourseModalProps {
   deck: Deck | null;
@@ -17,11 +17,11 @@ interface CopyToCourseModalProps {
 export function CopyToCourseModal({ deck, onClose, onCopied }: CopyToCourseModalProps) {
   const toast = useToast();
   const { courses } = useManagedCourses();
-  const [courseId, setCourseId] = useState('');
-  const [moduleId, setModuleId] = useState('');
-  const [title, setTitle] = useState('');
+  const [courseId, setCourseId] = useState("");
+  const [moduleId, setModuleId] = useState("");
+  const [title, setTitle] = useState("");
   const [saving, setSaving] = useState(false);
-  const [error, setError] = useState('');
+  const [error, setError] = useState("");
 
   const { modules } = useCourseModules(courseId || NO_COURSE);
 
@@ -30,11 +30,11 @@ export function CopyToCourseModal({ deck, onClose, onCopied }: CopyToCourseModal
   const submit = async (e: FormEvent) => {
     e.preventDefault();
     if (!courseId) {
-      setError('Please select a target course.');
+      setError("Please select a target course.");
       return;
     }
     setSaving(true);
-    setError('');
+    setError("");
     try {
       const created = await deckService.copyToCourse(deck.deckId, {
         courseId: Number(courseId),
@@ -45,7 +45,7 @@ export function CopyToCourseModal({ deck, onClose, onCopied }: CopyToCourseModal
       onCopied(created);
       onClose();
     } catch (err) {
-      setError(errorMessage(err, 'Could not copy community deck to course.'));
+      setError(errorMessage(err, "Could not copy community deck to course."));
     } finally {
       setSaving(false);
     }
@@ -60,8 +60,15 @@ export function CopyToCourseModal({ deck, onClose, onCopied }: CopyToCourseModal
       error={error ? <Alert type="error" message={error} /> : undefined}
       footer={
         <>
-          <Button variant="outline" onClick={onClose} disabled={saving}>Cancel</Button>
-          <Button form="copy-to-course-form" type="submit" loading={saving} disabled={saving || !courseId}>
+          <Button variant="outline" onClick={onClose} disabled={saving}>
+            Cancel
+          </Button>
+          <Button
+            form="copy-to-course-form"
+            type="submit"
+            loading={saving}
+            disabled={saving || !courseId}
+          >
             Copy to Course
           </Button>
         </>
@@ -71,14 +78,14 @@ export function CopyToCourseModal({ deck, onClose, onCopied }: CopyToCourseModal
         <SearchableSelect
           label="Target Course *"
           value={courseId}
-          onChange={v => {
+          onChange={(v) => {
             setCourseId(v);
-            setModuleId('');
-            setError('');
+            setModuleId("");
+            setError("");
           }}
           options={[
-            { label: 'Select course', value: '' },
-            ...courses.map(c => ({ label: c.title, value: String(c.courseId) })),
+            { label: "Select course", value: "" },
+            ...courses.map((c) => ({ label: c.title, value: String(c.courseId) })),
           ]}
           placeholder="Select course"
         />
@@ -89,17 +96,17 @@ export function CopyToCourseModal({ deck, onClose, onCopied }: CopyToCourseModal
           onChange={setModuleId}
           disabled={!courseId}
           options={[
-            { label: 'Course-level (no module)', value: '' },
-            ...modules.map(m => ({ label: m.title, value: String(m.moduleId) })),
+            { label: "Course-level (no module)", value: "" },
+            ...modules.map((m) => ({ label: m.title, value: String(m.moduleId) })),
           ]}
-          placeholder={courseId ? 'Select module (optional)' : 'Select a course first'}
+          placeholder={courseId ? "Select module (optional)" : "Select a course first"}
         />
 
         <Input
           label="Deck Title"
           placeholder={deck.title}
           value={title}
-          onChange={e => setTitle(e.target.value)}
+          onChange={(e) => setTitle(e.target.value)}
         />
       </form>
     </Modal>

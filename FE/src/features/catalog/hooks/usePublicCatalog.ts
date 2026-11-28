@@ -1,7 +1,11 @@
-import { useEffect, useState } from 'react';
-import { courseService, type CategoryResponse, type PageResponse } from '@/services/course.service';
-import { studentCourseService, type StudentCourseCard, type StudentSort } from '@/services/studentCourse.service';
-import { getApiErrorMessage } from '@/utils/apiError';
+import { useEffect, useState } from "react";
+import { courseService, type CategoryResponse, type PageResponse } from "@/services/course.service";
+import {
+  studentCourseService,
+  type StudentCourseCard,
+  type StudentSort,
+} from "@/services/studentCourse.service";
+import { getApiErrorMessage } from "@/utils/apiError";
 
 /**
  * Public catalog data — every course screen a guest can reach (header search,
@@ -58,7 +62,14 @@ export interface CatalogQuery {
 }
 
 /** One page of CL-01. `reload()` re-runs the same query. */
-export function useCatalogCourses({ keyword, categoryId, sort, page = 0, size = 12, enabled = true }: CatalogQuery) {
+export function useCatalogCourses({
+  keyword,
+  categoryId,
+  sort,
+  page = 0,
+  size = 12,
+  enabled = true,
+}: CatalogQuery) {
   const [data, setData] = useState<PageResponse<StudentCourseCard> | null>(null);
   const [loading, setLoading] = useState(enabled);
   const [error, setError] = useState<string | null>(null);
@@ -80,7 +91,7 @@ export function useCatalogCourses({ keyword, categoryId, sort, page = 0, size = 
         if (!cancelled) setData(res);
       })
       .catch((err) => {
-        if (!cancelled) setError(getApiErrorMessage(err, 'Failed to load courses.'));
+        if (!cancelled) setError(getApiErrorMessage(err, "Failed to load courses."));
       })
       .finally(() => {
         if (!cancelled) setLoading(false);
@@ -123,7 +134,8 @@ export function useCatalogOverview(): CatalogOverview | null {
           examCount += res.content.reduce((sum, c) => sum + (c.publishedExamCount ?? 0), 0);
           if (res.last || res.content.length === 0) break;
         }
-        if (!cancelled) setOverview({ courseCount, examCount, categoryNames: categories.map((c) => c.name) });
+        if (!cancelled)
+          setOverview({ courseCount, examCount, categoryNames: categories.map((c) => c.name) });
       } catch {
         if (!cancelled) setOverview(null);
       }

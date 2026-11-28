@@ -1,7 +1,7 @@
-import { useCallback } from 'react';
-import { useNavigate } from 'react-router';
-import { useAuth } from '@/auth/authContext';
-import { ROUTES } from '@/app/routes';
+import { useCallback } from "react";
+import { useNavigate } from "react-router";
+import { useAuth } from "@/auth/authContext";
+import { ROUTES } from "@/app/routes";
 
 /**
  * Auth gate for actions that require a signed-in learner.
@@ -41,9 +41,9 @@ export function withRedirectTarget(path: string, target: string | null): string 
  */
 export function safeRedirect(value: string | null | undefined): string | null {
   if (!value) return null;
-  if (!value.startsWith('/')) return null;
-  if (value.startsWith('//')) return null;
-  if (value.startsWith('/\\')) return null;
+  if (!value.startsWith("/")) return null;
+  if (value.startsWith("//")) return null;
+  if (value.startsWith("/\\")) return null;
   return value;
 }
 

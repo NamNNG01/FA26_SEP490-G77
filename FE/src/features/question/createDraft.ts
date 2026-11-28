@@ -1,6 +1,6 @@
-import { getUser } from '@/auth/storage';
-import { emptyGroupContext, type GroupContextValue } from './components/GroupContextCard';
-import { normalizeCode, type QuestionDraft } from './model';
+import { getUser } from "@/auth/storage";
+import { emptyGroupContext, type GroupContextValue } from "./components/GroupContextCard";
+import { normalizeCode, type QuestionDraft } from "./model";
 
 /**
  * The New Questions page keeps its unsaved work in localStorage, so a reload
@@ -19,7 +19,7 @@ export interface CreateDraftSnapshot {
   touched: string[];
 }
 
-const storageKey = () => `question-create-draft:${getUser()?.userId ?? 'anonymous'}`;
+const storageKey = () => `question-create-draft:${getUser()?.userId ?? "anonymous"}`;
 
 /** True only when there is actual written question content, flagged import, or new-group title/passage worth restoring. */
 export function hasUnsavedCreateWork(
@@ -27,8 +27,11 @@ export function hasUnsavedCreateWork(
   touched: Set<string>,
   groupCtx: GroupContextValue,
 ): boolean {
-  const hasQuestions = questions.some(q => touched.has(q.key) || q.content.trim() !== '' || Boolean(q.importIssue));
-  const hasNewGroup = groupCtx.mode === 'new' && Boolean(groupCtx.newTitle.trim() || groupCtx.newPassage.trim());
+  const hasQuestions = questions.some(
+    (q) => touched.has(q.key) || q.content.trim() !== "" || Boolean(q.importIssue),
+  );
+  const hasNewGroup =
+    groupCtx.mode === "new" && Boolean(groupCtx.newTitle.trim() || groupCtx.newPassage.trim());
   return hasQuestions || hasNewGroup;
 }
 
@@ -38,25 +41,28 @@ export function loadCreateDraft(): CreateDraftSnapshot | null {
     if (!raw) return null;
     const s = JSON.parse(raw) as Partial<CreateDraftSnapshot>;
     if (s?.version !== 1 || !Array.isArray(s.questions) || !s.groupCtx) return null;
-    const questions = s.questions.map(q => ({
+    const questions = s.questions.map((q) => ({
       ...q,
       rubric: Array.isArray(q.rubric) ? q.rubric : [],
-      rubricNotes: q.rubricNotes ?? '',
+      rubricNotes: q.rubricNotes ?? "",
       code: normalizeCode(q.code),
     }));
     const groupCtx = { ...emptyGroupContext(), ...s.groupCtx };
-    const hasWrittenQuestion = questions.some(q => q.content.trim() !== '' || Boolean(q.importIssue));
-    const hasWrittenNewGroup = groupCtx.mode === 'new' && Boolean(groupCtx.newTitle.trim() || groupCtx.newPassage.trim());
+    const hasWrittenQuestion = questions.some(
+      (q) => q.content.trim() !== "" || Boolean(q.importIssue),
+    );
+    const hasWrittenNewGroup =
+      groupCtx.mode === "new" && Boolean(groupCtx.newTitle.trim() || groupCtx.newPassage.trim());
     if (!hasWrittenQuestion && !hasWrittenNewGroup) {
       clearCreateDraft();
       return null;
     }
     return {
       version: 1,
-      savedAt: typeof s.savedAt === 'string' ? s.savedAt : new Date().toISOString(),
+      savedAt: typeof s.savedAt === "string" ? s.savedAt : new Date().toISOString(),
       questions,
-      courseId: typeof s.courseId === 'string' ? s.courseId : '',
-      moduleId: typeof s.moduleId === 'string' ? s.moduleId : '',
+      courseId: typeof s.courseId === "string" ? s.courseId : "",
+      moduleId: typeof s.moduleId === "string" ? s.moduleId : "",
       groupCtx,
       touched: Array.isArray(s.touched) ? s.touched : [],
     };
@@ -66,9 +72,14 @@ export function loadCreateDraft(): CreateDraftSnapshot | null {
 }
 
 /** False when the browser refused to store it (private mode, quota — e.g. large diagram snapshots). */
-export function saveCreateDraft(snapshot: Omit<CreateDraftSnapshot, 'version' | 'savedAt'>): boolean {
+export function saveCreateDraft(
+  snapshot: Omit<CreateDraftSnapshot, "version" | "savedAt">,
+): boolean {
   try {
-    localStorage.setItem(storageKey(), JSON.stringify({ version: 1, savedAt: new Date().toISOString(), ...snapshot }));
+    localStorage.setItem(
+      storageKey(),
+      JSON.stringify({ version: 1, savedAt: new Date().toISOString(), ...snapshot }),
+    );
     return true;
   } catch {
     return false;

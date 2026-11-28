@@ -1,15 +1,20 @@
-import React, { useEffect, useMemo, useRef, useState } from 'react';
-import { useNavigate, useParams, useSearchParams } from 'react-router';
-import { Breadcrumb } from '@/components/ui/Breadcrumb';
-import { Badge } from '@/components/ui/Badge';
-import { Button } from '@/components/ui/Button';
-import { Skeleton } from '@/components/ui/Skeleton';
-import { Spinner } from '@/components/ui/Spinner';
-import { Icon } from '@/assets/icons';
-import { ROUTES, studentCoursePath, studentModulePath, studentModulePracticePath } from '@/app/routes';
-import { getApiErrorMessage } from '@/utils/apiError';
-import { RUBRIC_TYPES } from '@/services/studentAttempt.service';
-import { studentProgressService } from '@/services/studentProgress.service';
+import React, { useEffect, useMemo, useRef, useState } from "react";
+import { useNavigate, useParams, useSearchParams } from "react-router";
+import { Breadcrumb } from "@/components/ui/Breadcrumb";
+import { Badge } from "@/components/ui/Badge";
+import { Button } from "@/components/ui/Button";
+import { Skeleton } from "@/components/ui/Skeleton";
+import { Spinner } from "@/components/ui/Spinner";
+import { Icon } from "@/assets/icons";
+import {
+  ROUTES,
+  studentCoursePath,
+  studentModulePath,
+  studentModulePracticePath,
+} from "@/app/routes";
+import { getApiErrorMessage } from "@/utils/apiError";
+import { RUBRIC_TYPES } from "@/services/studentAttempt.service";
+import { studentProgressService } from "@/services/studentProgress.service";
 import {
   AWAITING_GRADE,
   MAX_BATCH_QUESTIONS,
@@ -20,51 +25,102 @@ import {
   type PracticeResult,
   type PracticeSession,
   type ResultQuestion,
-} from '@/services/modulePractice.service';
-import { LoadError, STUDENT_PAGE_CLASS } from '../components/studentUi';
-import { QUESTION_TYPE_LABEL, QuestionText } from '../components/QuestionAnswerInput';
-import { PracticeVerdict, scorePercent, summaryOutcome } from '../components/PracticeVerdict';
-import { PracticeExplanation } from '../components/PracticeExplanation';
-import { ReportQuestionIssueButton } from '../components/ReportQuestionIssueDialog';
-import { AnswerReview } from '../components/result/AnswerReview';
-import { QuestionNav, ResultPalette, useArrowKeyNav, type OutcomeMeta } from '../components/result/ResultNavigator';
+} from "@/services/modulePractice.service";
+import { LoadError, STUDENT_PAGE_CLASS } from "../components/studentUi";
+import { QUESTION_TYPE_LABEL, QuestionText } from "../components/QuestionAnswerInput";
+import { PracticeVerdict, scorePercent, summaryOutcome } from "../components/PracticeVerdict";
+import { PracticeExplanation } from "../components/PracticeExplanation";
+import { ReportQuestionIssueButton } from "../components/ReportQuestionIssueDialog";
+import { AnswerReview } from "../components/result/AnswerReview";
+import {
+  QuestionNav,
+  ResultPalette,
+  useArrowKeyNav,
+  type OutcomeMeta,
+} from "../components/result/ResultNavigator";
 
 const POLL_MS = 5000;
 const POLL_LIMIT_MS = 3 * 60_000;
 
-const sortQuestions = (r: PracticeResult): PracticeResult => ({ ...r, questions: [...r.questions].sort((a, b) => a.orderIndex - b.orderIndex) });
+const sortQuestions = (r: PracticeResult): PracticeResult => ({
+  ...r,
+  questions: [...r.questions].sort((a, b) => a.orderIndex - b.orderIndex),
+});
 
-type Outcome = 'correct' | 'incorrect' | 'graded' | 'unanswered' | 'pending' | 'failed';
+type Outcome = "correct" | "incorrect" | "graded" | "unanswered" | "pending" | "failed";
 
-const OUTCOME: Record<Outcome, { label: string; badge: 'success' | 'danger' | 'purple' | 'default' | 'warning'; icon: React.ReactNode }> = {
-  correct: { label: 'Correct', badge: 'success', icon: <Icon.CheckCircle className="w-5 h-5 text-success" /> },
-  incorrect: { label: 'Incorrect', badge: 'danger', icon: <Icon.XCircle className="w-5 h-5 text-danger" /> },
-  graded: { label: 'AI scored', badge: 'purple', icon: <Icon.Award className="w-5 h-5 text-primary" /> },
-  unanswered: { label: 'Unanswered', badge: 'default', icon: <Icon.HelpCircle className="w-5 h-5 text-content-subtle" /> },
-  pending: { label: 'Grading', badge: 'warning', icon: <Icon.Clock className="w-5 h-5 text-warning" /> },
-  failed: { label: 'Not graded', badge: 'warning', icon: <Icon.AlertCircle className="w-5 h-5 text-warning" /> },
+const OUTCOME: Record<
+  Outcome,
+  {
+    label: string;
+    badge: "success" | "danger" | "purple" | "default" | "warning";
+    icon: React.ReactNode;
+  }
+> = {
+  correct: {
+    label: "Correct",
+    badge: "success",
+    icon: <Icon.CheckCircle className="w-5 h-5 text-success" />,
+  },
+  incorrect: {
+    label: "Incorrect",
+    badge: "danger",
+    icon: <Icon.XCircle className="w-5 h-5 text-danger" />,
+  },
+  graded: {
+    label: "AI scored",
+    badge: "purple",
+    icon: <Icon.Award className="w-5 h-5 text-primary" />,
+  },
+  unanswered: {
+    label: "Unanswered",
+    badge: "default",
+    icon: <Icon.HelpCircle className="w-5 h-5 text-content-subtle" />,
+  },
+  pending: {
+    label: "Grading",
+    badge: "warning",
+    icon: <Icon.Clock className="w-5 h-5 text-warning" />,
+  },
+  failed: {
+    label: "Not graded",
+    badge: "warning",
+    icon: <Icon.AlertCircle className="w-5 h-5 text-warning" />,
+  },
 };
 
 /** Same fills as the exam result's palette. */
 const PALETTE: OutcomeMeta<Outcome> = {
-  correct: { label: OUTCOME.correct.label, cell: 'bg-success-solid text-white' },
-  incorrect: { label: OUTCOME.incorrect.label, cell: 'bg-danger-solid text-white' },
-  graded: { label: OUTCOME.graded.label, cell: 'bg-brand-600 text-white' },
-  unanswered: { label: OUTCOME.unanswered.label, cell: 'bg-content-subtle text-white' },
-  pending: { label: OUTCOME.pending.label, cell: 'bg-highlight text-brand-950' },
-  failed: { label: OUTCOME.failed.label, cell: 'bg-warning-strong text-white' },
+  correct: { label: OUTCOME.correct.label, cell: "bg-success-solid text-white" },
+  incorrect: { label: OUTCOME.incorrect.label, cell: "bg-danger-solid text-white" },
+  graded: { label: OUTCOME.graded.label, cell: "bg-brand-600 text-white" },
+  unanswered: { label: OUTCOME.unanswered.label, cell: "bg-content-subtle text-white" },
+  pending: { label: OUTCOME.pending.label, cell: "bg-highlight text-brand-950" },
+  failed: { label: OUTCOME.failed.label, cell: "bg-warning-strong text-white" },
 };
 
 function outcomeOf(q: ResultQuestion): Outcome {
-  if (q.attemptCount === 0) return 'unanswered';
-  if (AWAITING_GRADE.has(q.gradingStatus)) return 'pending';
-  if (q.gradingStatus === 'FAILED') return 'failed';
-  const o = summaryOutcome({ answered: true, latestIsCorrect: q.latestIsCorrect, gradingStatus: q.gradingStatus, questionType: q.questionType });
-  return o === 'correct' ? 'correct' : o === 'wrong' ? 'incorrect' : o === 'partial' ? 'graded' : 'pending';
+  if (q.attemptCount === 0) return "unanswered";
+  if (AWAITING_GRADE.has(q.gradingStatus)) return "pending";
+  if (q.gradingStatus === "FAILED") return "failed";
+  const o = summaryOutcome({
+    answered: true,
+    latestIsCorrect: q.latestIsCorrect,
+    gradingStatus: q.gradingStatus,
+    questionType: q.questionType,
+  });
+  return o === "correct"
+    ? "correct"
+    : o === "wrong"
+      ? "incorrect"
+      : o === "partial"
+        ? "graded"
+        : "pending";
 }
 
 /** MP-04 depends on the latest attempt and its grading: a new one of either is another read. */
-const viewKey = (q: ResultQuestion) => `${q.sessionQuestionId}:${q.attemptCount}:${q.gradingStatus}`;
+const viewKey = (q: ResultQuestion) =>
+  `${q.sessionQuestionId}:${q.attemptCount}:${q.gradingStatus}`;
 
 /**
  * Result of one Module Practice session (MP-08), laid out like the exam result: a header with the
@@ -75,7 +131,7 @@ const viewKey = (q: ResultQuestion) => `${q.sessionQuestionId}:${q.attemptCount}
  * the session is still open.
  */
 export function StudentPracticeResultPage() {
-  const { sessionId = '' } = useParams<{ sessionId: string }>();
+  const { sessionId = "" } = useParams<{ sessionId: string }>();
   const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
   const [result, setResult] = useState<PracticeResult | null>(null);
@@ -91,14 +147,17 @@ export function StudentPracticeResultPage() {
     let cancelled = false;
     setError(null);
     // MP-08 has no course: MP-03 gives it, for the breadcrumb and the way back.
-    Promise.all([modulePracticeService.getResult(sessionId), modulePracticeService.getSession(sessionId)])
+    Promise.all([
+      modulePracticeService.getResult(sessionId),
+      modulePracticeService.getSession(sessionId),
+    ])
       .then(([r, s]) => {
         if (cancelled) return;
         setResult(sortQuestions(r));
         setSession(s);
       })
-      .catch(err => {
-        if (!cancelled) setError(getApiErrorMessage(err, 'Failed to load the practice result.'));
+      .catch((err) => {
+        if (!cancelled) setError(getApiErrorMessage(err, "Failed to load the practice result."));
       });
     return () => {
       cancelled = true;
@@ -114,7 +173,7 @@ export function StudentPracticeResultPage() {
       if (Date.now() - started > POLL_LIMIT_MS) return window.clearInterval(id);
       modulePracticeService
         .getResult(sessionId)
-        .then(r => setResult(sortQuestions(r)))
+        .then((r) => setResult(sortQuestions(r)))
         .catch(() => undefined);
     }, POLL_MS);
     return () => window.clearInterval(id);
@@ -146,34 +205,44 @@ export function StudentPracticeResultPage() {
     if (!result) return;
     const forSession = String(result.sessionId);
     // Only the questions never asked, or with a new attempt / grading since (the poll re-reads MP-08).
-    const stale = result.questions.filter(q => askedRef.current.get(q.sessionQuestionId) !== viewKey(q));
+    const stale = result.questions.filter(
+      (q) => askedRef.current.get(q.sessionQuestionId) !== viewKey(q),
+    );
     if (stale.length === 0) return;
-    const keys = new Map(stale.map(q => [q.sessionQuestionId, viewKey(q)]));
+    const keys = new Map(stale.map((q) => [q.sessionQuestionId, viewKey(q)]));
     keys.forEach((key, id) => askedRef.current.set(id, key));
-    setFailed(prev => (prev.size === 0 ? prev : new Set([...prev].filter(id => !keys.has(id)))));
+    setFailed((prev) =>
+      prev.size === 0 ? prev : new Set([...prev].filter((id) => !keys.has(id))),
+    );
 
     // The batch holding the question on screen first, the rest right after.
     const onScreen = result.questions[currentRef.current]?.sessionQuestionId;
     const ids = [...keys.keys()];
     const chunks: number[][] = [];
-    for (let i = 0; i < ids.length; i += MAX_BATCH_QUESTIONS) chunks.push(ids.slice(i, i + MAX_BATCH_QUESTIONS));
+    for (let i = 0; i < ids.length; i += MAX_BATCH_QUESTIONS)
+      chunks.push(ids.slice(i, i + MAX_BATCH_QUESTIONS));
     const first = Math.max(0, Math.floor(ids.indexOf(onScreen ?? -1) / MAX_BATCH_QUESTIONS));
     chunks.unshift(...chunks.splice(first, 1));
 
     // A later ask of the same question (newer key) wins over an older answer still on its way.
-    const current = (id: number) => sessionRef.current === forSession && askedRef.current.get(id) === keys.get(id);
-    chunks.forEach(chunk => {
+    const current = (id: number) =>
+      sessionRef.current === forSession && askedRef.current.get(id) === keys.get(id);
+    chunks.forEach((chunk) => {
       modulePracticeService
         .getQuestions(forSession, chunk)
-        .then(list => {
-          const fresh = list.filter(v => current(v.sessionQuestionId));
-          if (fresh.length > 0) setViews(prev => ({ ...prev, ...Object.fromEntries(fresh.map(v => [v.sessionQuestionId, v])) }));
+        .then((list) => {
+          const fresh = list.filter((v) => current(v.sessionQuestionId));
+          if (fresh.length > 0)
+            setViews((prev) => ({
+              ...prev,
+              ...Object.fromEntries(fresh.map((v) => [v.sessionQuestionId, v])),
+            }));
         })
         .catch(() => {
           const lost = chunk.filter(current);
           if (lost.length === 0) return;
-          lost.forEach(id => askedRef.current.delete(id));
-          setFailed(prev => new Set([...prev, ...lost]));
+          lost.forEach((id) => askedRef.current.delete(id));
+          setFailed((prev) => new Set([...prev, ...lost]));
         });
     });
   }, [result, viewReload]);
@@ -184,15 +253,15 @@ export function StudentPracticeResultPage() {
   const [bookmarkError, setBookmarkError] = useState<string | null>(null);
   const toggleBookmark = async (questionId: number) => {
     if (bookmarkBusy.has(questionId)) return;
-    setBookmarkBusy(prev => new Set(prev).add(questionId));
+    setBookmarkBusy((prev) => new Set(prev).add(questionId));
     setBookmarkError(null);
     try {
       const { isBookmarked } = await studentProgressService.toggleBookmark(questionId);
-      setBookmarks(prev => ({ ...prev, [questionId]: isBookmarked }));
+      setBookmarks((prev) => ({ ...prev, [questionId]: isBookmarked }));
     } catch (err) {
-      setBookmarkError(getApiErrorMessage(err, 'Could not update the bookmark.'));
+      setBookmarkError(getApiErrorMessage(err, "Could not update the bookmark."));
     } finally {
-      setBookmarkBusy(prev => {
+      setBookmarkBusy((prev) => {
         const next = new Set(prev);
         next.delete(questionId);
         return next;
@@ -205,14 +274,20 @@ export function StudentPracticeResultPage() {
   const breadcrumb = (
     <Breadcrumb
       items={[
-        { label: 'My Courses', onClick: () => navigate(ROUTES.studentCourses) },
+        { label: "My Courses", onClick: () => navigate(ROUTES.studentCourses) },
         ...(session
           ? [
-              { label: session.courseTitle, onClick: () => navigate(studentCoursePath(session.courseId)) },
-              { label: session.moduleTitle, onClick: () => navigate(studentModulePath(session.courseId, session.moduleId)) },
+              {
+                label: session.courseTitle,
+                onClick: () => navigate(studentCoursePath(session.courseId)),
+              },
+              {
+                label: session.moduleTitle,
+                onClick: () => navigate(studentModulePath(session.courseId, session.moduleId)),
+              },
             ]
           : []),
-        { label: 'Practice result' },
+        { label: "Practice result" },
       ]}
     />
   );
@@ -221,7 +296,7 @@ export function StudentPracticeResultPage() {
     return (
       <div className={`${STUDENT_PAGE_CLASS} space-y-6`}>
         {breadcrumb}
-        <LoadError message={error} onRetry={() => setReload(r => r + 1)} />
+        <LoadError message={error} onRetry={() => setReload((r) => r + 1)} />
       </div>
     );
   }
@@ -240,8 +315,9 @@ export function StudentPracticeResultPage() {
   }
 
   const total = result.questions.length;
-  const qParam = Number(searchParams.get('q'));
-  const current = total === 0 ? 0 : Number.isInteger(qParam) && qParam >= 1 ? Math.min(qParam, total) - 1 : 0;
+  const qParam = Number(searchParams.get("q"));
+  const current =
+    total === 0 ? 0 : Number.isInteger(qParam) && qParam >= 1 ? Math.min(qParam, total) - 1 : 0;
   currentRef.current = current;
   const prevIndex = current > 0 ? current - 1 : undefined;
   const nextIndex = current < total - 1 ? current + 1 : undefined;
@@ -249,9 +325,9 @@ export function StudentPracticeResultPage() {
   const goTo = (index: number) => {
     // replace: walking through the questions must not fill the Back button's history.
     setSearchParams(
-      prev => {
+      (prev) => {
         const next = new URLSearchParams(prev);
-        next.set('q', String(index + 1));
+        next.set("q", String(index + 1));
         return next;
       },
       { replace: true },
@@ -259,7 +335,8 @@ export function StudentPracticeResultPage() {
     setBookmarkError(null);
     // From the bottom of a long answer, bring the next question's top into view.
     const top = questionRef.current?.getBoundingClientRect().top;
-    if (top != null && top < 0) questionRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    if (top != null && top < 0)
+      questionRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
   };
   navRef.current = {
     prev: prevIndex != null ? () => goTo(prevIndex) : undefined,
@@ -282,9 +359,15 @@ export function StudentPracticeResultPage() {
           </aside>
         )}
 
-        <section ref={questionRef} className="lg:order-1 space-y-3 min-w-0 scroll-mt-[85px]" aria-label="Question">
+        <section
+          ref={questionRef}
+          className="lg:order-1 space-y-3 min-w-0 scroll-mt-[85px]"
+          aria-label="Question"
+        >
           {!q ? (
-            <div className="card px-5 py-10 text-center text-sm text-content-soft">This practice has no question.</div>
+            <div className="card px-5 py-10 text-center text-sm text-content-soft">
+              This practice has no question.
+            </div>
           ) : (
             <>
               <PracticeQuestionCard
@@ -295,11 +378,20 @@ export function StudentPracticeResultPage() {
                 sessionId={result.sessionId}
                 view={views[q.sessionQuestionId] ?? null}
                 failed={failed.has(q.sessionQuestionId)}
-                onRetry={() => setViewReload(r => r + 1)}
-                bookmarked={bookmarks[q.questionId] ?? views[q.sessionQuestionId]?.isBookmarked ?? false}
+                onRetry={() => setViewReload((r) => r + 1)}
+                bookmarked={
+                  bookmarks[q.questionId] ?? views[q.sessionQuestionId]?.isBookmarked ?? false
+                }
                 bookmarkBusy={bookmarkBusy.has(q.questionId)}
                 onToggleBookmark={() => toggleBookmark(q.questionId)}
-                nav={<QuestionNav current={current} total={total} onPrev={navRef.current.prev} onNext={navRef.current.next} />}
+                nav={
+                  <QuestionNav
+                    current={current}
+                    total={total}
+                    onPrev={navRef.current.prev}
+                    onNext={navRef.current.next}
+                  />
+                }
               />
               {bookmarkError && (
                 <p role="alert" className="text-sm text-danger">
@@ -307,7 +399,12 @@ export function StudentPracticeResultPage() {
                 </p>
               )}
               <div className="flex items-center justify-between gap-3">
-                <Button variant="outline" icon={<Icon.ChevronLeft className="w-4 h-4" />} disabled={!navRef.current.prev} onClick={navRef.current.prev}>
+                <Button
+                  variant="outline"
+                  icon={<Icon.ChevronLeft className="w-4 h-4" />}
+                  disabled={!navRef.current.prev}
+                  onClick={navRef.current.prev}
+                >
                   Previous
                 </Button>
                 <Button disabled={!navRef.current.next} onClick={navRef.current.next}>
@@ -326,32 +423,47 @@ export function StudentPracticeResultPage() {
 /** The module, mode and time on the left; Continue / Practice again and Back on the right; AI grading notes below. */
 function ResultHeader({ result, session }: { result: PracticeResult; session: PracticeSession }) {
   const navigate = useNavigate();
-  const inProgress = result.status === 'IN_PROGRESS';
+  const inProgress = result.status === "IN_PROGRESS";
   const modulePath = studentModulePath(session.courseId, session.moduleId);
   return (
     <div className="card p-5 min-w-0 space-y-4">
       <div className="flex flex-col gap-4 md:flex-row md:items-center">
         <div className="flex-1 min-w-0 space-y-1">
           <div className="flex flex-wrap items-center gap-2">
-            <h1 className="text-[clamp(1.25rem,1.1rem+0.6vw,1.5rem)] font-bold text-content">{result.moduleTitle}</h1>
-            <Badge variant={inProgress ? 'warning' : 'success'}>{inProgress ? 'In progress' : 'Completed'}</Badge>
+            <h1 className="text-[clamp(1.25rem,1.1rem+0.6vw,1.5rem)] font-bold text-content">
+              {result.moduleTitle}
+            </h1>
+            <Badge variant={inProgress ? "warning" : "success"}>
+              {inProgress ? "In progress" : "Completed"}
+            </Badge>
           </div>
           <p className="text-sm text-content-soft">
-            {PRACTICE_MODE_LABEL[session.mode] ?? 'Practice'} · {formatDuration(result.durationSeconds)}
+            {PRACTICE_MODE_LABEL[session.mode] ?? "Practice"} ·{" "}
+            {formatDuration(result.durationSeconds)}
             {result.completedAt && ` · finished ${new Date(result.completedAt).toLocaleString()}`}
           </p>
         </div>
         <div className="flex flex-wrap md:flex-col gap-2">
           {inProgress ? (
-            <Button icon={<Icon.Play className="w-4 h-4" />} onClick={() => navigate(studentModulePracticePath(result.sessionId))}>
+            <Button
+              icon={<Icon.Play className="w-4 h-4" />}
+              onClick={() => navigate(studentModulePracticePath(result.sessionId))}
+            >
               Continue practice
             </Button>
           ) : (
-            <Button icon={<Icon.RefreshCw className="w-4 h-4" />} onClick={() => navigate(modulePath)}>
+            <Button
+              icon={<Icon.RefreshCw className="w-4 h-4" />}
+              onClick={() => navigate(modulePath)}
+            >
               Practice again
             </Button>
           )}
-          <Button variant="outline" icon={<Icon.ChevronLeft className="w-4 h-4" />} onClick={() => navigate(modulePath)}>
+          <Button
+            variant="outline"
+            icon={<Icon.ChevronLeft className="w-4 h-4" />}
+            onClick={() => navigate(modulePath)}
+          >
             Back to module
           </Button>
         </div>
@@ -360,15 +472,18 @@ function ResultHeader({ result, session }: { result: PracticeResult; session: Pr
       {result.questionsAwaitingGrade > 0 && (
         <p className="flex items-start gap-2 text-xs text-warning">
           <Icon.Clock className="w-4 h-4 flex-shrink-0" />
-          {result.questionsAwaitingGrade} question{result.questionsAwaitingGrade === 1 ? ' is' : 's are'} still being graded by AI. This page
-          refreshes on its own.
+          {result.questionsAwaitingGrade} question
+          {result.questionsAwaitingGrade === 1 ? " is" : "s are"} still being graded by AI. This
+          page refreshes on its own.
         </p>
       )}
       {result.questionsFailedGrade > 0 && (
         <p className="flex items-start gap-2 rounded-[10px] border border-danger-solid bg-danger-light p-3 text-xs text-danger">
           <Icon.AlertCircle className="w-4 h-4 flex-shrink-0" />
-          AI grading failed for {result.questionsFailedGrade} question{result.questionsFailedGrade === 1 ? '' : 's'}. Answer {result.questionsFailedGrade === 1 ? 'it' : 'them'}{' '}
-          again in a new practice to get a grade.
+          AI grading failed for {result.questionsFailedGrade} question
+          {result.questionsFailedGrade === 1 ? "" : "s"}. Answer{" "}
+          {result.questionsFailedGrade === 1 ? "it" : "them"} again in a new practice to get a
+          grade.
         </p>
       )}
     </div>
@@ -424,7 +539,9 @@ function PracticeQuestionCard({
           {view && <QuestionText content={view.content} className="text-sm text-content mt-0.5" />}
         </div>
         <Badge variant={OUTCOME[outcome].badge} size="sm" className="flex-shrink-0">
-          {outcome === 'graded' ? `AI score ${scorePercent(q.latestScore)}%` : OUTCOME[outcome].label}
+          {outcome === "graded"
+            ? `AI score ${scorePercent(q.latestScore)}%`
+            : OUTCOME[outcome].label}
         </Badge>
       </header>
 
@@ -433,17 +550,21 @@ function PracticeQuestionCard({
           {(q.attemptCount > 0 || bookmarked) && (
             <Button
               size="sm"
-              variant={bookmarked ? 'primary' : 'outline'}
+              variant={bookmarked ? "primary" : "outline"}
               disabled={bookmarkBusy || !view}
               aria-pressed={bookmarked}
-              aria-label={bookmarked ? 'Remove bookmark' : 'Bookmark question'}
-              icon={<Icon.Star className={`w-4 h-4 ${bookmarked ? 'fill-current' : ''}`} />}
+              aria-label={bookmarked ? "Remove bookmark" : "Bookmark question"}
+              icon={<Icon.Star className={`w-4 h-4 ${bookmarked ? "fill-current" : ""}`} />}
               onClick={onToggleBookmark}
             >
-              {bookmarked ? 'Bookmarked' : 'Bookmark'}
+              {bookmarked ? "Bookmarked" : "Bookmark"}
             </Button>
           )}
-          <ReportQuestionIssueButton questionId={q.questionId} practiceSessionId={sessionId} options={view?.options ?? []} />
+          <ReportQuestionIssueButton
+            questionId={q.questionId}
+            practiceSessionId={sessionId}
+            options={view?.options ?? []}
+          />
         </div>
       </div>
 
@@ -451,7 +572,12 @@ function PracticeQuestionCard({
       {!view && failed ? (
         <div className="flex flex-wrap items-center gap-3 border-t border-line px-4 py-4">
           <p className="text-sm text-danger">Failed to load this question.</p>
-          <Button size="sm" variant="outline" icon={<Icon.RefreshCw className="w-4 h-4" />} onClick={onRetry}>
+          <Button
+            size="sm"
+            variant="outline"
+            icon={<Icon.RefreshCw className="w-4 h-4" />}
+            onClick={onRetry}
+          >
             Try again
           </Button>
         </div>
@@ -488,7 +614,9 @@ function PracticeQuestionCard({
         <div className="border-t border-line px-4 py-4 space-y-4">
           <AnswerReview question={toReviewQuestion(view, latest)} />
           {/* Only the "being graded" / "could not be graded" notes: the badge already says right or wrong. */}
-          {latest && (outcome === 'pending' || outcome === 'failed') && <PracticeVerdict attempt={latest} questionType={q.questionType} />}
+          {latest && (outcome === "pending" || outcome === "failed") && (
+            <PracticeVerdict attempt={latest} questionType={q.questionType} />
+          )}
           {graded && (
             <PracticeExplanation
               questionId={q.questionId}

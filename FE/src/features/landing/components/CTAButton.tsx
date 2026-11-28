@@ -1,6 +1,6 @@
-import React from 'react';
-import { useNavigate } from 'react-router';
-import { Icon } from '@/assets/icons';
+import React from "react";
+import { useNavigate } from "react-router";
+import { Icon } from "@/assets/icons";
 
 /**
  * CTAButton
@@ -24,26 +24,26 @@ export interface CTAButtonProps {
   to?: string;
   /** Alternative action (e.g. scroll to a section id). */
   onClick?: () => void;
-  variant?: 'primary' | 'secondary';
-  size?: 'md' | 'lg';
+  variant?: "primary" | "secondary";
+  size?: "md" | "lg";
   /** Show a trailing arrow icon (primary CTAs). */
   withArrow?: boolean;
   className?: string;
 }
 
 const sizeClasses = {
-  md: 'h-10 px-5 text-base',
-  lg: 'h-12 px-6 sm:px-7 text-lg',
+  md: "h-10 px-5 text-base",
+  lg: "h-12 px-6 sm:px-7 text-lg",
 };
 
 export function CTAButton({
   label,
   to,
   onClick,
-  variant = 'primary',
-  size = 'lg',
+  variant = "primary",
+  size = "lg",
   withArrow = false,
-  className = '',
+  className = "",
 }: CTAButtonProps) {
   const navigate = useNavigate();
 
@@ -52,7 +52,7 @@ export function CTAButton({
     else onClick?.();
   }
 
-  const isPrimary = variant === 'primary';
+  const isPrimary = variant === "primary";
 
   return (
     <button
@@ -62,8 +62,8 @@ export function CTAButton({
         active:scale-[0.98] focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-600/40 focus-visible:ring-offset-2
         ${
           isPrimary
-            ? 'bg-brand-600 text-white hover:bg-brand-700'
-            : 'bg-surface text-content-secondary border border-line shadow-sm hover:bg-surface-hover hover:border-line-strong'
+            ? "bg-brand-600 text-white hover:bg-brand-700"
+            : "bg-surface text-content-secondary border border-line shadow-sm hover:bg-surface-hover hover:border-line-strong"
         }
         ${sizeClasses[size]} ${className}`}
     >

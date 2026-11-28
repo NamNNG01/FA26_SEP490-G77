@@ -1,7 +1,7 @@
-import { api } from './api';
-import type { ApiResponse } from '@/types/api';
-import type { PageResponse } from './course.service';
-import { downloadFile } from '@/utils/downloadFile';
+import { api } from "./api";
+import type { ApiResponse } from "@/types/api";
+import type { PageResponse } from "./course.service";
+import { downloadFile } from "@/utils/downloadFile";
 
 /**
  * DeckService — flashcard decks a Course Manager administers.
@@ -106,15 +106,17 @@ export const deckService = {
   async getDecks(params: DeckListParams = {}): Promise<PageResponse<Deck>> {
     const query = new URLSearchParams();
     Object.entries(params).forEach(([key, value]) => {
-      if (value !== undefined && value !== null && value !== '') query.set(key, String(value));
+      if (value !== undefined && value !== null && value !== "") query.set(key, String(value));
     });
     const qs = query.toString();
-    const res = await api.get<ApiResponse<PageResponse<Deck>>>(`/manager/decks${qs ? `?${qs}` : ''}`);
+    const res = await api.get<ApiResponse<PageResponse<Deck>>>(
+      `/manager/decks${qs ? `?${qs}` : ""}`,
+    );
     return res.data;
   },
 
   /** Every deck matching the filters, fetched page by page (for export). */
-  async getAllDecks(params: Omit<DeckListParams, 'page' | 'size'> = {}): Promise<Deck[]> {
+  async getAllDecks(params: Omit<DeckListParams, "page" | "size"> = {}): Promise<Deck[]> {
     const all: Deck[] = [];
     for (let page = 0; ; page++) {
       const res = await deckService.getDecks({ ...params, page, size: DECK_PAGE_SIZE_MAX });
@@ -129,45 +131,60 @@ export const deckService = {
   },
 
   async createDeck(payload: DeckCreateRequest): Promise<Deck> {
-    const res = await api.post<ApiResponse<Deck>>('/manager/decks', payload);
+    const res = await api.post<ApiResponse<Deck>>("/manager/decks", payload);
     return res.data;
   },
 
   async updateDeck(id: number | string, payload: DeckUpdateRequest): Promise<Deck> {
-    const res = await api.request<ApiResponse<Deck>>({ method: 'put', url: `/manager/decks/${id}`, data: payload });
+    const res = await api.request<ApiResponse<Deck>>({
+      method: "put",
+      url: `/manager/decks/${id}`,
+      data: payload,
+    });
     return res.data;
   },
 
   async deleteDeck(id: number | string): Promise<void> {
-    await api.request<ApiResponse<null>>({ method: 'delete', url: `/manager/decks/${id}` });
+    await api.request<ApiResponse<null>>({ method: "delete", url: `/manager/decks/${id}` });
   },
 
   /** The deck and its cards as a PDF, saved through the browser's download. */
-  async exportPdf(id: number | string, fallbackName = 'flashcards.pdf'): Promise<void> {
+  async exportPdf(id: number | string, fallbackName = "flashcards.pdf"): Promise<void> {
     await downloadFile(`/manager/decks/${id}/export?format=pdf`, fallbackName);
   },
 
   async createCard(deckId: number | string, payload: CardRequest): Promise<CardResponse> {
-    const res = await api.post<ApiResponse<CardResponse>>(`/manager/decks/${deckId}/cards`, payload);
+    const res = await api.post<ApiResponse<CardResponse>>(
+      `/manager/decks/${deckId}/cards`,
+      payload,
+    );
     return res.data;
   },
 
   async updateCard(cardId: number | string, payload: CardRequest): Promise<CardResponse> {
-    const res = await api.request<ApiResponse<CardResponse>>({ method: 'put', url: `/manager/cards/${cardId}`, data: payload });
+    const res = await api.request<ApiResponse<CardResponse>>({
+      method: "put",
+      url: `/manager/cards/${cardId}`,
+      data: payload,
+    });
     return res.data;
   },
 
   async deleteCard(cardId: number | string): Promise<void> {
-    await api.request<ApiResponse<null>>({ method: 'delete', url: `/manager/cards/${cardId}` });
+    await api.request<ApiResponse<null>>({ method: "delete", url: `/manager/cards/${cardId}` });
   },
 
-  async getCommunityDecks(params: { search?: string; page?: number; size?: number } = {}): Promise<PageResponse<Deck>> {
+  async getCommunityDecks(
+    params: { search?: string; page?: number; size?: number } = {},
+  ): Promise<PageResponse<Deck>> {
     const query = new URLSearchParams();
-    if (params.search) query.set('search', params.search);
-    if (params.page !== undefined) query.set('page', String(params.page));
-    if (params.size !== undefined) query.set('size', String(params.size));
+    if (params.search) query.set("search", params.search);
+    if (params.page !== undefined) query.set("page", String(params.page));
+    if (params.size !== undefined) query.set("size", String(params.size));
     const qs = query.toString();
-    const res = await api.get<ApiResponse<PageResponse<Deck>>>(`/manager/decks/community${qs ? `?${qs}` : ''}`);
+    const res = await api.get<ApiResponse<PageResponse<Deck>>>(
+      `/manager/decks/community${qs ? `?${qs}` : ""}`,
+    );
     return res.data;
   },
 
@@ -175,7 +192,10 @@ export const deckService = {
     deckId: number | string,
     payload: { courseId: number; moduleId?: number; title?: string },
   ): Promise<Deck> {
-    const res = await api.post<ApiResponse<Deck>>(`/manager/decks/${deckId}/copy-to-course`, payload);
+    const res = await api.post<ApiResponse<Deck>>(
+      `/manager/decks/${deckId}/copy-to-course`,
+      payload,
+    );
     return res.data;
   },
 };

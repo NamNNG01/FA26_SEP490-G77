@@ -1,16 +1,16 @@
-import React, { useMemo, useState } from 'react';
-import { useNavigate } from 'react-router';
-import { StatCard } from '@/components/ui/StatCard';
-import { Button } from '@/components/ui/Button';
-import { Skeleton } from '@/components/ui/Skeleton';
-import { DashboardError } from '@/components/common/DashboardState';
-import { Icon } from '@/assets/icons';
-import { ROUTES } from '@/app/routes';
-import type { CmDashboardSummary } from '@/services/cmDashboard.types';
-import { useCmDashboard } from '../hooks/useCmDashboard';
-import { CmCoursePanel } from '../components/CmCoursePanel';
-import { CmExamPanel } from '../components/CmExamPanel';
-import { InfoTip, LabelWithInfo } from '../components/cmDashboardUi';
+import React, { useMemo, useState } from "react";
+import { useNavigate } from "react-router";
+import { StatCard } from "@/components/ui/StatCard";
+import { Button } from "@/components/ui/Button";
+import { Skeleton } from "@/components/ui/Skeleton";
+import { DashboardError } from "@/components/common/DashboardState";
+import { Icon } from "@/assets/icons";
+import { ROUTES } from "@/app/routes";
+import type { CmDashboardSummary } from "@/services/cmDashboard.types";
+import { useCmDashboard } from "../hooks/useCmDashboard";
+import { CmCoursePanel } from "../components/CmCoursePanel";
+import { CmExamPanel } from "../components/CmExamPanel";
+import { InfoTip, LabelWithInfo } from "../components/cmDashboardUi";
 
 /**
  * CMDashboard (Course Manager) — v2
@@ -45,7 +45,10 @@ export function CMDashboard() {
           </div>
           <p className="text-sm text-content-soft mt-0.5 flex items-center gap-1.5">
             Live figures from the courses and exams you manage
-            <InfoTip side="bottom" label="Courses are shared across managers; exam figures are yours only" />
+            <InfoTip
+              side="bottom"
+              label="Courses are shared across managers; exam figures are yours only"
+            />
           </p>
         </div>
         <Button
@@ -63,7 +66,11 @@ export function CMDashboard() {
         <KpiSkeleton />
       ) : error.summary || !summary ? (
         <div className="card">
-          <DashboardError bare message={error.summary ?? undefined} onRetry={() => refresh('summary')} />
+          <DashboardError
+            bare
+            message={error.summary ?? undefined}
+            onRetry={() => refresh("summary")}
+          />
         </div>
       ) : (
         <KpiRow summary={summary} />
@@ -76,7 +83,7 @@ export function CMDashboard() {
             courses={courses}
             loading={loading.courses}
             error={error.courses}
-            onRetry={() => refresh('courses')}
+            onRetry={() => refresh("courses")}
             selectedCourseId={selectedCourseId}
             onSelectCourse={setSelectedCourseId}
             onViewAll={() => navigate(ROUTES.managerCourses)}
@@ -87,7 +94,7 @@ export function CMDashboard() {
             exams={exams}
             loading={loading.exams}
             error={error.exams}
-            onRetry={() => refresh('exams')}
+            onRetry={() => refresh("exams")}
             courseOptions={courseOptions}
             selectedCourseId={selectedCourseId}
             onSelectCourse={setSelectedCourseId}
@@ -99,7 +106,7 @@ export function CMDashboard() {
   );
 }
 
-const KPI_GRID = 'grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4';
+const KPI_GRID = "grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4";
 
 function KpiSkeleton() {
   return (
@@ -125,12 +132,17 @@ function KpiRow({ summary: s }: { summary: CmDashboardSummary }) {
         icon={<Icon.Users />}
       />
       <StatCard
-        title={<LabelWithInfo info="Exams you created in courses you still manage">My exams</LabelWithInfo>}
+        title={
+          <LabelWithInfo info="Exams you created in courses you still manage">
+            My exams
+          </LabelWithInfo>
+        }
         value={String(s.myExams.total)}
         icon={<Icon.FileText />}
         footer={
           <p className="text-sm text-content-subtle">
-            {s.myExams.published} published · {s.myExams.draft} draft · {s.myExams.archived} archived
+            {s.myExams.published} published · {s.myExams.draft} draft · {s.myExams.archived}{" "}
+            archived
           </p>
         }
       />

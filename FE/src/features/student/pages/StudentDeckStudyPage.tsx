@@ -1,14 +1,14 @@
-import React, { useCallback, useEffect, useRef, useState } from 'react';
-import { useLocation, useNavigate, useParams } from 'react-router';
-import { Button } from '@/components/ui/Button';
-import { Breadcrumb } from '@/components/ui/Breadcrumb';
-import { Progress } from '@/components/ui/Progress';
-import { Skeleton } from '@/components/ui/Skeleton';
-import { EmptyState } from '@/components/ui/Card';
-import { useToast } from '@/components/ui/ToastHost';
-import { Icon } from '@/assets/icons';
-import { ROUTES, studentCoursePath, studentDeckPath } from '@/app/routes';
-import { getApiErrorMessage } from '@/utils/apiError';
+import React, { useCallback, useEffect, useRef, useState } from "react";
+import { useLocation, useNavigate, useParams } from "react-router";
+import { Button } from "@/components/ui/Button";
+import { Breadcrumb } from "@/components/ui/Breadcrumb";
+import { Progress } from "@/components/ui/Progress";
+import { Skeleton } from "@/components/ui/Skeleton";
+import { EmptyState } from "@/components/ui/Card";
+import { useToast } from "@/components/ui/ToastHost";
+import { Icon } from "@/assets/icons";
+import { ROUTES, studentCoursePath, studentDeckPath } from "@/app/routes";
+import { getApiErrorMessage } from "@/utils/apiError";
 import {
   apiErrorCode,
   isDeckDeletable,
@@ -18,22 +18,28 @@ import {
   type StudentDeckView,
   type ViewerCard,
   type ViewerView,
-} from '@/services/studentDeck.service';
-import { cacheGeneration, getCached, invalidateCached, setCached } from '@/hooks/useCachedQuery';
-import { LoadError, STUDENT_PAGE_CLASS, formatDateTime } from '../components/studentUi';
-import type { DeckStudyState } from '../components/DeckCard';
-import { CardFace, ConfirmModal, DeckModeBadge, DeckStatusBadge, plural } from '../components/flashcards/flashcardUi';
-import { DeckFormModal } from '../components/flashcards/DeckFormModal';
-import { CardFormModal } from '../components/flashcards/CardFormModal';
-import { ImportCardsModal } from '../components/flashcards/ImportCardsModal';
-import { CopyDeckModal } from '../components/flashcards/CopyDeckModal';
-import { downloadDecksXlsx, fileSlug } from '@/utils/flashcardXlsx';
-import { usableCards } from '../components/flashcards/flashcardQuiz';
+} from "@/services/studentDeck.service";
+import { cacheGeneration, getCached, invalidateCached, setCached } from "@/hooks/useCachedQuery";
+import { LoadError, STUDENT_PAGE_CLASS, formatDateTime } from "../components/studentUi";
+import type { DeckStudyState } from "../components/DeckCard";
+import {
+  CardFace,
+  ConfirmModal,
+  DeckModeBadge,
+  DeckStatusBadge,
+  plural,
+} from "../components/flashcards/flashcardUi";
+import { DeckFormModal } from "../components/flashcards/DeckFormModal";
+import { CardFormModal } from "../components/flashcards/CardFormModal";
+import { ImportCardsModal } from "../components/flashcards/ImportCardsModal";
+import { CopyDeckModal } from "../components/flashcards/CopyDeckModal";
+import { downloadDecksXlsx, fileSlug } from "@/utils/flashcardXlsx";
+import { usableCards } from "../components/flashcards/flashcardQuiz";
 
-const MODE_LABEL: Record<StudentDeckView['mode'], string> = {
-  FLASHCARD: 'Flashcard',
-  CODE_SNIPPET: 'Code snippet',
-  CODE_OUTPUT: 'Code output',
+const MODE_LABEL: Record<StudentDeckView["mode"], string> = {
+  FLASHCARD: "Flashcard",
+  CODE_SNIPPET: "Code snippet",
+  CODE_OUTPUT: "Code output",
 };
 import {
   StudyActions,
@@ -41,7 +47,7 @@ import {
   StudySummaryBanner,
   useDeckStudy,
   type DeckProgress,
-} from '../components/flashcards/StudyPanel';
+} from "../components/flashcards/StudyPanel";
 
 /** What the deck page reads on load (FC-11 viewer + FC-14), cached per deck for this tab. */
 interface DeckReading {
@@ -51,20 +57,20 @@ interface DeckReading {
 const deckCacheKey = (deckId: number) => `student:deck:${deckId}`;
 
 type Dialog =
-  | { kind: 'edit' }
-  | { kind: 'delete' }
-  | { kind: 'withdraw' }
-  | { kind: 'import' }
-  | { kind: 'copy' }
-  | { kind: 'card'; card?: ViewerCard }
-  | { kind: 'deleteCard'; card: ViewerCard };
+  | { kind: "edit" }
+  | { kind: "delete" }
+  | { kind: "withdraw" }
+  | { kind: "import" }
+  | { kind: "copy" }
+  | { kind: "card"; card?: ViewerCard }
+  | { kind: "deleteCard"; card: ViewerCard };
 
 /** Reasons the BE refuses a deck action, in words. */
 const CONFLICT_MESSAGE: Record<string, string> = {
   DECK_LOCKED: "This deck is under review or public, so it can't be changed.",
-  ALREADY_PENDING_REVIEW: 'This deck is already waiting for review.',
-  ALREADY_PUBLIC: 'This deck is already public.',
-  NOT_PENDING_REVIEW: 'This deck is not waiting for review.',
+  ALREADY_PENDING_REVIEW: "This deck is already waiting for review.",
+  ALREADY_PUBLIC: "This deck is already public.",
+  NOT_PENDING_REVIEW: "This deck is not waiting for review.",
 };
 
 /**
@@ -77,12 +83,12 @@ const CONFLICT_MESSAGE: Record<string, string> = {
  * Keyed by the deck id so moving to another deck (e.g. right after a copy) starts from a clean state.
  */
 export function StudentDeckStudyPage() {
-  const { deckId = '' } = useParams<{ deckId: string }>();
+  const { deckId = "" } = useParams<{ deckId: string }>();
   return <DeckPage key={deckId} />;
 }
 
 function DeckPage() {
-  const { deckId: deckIdParam = '' } = useParams<{ deckId: string }>();
+  const { deckId: deckIdParam = "" } = useParams<{ deckId: string }>();
   const deckId = Number(deckIdParam);
   const navigate = useNavigate();
   const toast = useToast();
@@ -96,20 +102,18 @@ function DeckPage() {
   const [reload, setReload] = useState(0);
   const [dialog, setDialog] = useState<Dialog | null>(null);
   const [busy, setBusy] = useState(false);
-  const [exporting, setExporting] = useState<'xlsx' | 'pdf' | null>(null);
+  const [exporting, setExporting] = useState<"xlsx" | "pdf" | null>(null);
   const [bookmarking, setBookmarking] = useState(false);
-  const study = useDeckStudy(deckId, setProgress, delta =>
-    setDeck(d => (d ? { ...d, starredCount: Math.max(0, (d.starredCount ?? 0) + delta) } : d)),
+  const study = useDeckStudy(deckId, setProgress, (delta) =>
+    setDeck((d) => (d ? { ...d, starredCount: Math.max(0, (d.starredCount ?? 0) + delta) } : d)),
   );
-
-
 
   useEffect(() => {
     let cancelled = false;
     const key = deckCacheKey(deckId);
     const apply = ({ viewer, detail }: DeckReading) => {
       setCards(viewer.cards);
-      setDeck(prev => {
+      setDeck((prev) => {
         const base: StudentDeckView = detail ??
           prev ?? {
             deckId,
@@ -119,8 +123,8 @@ function DeckPage() {
             courseId: state?.courseId ?? null,
             courseTitle: state?.courseTitle ?? null,
             cardCount: viewer.cards.length,
-            visibility: 'PRIVATE',
-            reviewStatus: 'NONE',
+            visibility: "PRIVATE",
+            reviewStatus: "NONE",
             reviewNote: null,
             createdAt: null,
             isOwner: false,
@@ -134,7 +138,8 @@ function DeckPage() {
           cardCount: viewer.cards.length,
         };
       });
-      if (detail?.learnedCount != null) setProgress({ learned: detail.learnedCount, total: viewer.cards.length });
+      if (detail?.learnedCount != null)
+        setProgress({ learned: detail.learnedCount, total: viewer.cards.length });
     };
     // Seen before in this tab: show the last reading at once, then read again behind it
     // (a study run takes its cards from FP-01, never from this reading).
@@ -147,7 +152,7 @@ function DeckPage() {
       try {
         const [viewer, detail] = await Promise.all([
           studentDeckService.getViewer(deckId),
-          studentDeckService.getDeck(deckId).catch(err => {
+          studentDeckService.getDeck(deckId).catch((err) => {
             if (isEndpointMissing(err)) return null; // FC-14 not on the BE yet
             throw err;
           }),
@@ -160,7 +165,7 @@ function DeckPage() {
         if (cancelled) return;
         // A deck that is gone (or no longer readable) must not stay on screen from the cache.
         invalidateCached(key);
-        setError(getApiErrorMessage(err, 'Failed to load the deck.'));
+        setError(getApiErrorMessage(err, "Failed to load the deck."));
       } finally {
         if (!cancelled) setLoading(false);
       }
@@ -176,16 +181,16 @@ function DeckPage() {
     try {
       const viewer = await studentDeckService.getViewer(deckId);
       setCards(viewer.cards);
-      setDeck(d => (d ? { ...d, cardCount: viewer.cards.length } : d));
+      setDeck((d) => (d ? { ...d, cardCount: viewer.cards.length } : d));
     } catch (err) {
-      toast.error(getApiErrorMessage(err, 'Failed to reload the cards.'));
+      toast.error(getApiErrorMessage(err, "Failed to reload the cards."));
     }
   }, [deckId, toast]);
 
   const isOwner = Boolean(deck?.isOwner);
   const editable = isOwner && deck != null && isDeckEditable(deck.reviewStatus);
   const deletable = isOwner && deck != null && isDeckDeletable(deck.reviewStatus);
-  const backTab = state?.tab ?? (isOwner ? 'mine' : 'course');
+  const backTab = state?.tab ?? (isOwner ? "mine" : "course");
   const flashcardsUrl = `${ROUTES.studentFlashcards}?tab=${backTab}`;
 
   /** Runs a deck action; a 409 reloads the deck since its status changed elsewhere. */
@@ -196,11 +201,11 @@ function DeckPage() {
       setDialog(null);
     } catch (err) {
       const code = apiErrorCode(err);
-      if (isEndpointMissing(err)) toast.error('This action is not available on the server yet.');
+      if (isEndpointMissing(err)) toast.error("This action is not available on the server yet.");
       else toast.error((code && CONFLICT_MESSAGE[code]) || getApiErrorMessage(err, fallback));
       if (code) {
         setDialog(null);
-        setReload(r => r + 1);
+        setReload((r) => r + 1);
       }
     } finally {
       setBusy(false);
@@ -209,7 +214,7 @@ function DeckPage() {
 
   const exportDeck = async () => {
     if (!deck) return;
-    setExporting('xlsx');
+    setExporting("xlsx");
     try {
       await downloadDecksXlsx(
         [
@@ -217,7 +222,7 @@ function DeckPage() {
             title: deck.title,
             courseName: deck.courseTitle,
             mode: MODE_LABEL[deck.mode],
-            visibility: deck.visibility === 'PUBLIC' ? 'Public' : 'Private',
+            visibility: deck.visibility === "PUBLIC" ? "Public" : "Private",
             description: deck.description,
             cards,
           },
@@ -225,7 +230,7 @@ function DeckPage() {
         fileSlug(deck.title),
       );
     } catch (err) {
-      toast.error(getApiErrorMessage(err, 'Could not export the deck.'));
+      toast.error(getApiErrorMessage(err, "Could not export the deck."));
     } finally {
       setExporting(null);
     }
@@ -234,11 +239,11 @@ function DeckPage() {
   /** Rendered by the BE — the student's own decks and the course decks they can open. */
   const exportDeckPdf = async () => {
     if (!deck) return;
-    setExporting('pdf');
+    setExporting("pdf");
     try {
       await studentDeckService.exportPdf(deck.deckId, `${fileSlug(deck.title)}.pdf`);
     } catch (err) {
-      toast.error(getApiErrorMessage(err, 'Could not export the deck as PDF.'));
+      toast.error(getApiErrorMessage(err, "Could not export the deck as PDF."));
     } finally {
       setExporting(null);
     }
@@ -249,30 +254,34 @@ function DeckPage() {
     if (!deck || bookmarking) return;
     const before = Boolean(deck.isBookmarked);
     const settle = (isBookmarked: boolean) => {
-      setDeck(d => (d ? { ...d, isBookmarked } : d));
+      setDeck((d) => (d ? { ...d, isBookmarked } : d));
       const key = deckCacheKey(deckId);
       const cached = getCached<DeckReading>(key);
-      if (cached?.detail) setCached<DeckReading>(key, { ...cached, detail: { ...cached.detail, isBookmarked } });
+      if (cached?.detail)
+        setCached<DeckReading>(key, { ...cached, detail: { ...cached.detail, isBookmarked } });
     };
     settle(!before);
     setBookmarking(true);
     try {
       const res = await studentDeckService.toggleBookmark(deck.deckId);
       settle(res.isBookmarked);
-      toast.success(res.isBookmarked ? 'Deck bookmarked.' : 'Bookmark removed.');
+      toast.success(res.isBookmarked ? "Deck bookmarked." : "Bookmark removed.");
     } catch (err) {
       settle(before);
-      toast.error(getApiErrorMessage(err, 'Could not update the bookmark.'));
+      toast.error(getApiErrorMessage(err, "Could not update the bookmark."));
     } finally {
       setBookmarking(false);
     }
   };
 
-  const crumbs: { label: string; onClick?: () => void }[] = [{ label: 'Flashcards', onClick: () => navigate(flashcardsUrl) }];
+  const crumbs: { label: string; onClick?: () => void }[] = [
+    { label: "Flashcards", onClick: () => navigate(flashcardsUrl) },
+  ];
   const courseId = deck?.courseId ?? state?.courseId;
   const courseTitle = deck?.courseTitle ?? state?.courseTitle;
-  if (courseId && courseTitle && !isOwner) crumbs.push({ label: courseTitle, onClick: () => navigate(studentCoursePath(courseId)) });
-  crumbs.push({ label: deck?.title ?? state?.deckTitle ?? 'Deck' });
+  if (courseId && courseTitle && !isOwner)
+    crumbs.push({ label: courseTitle, onClick: () => navigate(studentCoursePath(courseId)) });
+  crumbs.push({ label: deck?.title ?? state?.deckTitle ?? "Deck" });
 
   if (loading && !deck) {
     return (
@@ -287,7 +296,10 @@ function DeckPage() {
     return (
       <div className={`${STUDENT_PAGE_CLASS} space-y-4`}>
         <Breadcrumb items={crumbs} />
-        <LoadError message={error ?? 'Failed to load the deck.'} onRetry={() => setReload(r => r + 1)} />
+        <LoadError
+          message={error ?? "Failed to load the deck."}
+          onRetry={() => setReload((r) => r + 1)}
+        />
       </div>
     );
   }
@@ -305,44 +317,63 @@ function DeckPage() {
               <DeckModeBadge mode={deck.mode} />
               {isOwner && <DeckStatusBadge status={deck.reviewStatus} />}
             </div>
-            <h1 className="text-[clamp(1.25rem,1.1rem+0.6vw,1.5rem)] font-bold text-content break-words">{deck.title}</h1>
+            <h1 className="text-[clamp(1.25rem,1.1rem+0.6vw,1.5rem)] font-bold text-content break-words">
+              {deck.title}
+            </h1>
             <p className="text-sm text-content-soft">
-              {plural(deck.cardCount, 'card')}
+              {plural(deck.cardCount, "card")}
               {courseTitle && <> · {courseTitle}</>}
               {!isOwner && deck.ownerName && <> · by {deck.ownerName}</>}
             </p>
-            {deck.description && <p className="text-sm text-content-secondary whitespace-pre-line">{deck.description}</p>}
+            {deck.description && (
+              <p className="text-sm text-content-secondary whitespace-pre-line">
+                {deck.description}
+              </p>
+            )}
           </div>
           {progress && progress.total > 0 && (
             <div className="max-w-md">
-              <Progress value={progress.learned} max={progress.total} label={`Learned ${progress.learned} / ${progress.total}`} size="sm" />
+              <Progress
+                value={progress.learned}
+                max={progress.total}
+                label={`Learned ${progress.learned} / ${progress.total}`}
+                size="sm"
+              />
             </div>
           )}
 
-        {isOwner && deck.reviewStatus === 'REJECTED' && (
-          <div className="rounded-[10px] border border-danger-line bg-danger-light p-3 text-sm space-y-1">
-            <p className="flex items-center gap-2 font-semibold text-danger">
-              <Icon.XCircle className="w-4 h-4" /> Your request to make this deck public was rejected
-            </p>
-            {deck.reviewNote && <p className="text-content whitespace-pre-line">{deck.reviewNote}</p>}
-            <p className="text-content-soft text-xs">Fix the deck, then resubmit it for review.</p>
-          </div>
-        )}
-        {isOwner && deck.reviewStatus === 'PENDING_REVIEW' && (
-          <div className="rounded-[10px] border border-warning-line bg-warning-light p-3 text-sm text-warning flex items-start gap-2">
-            <Icon.Clock className="w-4 h-4 flex-shrink-0 mt-0.5" />
-            <span>
-              Waiting for review{deck.submittedAt ? ` since ${formatDateTime(deck.submittedAt)}` : ''}. Editing is locked — withdraw the
-              request to make changes.
-            </span>
-          </div>
-        )}
-        {isOwner && deck.reviewStatus === 'APPROVED' && (
-          <div className="rounded-[10px] border border-success-line bg-success-light p-3 text-sm text-success flex items-start gap-2">
-            <Icon.Eye className="w-4 h-4 flex-shrink-0 mt-0.5" />
-            <span>This deck is public. Public decks can't be edited, made private or deleted.</span>
-          </div>
-        )}
+          {isOwner && deck.reviewStatus === "REJECTED" && (
+            <div className="rounded-[10px] border border-danger-line bg-danger-light p-3 text-sm space-y-1">
+              <p className="flex items-center gap-2 font-semibold text-danger">
+                <Icon.XCircle className="w-4 h-4" /> Your request to make this deck public was
+                rejected
+              </p>
+              {deck.reviewNote && (
+                <p className="text-content whitespace-pre-line">{deck.reviewNote}</p>
+              )}
+              <p className="text-content-soft text-xs">
+                Fix the deck, then resubmit it for review.
+              </p>
+            </div>
+          )}
+          {isOwner && deck.reviewStatus === "PENDING_REVIEW" && (
+            <div className="rounded-[10px] border border-warning-line bg-warning-light p-3 text-sm text-warning flex items-start gap-2">
+              <Icon.Clock className="w-4 h-4 flex-shrink-0 mt-0.5" />
+              <span>
+                Waiting for review
+                {deck.submittedAt ? ` since ${formatDateTime(deck.submittedAt)}` : ""}. Editing is
+                locked — withdraw the request to make changes.
+              </span>
+            </div>
+          )}
+          {isOwner && deck.reviewStatus === "APPROVED" && (
+            <div className="rounded-[10px] border border-success-line bg-success-light p-3 text-sm text-success flex items-start gap-2">
+              <Icon.Eye className="w-4 h-4 flex-shrink-0 mt-0.5" />
+              <span>
+                This deck is public. Public decks can't be edited, made private or deleted.
+              </span>
+            </div>
+          )}
         </div>
 
         <div className="min-w-0 flex flex-col gap-3 lg:border-l lg:border-line lg:pl-5">
@@ -350,90 +381,122 @@ function DeckPage() {
             study={study}
             deckId={deckId}
             cardCount={deck.cardCount}
-            starredCount={deck.starredCount ?? cards.filter(card => card.isStarred).length}
+            starredCount={deck.starredCount ?? cards.filter((card) => card.isStarred).length}
             quizCount={usableCards(cards, deck.mode).length}
             onProgress={setProgress}
           />
           {/* Another student's public deck or a course deck: keep it close, or take a copy to edit. */}
           {!isOwner && (
-            <div className={`grid grid-cols-2 gap-2 ${deck.cardCount > 0 ? 'border-t border-line pt-3' : ''}`}>
+            <div
+              className={`grid grid-cols-2 gap-2 ${deck.cardCount > 0 ? "border-t border-line pt-3" : ""}`}
+            >
               <Button
                 variant="outline"
                 size="sm"
-                icon={<Icon.Bookmark className={`w-4 h-4 ${deck.isBookmarked ? 'fill-current text-primary' : ''}`} />}
+                icon={
+                  <Icon.Bookmark
+                    className={`w-4 h-4 ${deck.isBookmarked ? "fill-current text-primary" : ""}`}
+                  />
+                }
                 onClick={toggleBookmark}
                 disabled={bookmarking}
                 aria-pressed={Boolean(deck.isBookmarked)}
               >
-                {deck.isBookmarked ? 'Bookmarked' : 'Bookmark'}
+                {deck.isBookmarked ? "Bookmarked" : "Bookmark"}
               </Button>
               <Button
                 variant="outline"
                 size="sm"
                 icon={<Icon.Copy className="w-4 h-4" />}
-                onClick={() => setDialog({ kind: 'copy' })}
+                onClick={() => setDialog({ kind: "copy" })}
                 disabled={deck.cardCount === 0}
-                title={deck.cardCount === 0 ? 'This deck has no cards to copy' : 'Copy this deck to My decks'}
+                title={
+                  deck.cardCount === 0
+                    ? "This deck has no cards to copy"
+                    : "Copy this deck to My decks"
+                }
               >
                 Copy
               </Button>
             </div>
           )}
-          {isOwner && (editable || deletable || deck.visibility === 'PUBLIC' || deck.reviewStatus === 'PENDING_REVIEW') && (
-            <div className={`grid grid-cols-2 gap-2 ${deck.cardCount > 0 ? 'border-t border-line pt-3' : ''}`}>
-              {editable && (
-                <>
+          {isOwner &&
+            (editable ||
+              deletable ||
+              deck.visibility === "PUBLIC" ||
+              deck.reviewStatus === "PENDING_REVIEW") && (
+              <div
+                className={`grid grid-cols-2 gap-2 ${deck.cardCount > 0 ? "border-t border-line pt-3" : ""}`}
+              >
+                {editable && (
+                  <>
+                    <Button
+                      className="col-span-2"
+                      variant="outline"
+                      icon={<Icon.Upload className="w-4 h-4" />}
+                      loading={busy}
+                      onClick={() =>
+                        act(async () => {
+                          const res = await studentDeckService.requestPublish(deckId);
+                          setDeck((d) =>
+                            d
+                              ? {
+                                  ...d,
+                                  reviewStatus: res.reviewStatus,
+                                  visibility: res.visibility,
+                                  submittedAt: res.submittedAt,
+                                }
+                              : d,
+                          );
+                          toast.success("Published to Community.");
+                        }, "Could not publish deck.")
+                      }
+                      disabled={busy || deck.cardCount === 0 || deck.reviewStatus === "REJECTED"}
+                      title={
+                        deck.reviewStatus === "REJECTED"
+                          ? "This deck was removed by an administrator"
+                          : deck.cardCount === 0
+                            ? "Add at least one card first"
+                            : "Share this deck publicly in Community"
+                      }
+                    >
+                      {deck.reviewStatus === "REJECTED"
+                        ? "Removed by Admin"
+                        : "Publish to Community"}
+                    </Button>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      icon={<Icon.Edit className="w-4 h-4" />}
+                      onClick={() => setDialog({ kind: "edit" })}
+                    >
+                      Edit
+                    </Button>
+                  </>
+                )}
+                {(deck.visibility === "PUBLIC" || deck.reviewStatus === "PENDING_REVIEW") && (
                   <Button
                     className="col-span-2"
                     variant="outline"
-                    icon={<Icon.Upload className="w-4 h-4" />}
-                    loading={busy}
-                    onClick={() =>
-                      act(async () => {
-                        const res = await studentDeckService.requestPublish(deckId);
-                        setDeck(d => (d ? { ...d, reviewStatus: res.reviewStatus, visibility: res.visibility, submittedAt: res.submittedAt } : d));
-                        toast.success('Published to Community.');
-                      }, 'Could not publish deck.')
-                    }
-                    disabled={busy || deck.cardCount === 0 || deck.reviewStatus === 'REJECTED'}
-                    title={
-                      deck.reviewStatus === 'REJECTED'
-                        ? 'This deck was removed by an administrator'
-                        : deck.cardCount === 0
-                          ? 'Add at least one card first'
-                          : 'Share this deck publicly in Community'
-                    }
+                    icon={<Icon.RefreshCw className="w-4 h-4" />}
+                    onClick={() => setDialog({ kind: "withdraw" })}
                   >
-                    {deck.reviewStatus === 'REJECTED' ? 'Removed by Admin' : 'Publish to Community'}
+                    Make Private
                   </Button>
-                  <Button variant="outline" size="sm" icon={<Icon.Edit className="w-4 h-4" />} onClick={() => setDialog({ kind: 'edit' })}>
-                    Edit
+                )}
+                {deletable && (
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    className={editable ? "" : "col-span-2"}
+                    icon={<Icon.Trash className="w-4 h-4" />}
+                    onClick={() => setDialog({ kind: "delete" })}
+                  >
+                    Delete
                   </Button>
-                </>
-              )}
-              {(deck.visibility === 'PUBLIC' || deck.reviewStatus === 'PENDING_REVIEW') && (
-                <Button
-                  className="col-span-2"
-                  variant="outline"
-                  icon={<Icon.RefreshCw className="w-4 h-4" />}
-                  onClick={() => setDialog({ kind: 'withdraw' })}
-                >
-                  Make Private
-                </Button>
-              )}
-              {deletable && (
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  className={editable ? '' : 'col-span-2'}
-                  icon={<Icon.Trash className="w-4 h-4" />}
-                  onClick={() => setDialog({ kind: 'delete' })}
-                >
-                  Delete
-                </Button>
-              )}
-            </div>
-          )}
+                )}
+              </div>
+            )}
         </div>
       </div>
 
@@ -442,7 +505,9 @@ function DeckPage() {
         <StudySession study={study} mode={deck.mode} />
       ) : (
         <section className="space-y-3" aria-label="Cards">
-          {study.summary && <StudySummaryBanner summary={study.summary} onClose={study.dismissSummary} />}
+          {study.summary && (
+            <StudySummaryBanner summary={study.summary} onClose={study.dismissSummary} />
+          )}
 
           <div className="flex flex-wrap items-center justify-between gap-3">
             <h2 className="text-base font-semibold text-content">All cards ({cards.length})</h2>
@@ -455,7 +520,7 @@ function DeckPage() {
                     size="sm"
                     icon={<Icon.Download className="w-4 h-4" />}
                     onClick={exportDeck}
-                    loading={exporting === 'xlsx'}
+                    loading={exporting === "xlsx"}
                     disabled={exporting != null}
                     title="Download this deck with all its cards as an Excel file"
                   >
@@ -468,7 +533,7 @@ function DeckPage() {
                     size="sm"
                     icon={<Icon.FileText className="w-4 h-4" />}
                     onClick={exportDeckPdf}
-                    loading={exporting === 'pdf'}
+                    loading={exporting === "pdf"}
                     disabled={exporting != null}
                     title="Download this deck with all its cards as a printable PDF"
                   >
@@ -477,10 +542,19 @@ function DeckPage() {
                 )}
                 {editable && (
                   <>
-                    <Button variant="outline" size="sm" icon={<Icon.Upload className="w-4 h-4" />} onClick={() => setDialog({ kind: 'import' })}>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      icon={<Icon.Upload className="w-4 h-4" />}
+                      onClick={() => setDialog({ kind: "import" })}
+                    >
                       Import from file
                     </Button>
-                    <Button size="sm" icon={<Icon.Plus className="w-4 h-4" />} onClick={() => setDialog({ kind: 'card' })}>
+                    <Button
+                      size="sm"
+                      icon={<Icon.Plus className="w-4 h-4" />}
+                      onClick={() => setDialog({ kind: "card" })}
+                    >
                       Add card
                     </Button>
                   </>
@@ -490,73 +564,93 @@ function DeckPage() {
           </div>
 
           {cards.length === 0 ? (
-        <div className="card">
-          <EmptyState
-            icon={<Icon.Layers className="w-7 h-7" />}
-            title="This deck has no cards yet"
-            message={editable ? deck.mode === 'FLASHCARD' ? 'Add cards one by one or import from a Word, Excel, or PDF template.' : 'Add cards one by one or import them from a CSV / XLSX file.' : undefined}
-            action={editable ? <Button onClick={() => setDialog({ kind: 'card' })}>Add card</Button> : undefined}
-          />
-        </div>
-      ) : (
-        <ul className="card divide-y divide-line">
-          {cards.map((c, i) => (
-            <li key={c.cardId} className="grid gap-3 md:grid-cols-[2rem_minmax(0,1fr)_minmax(0,1fr)_auto] items-start px-5 py-4">
-              <span className="text-xs font-semibold text-content-subtle pt-1">{i + 1}</span>
-              <div className="min-w-0 space-y-1 [&_p]:text-sm">
-                <p className="!text-2xs font-semibold uppercase tracking-wide text-content-subtle">Front</p>
-                <CardFace card={c} mode={deck.mode} side="front" />
-              </div>
-              <div className="min-w-0 space-y-1 [&_p]:text-sm [&_p]:text-content-soft">
-                <p className="!text-2xs font-semibold uppercase tracking-wide !text-content-subtle">Back</p>
-                <CardFace card={c} mode={deck.mode} side="back" />
-              </div>
-              {editable ? (
-                <div className="flex gap-1">
-                  <button
-                    type="button"
-                    aria-label={`Edit card ${i + 1}`}
-                    onClick={() => setDialog({ kind: 'card', card: c })}
-                    className="w-8 h-8 rounded-[8px] flex items-center justify-center text-content-subtle hover:bg-accent hover:text-content"
-                  >
-                    <Icon.Edit className="w-4 h-4" />
-                  </button>
-                  <button
-                    type="button"
-                    aria-label={`Delete card ${i + 1}`}
-                    onClick={() => setDialog({ kind: 'deleteCard', card: c })}
-                    className="w-8 h-8 rounded-[8px] flex items-center justify-center text-content-subtle hover:bg-danger-light hover:text-danger"
-                  >
-                    <Icon.Trash className="w-4 h-4" />
-                  </button>
-                </div>
-              ) : (
-                <span />
-              )}
-            </li>
-          ))}
-        </ul>
+            <div className="card">
+              <EmptyState
+                icon={<Icon.Layers className="w-7 h-7" />}
+                title="This deck has no cards yet"
+                message={
+                  editable
+                    ? deck.mode === "FLASHCARD"
+                      ? "Add cards one by one or import from a Word, Excel, or PDF template."
+                      : "Add cards one by one or import them from a CSV / XLSX file."
+                    : undefined
+                }
+                action={
+                  editable ? (
+                    <Button onClick={() => setDialog({ kind: "card" })}>Add card</Button>
+                  ) : undefined
+                }
+              />
+            </div>
+          ) : (
+            <ul className="card divide-y divide-line">
+              {cards.map((c, i) => (
+                <li
+                  key={c.cardId}
+                  className="grid gap-3 md:grid-cols-[2rem_minmax(0,1fr)_minmax(0,1fr)_auto] items-start px-5 py-4"
+                >
+                  <span className="text-xs font-semibold text-content-subtle pt-1">{i + 1}</span>
+                  <div className="min-w-0 space-y-1 [&_p]:text-sm">
+                    <p className="!text-2xs font-semibold uppercase tracking-wide text-content-subtle">
+                      Front
+                    </p>
+                    <CardFace card={c} mode={deck.mode} side="front" />
+                  </div>
+                  <div className="min-w-0 space-y-1 [&_p]:text-sm [&_p]:text-content-soft">
+                    <p className="!text-2xs font-semibold uppercase tracking-wide !text-content-subtle">
+                      Back
+                    </p>
+                    <CardFace card={c} mode={deck.mode} side="back" />
+                  </div>
+                  {editable ? (
+                    <div className="flex gap-1">
+                      <button
+                        type="button"
+                        aria-label={`Edit card ${i + 1}`}
+                        onClick={() => setDialog({ kind: "card", card: c })}
+                        className="w-8 h-8 rounded-[8px] flex items-center justify-center text-content-subtle hover:bg-accent hover:text-content"
+                      >
+                        <Icon.Edit className="w-4 h-4" />
+                      </button>
+                      <button
+                        type="button"
+                        aria-label={`Delete card ${i + 1}`}
+                        onClick={() => setDialog({ kind: "deleteCard", card: c })}
+                        className="w-8 h-8 rounded-[8px] flex items-center justify-center text-content-subtle hover:bg-danger-light hover:text-danger"
+                      >
+                        <Icon.Trash className="w-4 h-4" />
+                      </button>
+                    </div>
+                  ) : (
+                    <span />
+                  )}
+                </li>
+              ))}
+            </ul>
           )}
         </section>
       )}
 
       {/* ── Dialogs ────────────────────────────────────────────────────── */}
-      {dialog?.kind === 'edit' && (
+      {dialog?.kind === "edit" && (
         <DeckFormModal
           deck={deck}
           onClose={() => setDialog(null)}
-          onSaved={saved => {
-            setDeck(d => ({
+          onSaved={(saved) => {
+            setDeck((d) => ({
               ...(d ?? saved),
               ...saved,
               isOwner: true,
-              courseTitle: saved.courseId === d?.courseId ? d?.courseTitle ?? null : saved.courseTitle ?? null,
+              courseTitle:
+                saved.courseId === d?.courseId
+                  ? (d?.courseTitle ?? null)
+                  : (saved.courseTitle ?? null),
             }));
             setDialog(null);
           }}
         />
       )}
-      {dialog?.kind === 'card' && (
+      {dialog?.kind === "card" && (
         <CardFormModal
           deckId={deckId}
           mode={deck.mode}
@@ -568,20 +662,26 @@ function DeckPage() {
           }}
         />
       )}
-      {dialog?.kind === 'import' && (
-        <ImportCardsModal deckId={deckId} deckTitle={deck.title} mode={deck.mode} onClose={() => setDialog(null)} onImported={() => void reloadCards()} />
+      {dialog?.kind === "import" && (
+        <ImportCardsModal
+          deckId={deckId}
+          deckTitle={deck.title}
+          mode={deck.mode}
+          onClose={() => setDialog(null)}
+          onImported={() => void reloadCards()}
+        />
       )}
-      {dialog?.kind === 'copy' && (
+      {dialog?.kind === "copy" && (
         <CopyDeckModal
           deck={deck}
           onClose={() => setDialog(null)}
-          onCopied={copy => {
+          onCopied={(copy) => {
             setDialog(null);
             toast.success(`Copied to My decks as "${copy.newTitle}".`);
             navigate(studentDeckPath(copy.newDeckId), {
               state: {
                 deckTitle: copy.newTitle,
-                tab: 'mine',
+                tab: "mine",
                 deck: {
                   ...deck,
                   deckId: copy.newDeckId,
@@ -590,8 +690,8 @@ function DeckPage() {
                   courseTitle: null,
                   moduleId: null,
                   moduleTitle: null,
-                  visibility: 'PRIVATE',
-                  reviewStatus: 'NONE',
+                  visibility: "PRIVATE",
+                  reviewStatus: "NONE",
                   reviewNote: null,
                   submittedAt: null,
                   ownerName: null,
@@ -605,7 +705,7 @@ function DeckPage() {
           }}
         />
       )}
-      {dialog?.kind === 'deleteCard' && (
+      {dialog?.kind === "deleteCard" && (
         <ConfirmModal
           title="Delete this card?"
           message="The card and everyone's progress on it will be deleted."
@@ -616,17 +716,17 @@ function DeckPage() {
           onConfirm={() =>
             act(async () => {
               await studentDeckService.deleteCard(dialog.card.cardId);
-              setCards(cs => cs.filter(c => c.cardId !== dialog.card.cardId));
-              setDeck(d => (d ? { ...d, cardCount: Math.max(d.cardCount - 1, 0) } : d));
-              toast.success('Card deleted.');
-            }, 'Could not delete the card.')
+              setCards((cs) => cs.filter((c) => c.cardId !== dialog.card.cardId));
+              setDeck((d) => (d ? { ...d, cardCount: Math.max(d.cardCount - 1, 0) } : d));
+              toast.success("Card deleted.");
+            }, "Could not delete the card.")
           }
         />
       )}
-      {dialog?.kind === 'delete' && (
+      {dialog?.kind === "delete" && (
         <ConfirmModal
           title="Delete this deck?"
-          message={`"${deck.title}", its ${plural(deck.cardCount, 'card')} and all study progress will be deleted. This can't be undone.`}
+          message={`"${deck.title}", its ${plural(deck.cardCount, "card")} and all study progress will be deleted. This can't be undone.`}
           confirmLabel="Delete deck"
           danger
           busy={busy}
@@ -635,13 +735,13 @@ function DeckPage() {
             act(async () => {
               await studentDeckService.deleteDeck(deckId);
               invalidateCached(deckCacheKey(deckId));
-              toast.success('Deck deleted.');
+              toast.success("Deck deleted.");
               navigate(`${ROUTES.studentFlashcards}?tab=mine`, { replace: true });
-            }, 'Could not delete the deck.')
+            }, "Could not delete the deck.")
           }
         />
       )}
-      {dialog?.kind === 'withdraw' && (
+      {dialog?.kind === "withdraw" && (
         <ConfirmModal
           title="Make this deck private?"
           message="The deck will be hidden from Community and you can edit or delete it again."
@@ -651,9 +751,18 @@ function DeckPage() {
           onConfirm={() =>
             act(async () => {
               const res = await studentDeckService.withdrawReview(deckId);
-              setDeck(d => (d ? { ...d, reviewStatus: res.reviewStatus, visibility: res.visibility, submittedAt: null } : d));
-              toast.success('Deck moved back to private.');
-            }, 'Could not make deck private.')
+              setDeck((d) =>
+                d
+                  ? {
+                      ...d,
+                      reviewStatus: res.reviewStatus,
+                      visibility: res.visibility,
+                      submittedAt: null,
+                    }
+                  : d,
+              );
+              toast.success("Deck moved back to private.");
+            }, "Could not make deck private.")
           }
         />
       )}

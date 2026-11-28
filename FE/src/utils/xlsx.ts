@@ -22,18 +22,20 @@ const STYLE_HEADER = 1;
 const STYLE_NUMBER = 2;
 
 function escapeXml(value: string): string {
-  return value
-    .replace(/&/g, '&amp;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;')
-    .replace(/"/g, '&quot;')
-    // Control characters other than tab/newline are illegal in XML 1.0.
-    // eslint-disable-next-line no-control-regex
-    .replace(/[\u0000-\u0008\u000B\u000C\u000E-\u001F]/g, '');
+  return (
+    value
+      .replace(/&/g, "&amp;")
+      .replace(/</g, "&lt;")
+      .replace(/>/g, "&gt;")
+      .replace(/"/g, "&quot;")
+      // Control characters other than tab/newline are illegal in XML 1.0.
+      // eslint-disable-next-line no-control-regex
+      .replace(/[\u0000-\u0008\u000B\u000C\u000E-\u001F]/g, "")
+  );
 }
 
 function columnName(index: number): string {
-  let name = '';
+  let name = "";
   for (let n = index + 1; n > 0; n = Math.floor((n - 1) / 26)) {
     name = String.fromCharCode(65 + ((n - 1) % 26)) + name;
   }
@@ -41,8 +43,8 @@ function columnName(index: number): string {
 }
 
 function cellXml(value: XlsxCell, ref: string, style: number): string {
-  if (value === null || value === undefined || value === '') return '';
-  if (typeof value === 'number' && Number.isFinite(value)) {
+  if (value === null || value === undefined || value === "") return "";
+  if (typeof value === "number" && Number.isFinite(value)) {
     return `<c r="${ref}" s="${style === STYLE_HEADER ? STYLE_HEADER : STYLE_NUMBER}"><v>${value}</v></c>`;
   }
   return `<c r="${ref}" s="${style}" t="inlineStr"><is><t xml:space="preserve">${escapeXml(String(value))}</t></is></c>`;
@@ -55,20 +57,22 @@ function sheetXml(sheet: XlsxSheet): string {
 
   const rowsXml = allRows
     .map(({ cells, style }, r) => {
-      const cellsXml = cells.map((value, c) => cellXml(value, `${columnName(c)}${r + 1}`, style)).join('');
+      const cellsXml = cells
+        .map((value, c) => cellXml(value, `${columnName(c)}${r + 1}`, style))
+        .join("");
       return `<row r="${r + 1}">${cellsXml}</row>`;
     })
-    .join('');
+    .join("");
 
   const colsXml = sheet.widths?.length
     ? `<cols>${sheet.widths
         .map((w, i) => `<col min="${i + 1}" max="${i + 1}" width="${w}" customWidth="1"/>`)
-        .join('')}</cols>`
-    : '';
+        .join("")}</cols>`
+    : "";
 
   const freeze = sheet.header
     ? '<sheetViews><sheetView workbookViewId="0"><pane ySplit="1" topLeftCell="A2" activePane="bottomLeft" state="frozen"/></sheetView></sheetViews>'
-    : '';
+    : "";
 
   return (
     '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>' +
@@ -78,7 +82,7 @@ function sheetXml(sheet: XlsxSheet): string {
 }
 
 function safeSheetName(name: string, used: Set<string>): string {
-  const base = name.replace(/[[\]:*?/\\]/g, ' ').slice(0, 31) || 'Sheet';
+  const base = name.replace(/[[\]:*?/\\]/g, " ").slice(0, 31) || "Sheet";
   let candidate = base;
   for (let i = 2; used.has(candidate.toLowerCase()); i++) {
     candidate = `${base.slice(0, 31 - String(i).length - 1)} ${i}`;
@@ -92,7 +96,7 @@ function workbookParts(sheets: XlsxSheet[]): Record<string, string> {
   const names = sheets.map((s) => safeSheetName(s.name, used));
 
   const parts: Record<string, string> = {
-    '[Content_Types].xml':
+    "[Content_Types].xml":
       '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>' +
       '<Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types">' +
       '<Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/>' +
@@ -104,20 +108,20 @@ function workbookParts(sheets: XlsxSheet[]): Record<string, string> {
           (_, i) =>
             `<Override PartName="/xl/worksheets/sheet${i + 1}.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml"/>`,
         )
-        .join('') +
-      '</Types>',
-    '_rels/.rels':
+        .join("") +
+      "</Types>",
+    "_rels/.rels":
       '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>' +
       '<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">' +
       '<Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="xl/workbook.xml"/>' +
-      '</Relationships>',
-    'xl/workbook.xml':
+      "</Relationships>",
+    "xl/workbook.xml":
       '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>' +
       '<workbook xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships">' +
       `<sheets>${names
         .map((n, i) => `<sheet name="${escapeXml(n)}" sheetId="${i + 1}" r:id="rId${i + 1}"/>`)
-        .join('')}</sheets></workbook>`,
-    'xl/_rels/workbook.xml.rels':
+        .join("")}</sheets></workbook>`,
+    "xl/_rels/workbook.xml.rels":
       '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>' +
       '<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">' +
       sheets
@@ -125,10 +129,10 @@ function workbookParts(sheets: XlsxSheet[]): Record<string, string> {
           (_, i) =>
             `<Relationship Id="rId${i + 1}" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet" Target="worksheets/sheet${i + 1}.xml"/>`,
         )
-        .join('') +
+        .join("") +
       `<Relationship Id="rId${sheets.length + 1}" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/styles" Target="styles.xml"/>` +
-      '</Relationships>',
-    'xl/styles.xml':
+      "</Relationships>",
+    "xl/styles.xml":
       '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>' +
       '<styleSheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">' +
       '<fonts count="2"><font><sz val="11"/><name val="Calibri"/></font><font><b/><sz val="11"/><name val="Calibri"/></font></fonts>' +
@@ -139,7 +143,7 @@ function workbookParts(sheets: XlsxSheet[]): Record<string, string> {
       '<xf numFmtId="0" fontId="0" fillId="0" borderId="0" xfId="0"/>' +
       '<xf numFmtId="0" fontId="1" fillId="0" borderId="0" xfId="0" applyFont="1"/>' +
       '<xf numFmtId="3" fontId="0" fillId="0" borderId="0" xfId="0" applyNumberFormat="1"/>' +
-      '</cellXfs></styleSheet>',
+      "</cellXfs></styleSheet>",
   };
   sheets.forEach((sheet, i) => {
     parts[`xl/worksheets/sheet${i + 1}.xml`] = sheetXml(sheet);
@@ -237,15 +241,14 @@ function zip(files: Record<string, string>): Uint8Array<ArrayBuffer> {
 export function downloadXlsx(fileName: string, sheets: XlsxSheet[]): void {
   const bytes = zip(workbookParts(sheets));
   const blob = new Blob([bytes], {
-    type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+    type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
   });
   const url = URL.createObjectURL(blob);
-  const link = document.createElement('a');
+  const link = document.createElement("a");
   link.href = url;
-  link.download = fileName.endsWith('.xlsx') ? fileName : `${fileName}.xlsx`;
+  link.download = fileName.endsWith(".xlsx") ? fileName : `${fileName}.xlsx`;
   document.body.appendChild(link);
   link.click();
   link.remove();
   URL.revokeObjectURL(url);
 }
-

@@ -31,9 +31,7 @@ export const textareaClass =
 
 export function VisibilityBadge({ isPublic }: { isPublic: boolean }) {
   return (
-    <Badge variant={isPublic ? "success" : "default"}>
-      {isPublic ? "Public" : "Private"}
-    </Badge>
+    <Badge variant={isPublic ? "success" : "default"}>{isPublic ? "Public" : "Private"}</Badge>
   );
 }
 
@@ -85,8 +83,7 @@ export function useCourseModules(courseId: string) {
     courseService
       .getCourseModules(courseId)
       .then((list) => {
-        if (!cancelled)
-          setModules([...list].sort((a, b) => a.orderIndex - b.orderIndex));
+        if (!cancelled) setModules([...list].sort((a, b) => a.orderIndex - b.orderIndex));
       })
       .catch(() => {
         if (!cancelled) setModules([]);
@@ -113,14 +110,9 @@ export interface DeckInfo {
   description: string;
 }
 
-export type DeckInfoErrors = Partial<
-  Record<"title" | "courseId" | "description", string>
->;
+export type DeckInfoErrors = Partial<Record<"title" | "courseId" | "description", string>>;
 
-export function validateDeckInfo(
-  info: DeckInfo,
-  { requireCourse = false } = {},
-): DeckInfoErrors {
+export function validateDeckInfo(info: DeckInfo, { requireCourse = false } = {}): DeckInfoErrors {
   const errors: DeckInfoErrors = {};
   const title = info.title.trim();
   if (!title) errors.title = "Deck name is required.";
@@ -133,8 +125,7 @@ export function validateDeckInfo(
   return errors;
 }
 
-export const DUPLICATE_TITLE_MESSAGE =
-  "A deck with this name already exists in this course.";
+export const DUPLICATE_TITLE_MESSAGE = "A deck with this name already exists in this course.";
 
 /**
  * Is another deck in the course already called `title` (ignoring case and
@@ -155,8 +146,7 @@ export async function hasDuplicateTitle(
       size: 100,
     });
     return res.content.some(
-      (d) =>
-        d.deckId !== excludeDeckId && d.title.trim().toLowerCase() === wanted,
+      (d) => d.deckId !== excludeDeckId && d.title.trim().toLowerCase() === wanted,
     );
   } catch {
     return false;
@@ -198,8 +188,7 @@ export function DeckInfoFields({
       ? [{ label: "Loading modules…", value: value.moduleId }]
       : [
           {
-            label:
-              modules.length > 0 ? "No module" : "This course has no module",
+            label: modules.length > 0 ? "No module" : "This course has no module",
             value: NO_MODULE,
           },
           ...modules.map((m) => ({
@@ -225,9 +214,7 @@ export function DeckInfoFields({
             value={value.courseId}
             onChange={(v) =>
               onChange(
-                v === value.courseId
-                  ? { courseId: v }
-                  : { courseId: v, moduleId: NO_MODULE },
+                v === value.courseId ? { courseId: v } : { courseId: v, moduleId: NO_MODULE },
               )
             }
             disabled={coursesLoading}
@@ -241,9 +228,7 @@ export function DeckInfoFields({
             searchPlaceholder="Search courses…"
             emptyText="No courses found"
           />
-          {errors.courseId && (
-            <p className="text-xs text-danger mt-1">{errors.courseId}</p>
-          )}
+          {errors.courseId && <p className="text-xs text-danger mt-1">{errors.courseId}</p>}
         </div>
         <SearchableSelect
           label="Module"
@@ -334,8 +319,7 @@ export interface CardActions {
 }
 
 /** Message for a failed card call (F-06..F-08). */
-export const cardErrorMessage = (err: unknown, fallback: string) =>
-  errorMessage(err, fallback);
+export const cardErrorMessage = (err: unknown, fallback: string) => errorMessage(err, fallback);
 
 export interface CardEditor {
   editingId: string | null;
@@ -383,9 +367,7 @@ export function useCardEditor(
   const [pendingRemoveId, setPendingRemoveId] = useState<string | null>(null);
   const frontRef = useRef<HTMLTextAreaElement>(null);
 
-  const editingIndex = editingId
-    ? cards.findIndex((c) => c.id === editingId)
-    : -1;
+  const editingIndex = editingId ? cards.findIndex((c) => c.id === editingId) : -1;
 
   const clear = () => {
     setEditingId(null);
@@ -411,30 +393,21 @@ export function useCardEditor(
     const f = front.trim();
     const b = back.trim();
     const next: { front?: string; back?: string } = {};
-    if (!f && !frontImageUrl)
-      next.front = "Add text or an image for the front side.";
+    if (!f && !frontImageUrl) next.front = "Add text or an image for the front side.";
     else if (f.length > SIDE_MAX)
       next.front = `Front side must be ${SIDE_MAX} characters or fewer.`;
     else if (
       f &&
-      cards.some(
-        (c) =>
-          c.id !== editingId &&
-          c.frontText.trim().toLowerCase() === f.toLowerCase(),
-      )
+      cards.some((c) => c.id !== editingId && c.frontText.trim().toLowerCase() === f.toLowerCase())
     ) {
       next.front = "Another card in this deck already has this front text.";
     }
-    if (!b && !backImageUrl)
-      next.back = "Add text or an image for the back side.";
-    else if (b.length > SIDE_MAX)
-      next.back = `Back side must be ${SIDE_MAX} characters or fewer.`;
+    if (!b && !backImageUrl) next.back = "Add text or an image for the back side.";
+    else if (b.length > SIDE_MAX) next.back = `Back side must be ${SIDE_MAX} characters or fewer.`;
     setErrors(next);
     if (next.front || next.back) return;
 
-    const editing = editingId
-      ? cards.find((c) => c.id === editingId)
-      : undefined;
+    const editing = editingId ? cards.find((c) => c.id === editingId) : undefined;
     setBusy(true);
     try {
       if (editing) {
@@ -447,10 +420,7 @@ export function useCardEditor(
       clear();
     } catch (err) {
       toast.error(
-        cardErrorMessage(
-          err,
-          editing ? "Could not update the card." : "Could not add the card.",
-        ),
+        cardErrorMessage(err, editing ? "Could not update the card." : "Could not add the card."),
       );
     } finally {
       setBusy(false);
@@ -511,8 +481,7 @@ export function useCardEditor(
     backImageUrl,
     uploading,
     setImage,
-    removeImage: (side) =>
-      (side === "front" ? setFrontImageUrl : setBackImageUrl)(null),
+    removeImage: (side) => (side === "front" ? setFrontImageUrl : setBackImageUrl)(null),
     clear,
     load,
     submit,
@@ -544,9 +513,7 @@ export function CardList({
   return (
     <section aria-label="Flashcards in this deck" className="space-y-3">
       <div className="flex flex-wrap items-center justify-between gap-2">
-        <h3 className="text-lg font-semibold text-content">
-          Flashcards in this Deck
-        </h3>
+        <h3 className="text-lg font-semibold text-content">Flashcards in this Deck</h3>
         <div className="flex items-center gap-3">
           <span className="text-sm text-content-soft">
             {cards.length} card{cards.length === 1 ? "" : "s"}
@@ -692,17 +659,10 @@ export function CardEditorPanel({
       aria-labelledby={`${idPrefix}-editor-title`}
     >
       <div className="flex items-center justify-between gap-2">
-        <h3
-          id={`${idPrefix}-editor-title`}
-          className="text-lg font-semibold text-content"
-        >
-          {editor.editingId
-            ? `Edit Card #${editor.editingIndex + 1}`
-            : "Card Editor"}
+        <h3 id={`${idPrefix}-editor-title`} className="text-lg font-semibold text-content">
+          {editor.editingId ? `Edit Card #${editor.editingIndex + 1}` : "Card Editor"}
         </h3>
-        {!editor.editingId && (
-          <span className="text-xs text-content-subtle">New card</span>
-        )}
+        {!editor.editingId && <span className="text-xs text-content-subtle">New card</span>}
       </div>
 
       {/* A div, not a form: the editor also lives inside the create-deck modal. */}
@@ -807,11 +767,7 @@ export function CardEditorPanel({
               )
             }
           >
-            {editor.busy
-              ? "Saving…"
-              : editor.editingId
-                ? "Update Card"
-                : "Add Card"}
+            {editor.busy ? "Saving…" : editor.editingId ? "Update Card" : "Add Card"}
           </Button>
           <Button
             type="button"
@@ -840,17 +796,11 @@ const EditorField = React.forwardRef<
     error?: string;
     onChange: (value: string) => void;
   }
->(function EditorField(
-  { id, label, hint, value, placeholder, error, onChange },
-  ref,
-) {
+>(function EditorField({ id, label, hint, value, placeholder, error, onChange }, ref) {
   return (
     <div>
       <div className="flex items-baseline justify-between gap-2 mb-1.5">
-        <label
-          htmlFor={id}
-          className="text-sm font-semibold text-content-secondary"
-        >
+        <label htmlFor={id} className="text-sm font-semibold text-content-secondary">
           {label}
         </label>
         <span className="text-2xs text-content-subtle">{hint}</span>

@@ -1,5 +1,5 @@
-import React from 'react';
-import { Icon } from '@/assets/icons';
+import React from "react";
+import { Icon } from "@/assets/icons";
 
 /**
  * LoadingScreen
@@ -10,7 +10,11 @@ import { Icon } from '@/assets/icons';
 export function LoadingScreen() {
   return (
     <div className="min-h-[100dvh] bg-surface-alt flex items-center justify-center px-4">
-      <div role="status" aria-live="polite" className="flex flex-col items-center gap-3 text-center">
+      <div
+        role="status"
+        aria-live="polite"
+        className="flex flex-col items-center gap-3 text-center"
+      >
         <Icon.Logo className="w-12 h-12 flex-shrink-0 text-brand-ink" aria-hidden="true" />
         <p className="text-base text-content-soft">Loading PrepExam…</p>
         <div

@@ -1,8 +1,8 @@
-import React from 'react';
-import { useNavigate } from 'react-router';
-import { Icon } from '@/assets/icons';
-import { ROUTES } from '@/app/routes';
-import { Container } from './Container';
+import React from "react";
+import { useNavigate } from "react-router";
+import { Icon } from "@/assets/icons";
+import { ROUTES } from "@/app/routes";
+import { Container } from "./Container";
 
 /**
  * PublicFooter
@@ -15,19 +15,19 @@ export function PublicFooter() {
 
   const columns = [
     {
-      title: 'Learn',
+      title: "Learn",
       links: [
-        { label: 'Browse Courses', to: ROUTES.courses },
-        { label: 'Practice Questions', to: ROUTES.courses },
-        { label: 'Mock Exams', to: ROUTES.courses },
+        { label: "Browse Courses", to: ROUTES.courses },
+        { label: "Practice Questions", to: ROUTES.courses },
+        { label: "Mock Exams", to: ROUTES.courses },
       ],
     },
     {
-      title: 'Platform',
+      title: "Platform",
       links: [
-        { label: 'Home', to: ROUTES.landing },
-        { label: 'Pricing', to: ROUTES.pricing },
-        { label: 'Get Started', to: ROUTES.register },
+        { label: "Home", to: ROUTES.landing },
+        { label: "Pricing", to: ROUTES.pricing },
+        { label: "Get Started", to: ROUTES.register },
       ],
     },
   ];
@@ -47,8 +47,8 @@ export function PublicFooter() {
               <span className="text-lg font-bold text-content">PrepExam</span>
             </button>
             <p className="mt-3 text-sm leading-relaxed text-content-soft">
-              Exam preparation for cloud and security certifications. Browse courses, practise exam-style questions and sit mock exams —
-              PrepExam does not issue certificates.
+              Exam preparation for cloud and security certifications. Browse courses, practise
+              exam-style questions and sit mock exams — PrepExam does not issue certificates.
             </p>
           </div>
 
@@ -77,7 +77,9 @@ export function PublicFooter() {
         </div>
 
         <div className="mt-8 flex flex-col items-center justify-between gap-2 border-t border-line-soft pt-6 text-center sm:flex-row sm:text-left">
-          <p className="text-sm text-content-subtle">© {new Date().getFullYear()} PrepExam. All rights reserved.</p>
+          <p className="text-sm text-content-subtle">
+            © {new Date().getFullYear()} PrepExam. All rights reserved.
+          </p>
           <p className="text-sm text-content-subtle">Practice questions · Mock exams · AI review</p>
         </div>
       </Container>

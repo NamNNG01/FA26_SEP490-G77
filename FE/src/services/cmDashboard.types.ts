@@ -8,7 +8,7 @@
  * Conventions: percentages and scores are 0–100; `null` means "no data" (never 0).
  */
 
-export type CmExamStatus = 'DRAFT' | 'PUBLISHED' | 'ARCHIVED';
+export type CmExamStatus = "DRAFT" | "PUBLISHED" | "ARCHIVED";
 
 export interface CmDashboardSummary {
   /** Courses the CM is listed on as owner or co-manager. */

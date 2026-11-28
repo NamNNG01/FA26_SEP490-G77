@@ -1,11 +1,22 @@
-import React from 'react';
+import React from "react";
 
 /** Tile colours for courses without a thumbnail — picked by a stable hash of the title. */
-const TILE_COLORS = ['#F27124', '#2563EB', '#7C3AED', '#D97706', '#DB2777', '#0891B2', '#4F46E5', '#059669'];
+const TILE_COLORS = [
+  "#F27124",
+  "#2563EB",
+  "#7C3AED",
+  "#D97706",
+  "#DB2777",
+  "#0891B2",
+  "#4F46E5",
+  "#059669",
+];
 
 function initials(title: string): string {
   const words = title.trim().split(/\s+/).filter(Boolean);
-  return (words.length > 1 ? words[0][0] + words[1][0] : (words[0] ?? '?').slice(0, 2)).toUpperCase();
+  return (
+    words.length > 1 ? words[0][0] + words[1][0] : (words[0] ?? "?").slice(0, 2)
+  ).toUpperCase();
 }
 
 function colorFor(title: string): string {
@@ -23,7 +34,7 @@ export function CourseLogo({
   title,
   thumbnailUrl,
   size = 40,
-  className = '',
+  className = "",
 }: {
   title: string;
   thumbnailUrl?: string | null;
@@ -34,7 +45,13 @@ export function CourseLogo({
   if (thumbnailUrl) {
     return (
       <span aria-hidden className={box} style={{ width: size, height: size }}>
-        <img src={thumbnailUrl} alt="" width={size} height={size} className="h-full w-full object-cover" />
+        <img
+          src={thumbnailUrl}
+          alt=""
+          width={size}
+          height={size}
+          className="h-full w-full object-cover"
+        />
       </span>
     );
   }
@@ -42,7 +59,12 @@ export function CourseLogo({
     <span
       aria-hidden
       className={`${box} font-bold text-white`}
-      style={{ width: size, height: size, background: colorFor(title), fontSize: Math.round(size * 0.36) }}
+      style={{
+        width: size,
+        height: size,
+        background: colorFor(title),
+        fontSize: Math.round(size * 0.36),
+      }}
     >
       {initials(title)}
     </span>
@@ -52,6 +74,6 @@ export function CourseLogo({
 /** "Free" for 0 / missing, otherwise VND — the amount PayOS charges, e.g. "99.000 ₫". */
 export function formatPrice(price: number | null | undefined): string {
   const value = Number(price ?? 0);
-  if (!value) return 'Free';
-  return `${value.toLocaleString('vi-VN', { maximumFractionDigits: 0 })} ₫`;
+  if (!value) return "Free";
+  return `${value.toLocaleString("vi-VN", { maximumFractionDigits: 0 })} ₫`;
 }

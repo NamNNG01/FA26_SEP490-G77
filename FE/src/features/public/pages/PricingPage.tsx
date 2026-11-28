@@ -1,18 +1,18 @@
-import React, { useEffect, useState } from 'react';
-import { useNavigate } from 'react-router';
-import { Icon } from '@/assets/icons';
-import { ROUTES } from '@/app/routes';
-import { useAuth } from '@/auth/authContext';
-import { useRequireAuth } from '@/hooks/useRequireAuth';
-import { Button } from '@/components/ui/Button';
-import { Role } from '@/utils/permissions';
-import { getApiErrorMessage } from '@/utils/apiError';
-import { planLines } from '@/utils/planDescription';
-import { formatVnd } from '@/services/payment.service';
+import React, { useEffect, useState } from "react";
+import { useNavigate } from "react-router";
+import { Icon } from "@/assets/icons";
+import { ROUTES } from "@/app/routes";
+import { useAuth } from "@/auth/authContext";
+import { useRequireAuth } from "@/hooks/useRequireAuth";
+import { Button } from "@/components/ui/Button";
+import { Role } from "@/utils/permissions";
+import { getApiErrorMessage } from "@/utils/apiError";
+import { planLines } from "@/utils/planDescription";
+import { formatVnd } from "@/services/payment.service";
 import {
   adminSubscriptionPlanService,
   type PublicSubscriptionPlan,
-} from '@/services/adminSubscriptionPlan.service';
+} from "@/services/adminSubscriptionPlan.service";
 
 /**
  * PricingPage (P04)
@@ -40,9 +40,15 @@ export function PricingPage() {
     setPlans(null);
     adminSubscriptionPlanService
       .listPublic()
-      .then((rows) => { if (!cancelled) setPlans(rows); })
-      .catch((err) => { if (!cancelled) setError(getApiErrorMessage(err, 'Could not load the plans.')); });
-    return () => { cancelled = true; };
+      .then((rows) => {
+        if (!cancelled) setPlans(rows);
+      })
+      .catch((err) => {
+        if (!cancelled) setError(getApiErrorMessage(err, "Could not load the plans."));
+      });
+    return () => {
+      cancelled = true;
+    };
   }, [reloadKey]);
 
   const canBuy = !isAuthenticated || user?.role === Role.STUDENT;
@@ -51,12 +57,15 @@ export function PricingPage() {
     <div className="min-h-[calc(100dvh-4rem)] bg-gradient-to-br from-surface-brand to-surface">
       <div className="mx-auto w-full max-w-[1280px] px-4 py-[clamp(2.5rem,6vw,4.5rem)] sm:px-6">
         <div className="mx-auto max-w-2xl text-center">
-          <p className="text-xs font-semibold tracking-[0.08em] text-brand-ink uppercase">Pricing Plans</p>
+          <p className="text-xs font-semibold tracking-[0.08em] text-brand-ink uppercase">
+            Pricing Plans
+          </p>
           <h1 className="mt-3 text-[clamp(1.9rem,1.3rem+2.4vw,3rem)] leading-tight font-bold text-content">
             Pick the plan that fits your exam date
           </h1>
           <p className="mt-3 text-base leading-relaxed text-content-muted">
-            Each plan gives full access for its duration plus an AI token allowance. Browsing the course catalog stays free.
+            Each plan gives full access for its duration plus an AI token allowance. Browsing the
+            course catalog stays free.
           </p>
         </div>
 
@@ -78,7 +87,9 @@ export function PricingPage() {
             <div className="card mx-auto max-w-md p-8 text-center text-sm text-content-soft">
               No plans are on offer right now. You can still browse every course for free.
               <div className="mt-4">
-                <Button variant="outline" onClick={() => navigate(ROUTES.courses)}>Browse courses</Button>
+                <Button variant="outline" onClick={() => navigate(ROUTES.courses)}>
+                  Browse courses
+                </Button>
               </div>
             </div>
           ) : (
@@ -120,16 +131,16 @@ function PricingCard({
 
       <div>
         <p className="font-[family-name:var(--font-display)] text-3xl font-bold text-content">
-          {free ? 'Free' : formatVnd(plan.price)}
+          {free ? "Free" : formatVnd(plan.price)}
         </p>
         <p className="mt-1 text-sm text-content-soft">
-          {plan.durationDays} days · {plan.aiTokenLimit.toLocaleString('en-US')} AI tokens
+          {plan.durationDays} days · {plan.aiTokenLimit.toLocaleString("en-US")} AI tokens
         </p>
       </div>
 
       <ul className="flex-1 space-y-2">
         {features.map((feature, index) => (
-          <li key={index}className="flex items-start gap-2 text-sm text-content-secondary">
+          <li key={index} className="flex items-start gap-2 text-sm text-content-secondary">
             <Icon.Check className="mt-0.5 h-4 w-4 shrink-0 text-success" />
             <span>{feature}</span>
           </li>
@@ -138,10 +149,12 @@ function PricingCard({
 
       {canBuy ? (
         <Button variant="primary" onClick={onChoose}>
-          {free ? 'Get started' : 'Choose plan'}
+          {free ? "Get started" : "Choose plan"}
         </Button>
       ) : (
-        <Button variant="outline" disabled>Student accounts only</Button>
+        <Button variant="outline" disabled>
+          Student accounts only
+        </Button>
       )}
     </div>
   );

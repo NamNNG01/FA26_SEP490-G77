@@ -1,33 +1,33 @@
-import React, { useCallback, useEffect, useMemo, useState } from 'react';
-import { useNavigate } from 'react-router';
-import { StatCard } from '@/components/ui/StatCard';
-import { Badge } from '@/components/ui/Badge';
-import { Button } from '@/components/ui/Button';
-import { Alert } from '@/components/ui/Alert';
-import { Skeleton } from '@/components/ui/Skeleton';
-import { DashboardError } from '@/components/common/DashboardState';
-import { Icon } from '@/assets/icons';
-import { ROUTES } from '@/app/routes';
-import { getApiErrorMessage } from '@/utils/apiError';
+import React, { useCallback, useEffect, useMemo, useState } from "react";
+import { useNavigate } from "react-router";
+import { StatCard } from "@/components/ui/StatCard";
+import { Badge } from "@/components/ui/Badge";
+import { Button } from "@/components/ui/Button";
+import { Alert } from "@/components/ui/Alert";
+import { Skeleton } from "@/components/ui/Skeleton";
+import { DashboardError } from "@/components/common/DashboardState";
+import { Icon } from "@/assets/icons";
+import { ROUTES } from "@/app/routes";
+import { getApiErrorMessage } from "@/utils/apiError";
 import {
   adminDashboardService,
   type AdminDashboardReport,
   type DashboardFilter,
   type Granularity,
   type TopCourseSort,
-} from '@/services/adminDashboard.service';
-import { PeriodFilter } from '../components/PeriodFilter';
-import { RevenueTrendChart, REVENUE_SERIES } from '../components/RevenueTrendChart';
-import { RevenueSourceDonut } from '../components/RevenueSourceDonut';
-import { AiUsageLogTable } from '../components/AiUsageLogTable';
-import { SortHeader } from '../components/SortHeader';
-import { defaultFilter, filterDayRange } from '../utils/dashboardPeriods';
-import { formatCompact, formatInteger, formatPeriod, formatVnd } from '../utils/dashboardFormat';
-import { exportAdminDashboard } from '../utils/exportAdminDashboard';
-import { DASHBOARD_REFRESH_MS, useQuietRefresh } from '@/hooks/useAutoRefresh';
+} from "@/services/adminDashboard.service";
+import { PeriodFilter } from "../components/PeriodFilter";
+import { RevenueTrendChart, REVENUE_SERIES } from "../components/RevenueTrendChart";
+import { RevenueSourceDonut } from "../components/RevenueSourceDonut";
+import { AiUsageLogTable } from "../components/AiUsageLogTable";
+import { SortHeader } from "../components/SortHeader";
+import { defaultFilter, filterDayRange } from "../utils/dashboardPeriods";
+import { formatCompact, formatInteger, formatPeriod, formatVnd } from "../utils/dashboardFormat";
+import { exportAdminDashboard } from "../utils/exportAdminDashboard";
+import { DASHBOARD_REFRESH_MS, useQuietRefresh } from "@/hooks/useAutoRefresh";
 
 /** Until the first report arrives the picker offers any date; the API bounds the report itself. */
-const FALLBACK_DATA_START = '2000-01-01';
+const FALLBACK_DATA_START = "2000-01-01";
 
 /**
  * AdminDashboard
@@ -39,13 +39,17 @@ const FALLBACK_DATA_START = '2000-01-01';
  * the AI log and the Excel export. Users, courses and top courses are all-time figures.
  */
 export function AdminDashboard() {
-  const [filter, setFilter] = useState<DashboardFilter>(() => defaultFilter('month'));
-  const [sortBy, setSortBy] = useState<TopCourseSort>('revenue');
+  const [filter, setFilter] = useState<DashboardFilter>(() => defaultFilter("month"));
+  const [sortBy, setSortBy] = useState<TopCourseSort>("revenue");
   const [data, setData] = useState<AdminDashboardReport | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [reload, setReload] = useState(0);
-  const takeQuiet = useQuietRefresh(() => setReload(value => value + 1), true, DASHBOARD_REFRESH_MS);
+  const takeQuiet = useQuietRefresh(
+    () => setReload((value) => value + 1),
+    true,
+    DASHBOARD_REFRESH_MS,
+  );
 
   useEffect(() => {
     let cancelled = false;
@@ -57,11 +61,12 @@ export function AdminDashboard() {
     }
     adminDashboardService
       .getReport(filter, sortBy)
-      .then(report => {
+      .then((report) => {
         if (!cancelled) setData(report);
       })
-      .catch(err => {
-        if (!cancelled && !quiet) setError(getApiErrorMessage(err, 'Could not load the dashboard report.'));
+      .catch((err) => {
+        if (!cancelled && !quiet)
+          setError(getApiErrorMessage(err, "Could not load the dashboard report."));
       })
       .finally(() => {
         if (!cancelled) setLoading(false);
@@ -71,7 +76,7 @@ export function AdminDashboard() {
     };
   }, [filter, sortBy, reload]);
 
-  const retry = useCallback(() => setReload(value => value + 1), []);
+  const retry = useCallback(() => setReload((value) => value + 1), []);
   // A new period invalidates the AI table's own time window.
   const dayRange = useMemo(() => filterDayRange(filter), [filter]);
   const g = filter.granularity;
@@ -88,7 +93,11 @@ export function AdminDashboard() {
           </p>
         </div>
         <div className="flex flex-wrap items-center gap-3">
-          <PeriodFilter value={filter} minDate={data?.dataStart ?? FALLBACK_DATA_START} onChange={setFilter} />
+          <PeriodFilter
+            value={filter}
+            minDate={data?.dataStart ?? FALLBACK_DATA_START}
+            onChange={setFilter}
+          />
           <Button
             variant="outline"
             icon={<Icon.Download className="w-4 h-4" />}
@@ -112,14 +121,26 @@ export function AdminDashboard() {
         <>
           {/* A failed refresh keeps the last report on screen; the banner explains the gap. */}
           {error && <Alert type="error" title="Could not refresh" message={error} />}
-          <DashboardBody data={data} granularity={g} sortBy={sortBy} onSort={setSortBy} dayRange={dayRange} />
+          <DashboardBody
+            data={data}
+            granularity={g}
+            sortBy={sortBy}
+            onSort={setSortBy}
+            dayRange={dayRange}
+          />
         </>
       )}
     </div>
   );
 }
 
-function DashboardBody({ data, granularity, sortBy, onSort, dayRange }: {
+function DashboardBody({
+  data,
+  granularity,
+  sortBy,
+  onSort,
+  dayRange,
+}: {
   data: AdminDashboardReport;
   granularity: Granularity;
   sortBy: TopCourseSort;
@@ -138,7 +159,9 @@ function DashboardBody({ data, granularity, sortBy, onSort, dayRange }: {
           title="Net Revenue"
           value={formatVnd(summary.netRevenue)}
           icon={<Icon.TrendingUp />}
-          footer={<p className="text-xs text-content-subtle">Collected payments, after discounts</p>}
+          footer={
+            <p className="text-xs text-content-subtle">Collected payments, after discounts</p>
+          }
         />
 
         <div
@@ -158,13 +181,15 @@ function DashboardBody({ data, granularity, sortBy, onSort, dayRange }: {
             className="absolute left-4 right-4 top-[calc(100%-12px)] z-20 hidden group-hover:block group-focus:block rounded-[10px] border border-line bg-surface p-3 shadow-lg"
           >
             {[
-              ['Students', summary.users.students],
-              ['Course Managers', summary.users.courseManagers],
-              ['Admins', summary.users.admins],
+              ["Students", summary.users.students],
+              ["Course Managers", summary.users.courseManagers],
+              ["Admins", summary.users.admins],
             ].map(([label, count]) => (
               <div key={label} className="flex justify-between py-1 text-sm">
                 <span className="text-content-soft">{label}</span>
-                <span className="font-semibold text-content tabular-nums">{formatInteger(count as number)}</span>
+                <span className="font-semibold text-content tabular-nums">
+                  {formatInteger(count as number)}
+                </span>
               </div>
             ))}
           </div>
@@ -182,7 +207,8 @@ function DashboardBody({ data, granularity, sortBy, onSort, dayRange }: {
           icon={<Icon.Brain />}
           footer={
             <p className="text-xs text-content-subtle">
-              {formatInteger(aiLogTotals.requests)} settled request{aiLogTotals.requests === 1 ? '' : 's'} in this period
+              {formatInteger(aiLogTotals.requests)} settled request
+              {aiLogTotals.requests === 1 ? "" : "s"} in this period
               {aiLogTotals.failed > 0 && ` · ${formatInteger(aiLogTotals.failed)} failed`}
             </p>
           }
@@ -203,7 +229,11 @@ function DashboardBody({ data, granularity, sortBy, onSort, dayRange }: {
               ))}
             </div>
           </div>
-          {hasRevenue ? <RevenueTrendChart data={revenueSeries} granularity={granularity} /> : <EmptyState />}
+          {hasRevenue ? (
+            <RevenueTrendChart data={revenueSeries} granularity={granularity} />
+          ) : (
+            <EmptyState />
+          )}
         </div>
 
         <div className="card p-5 min-w-0">
@@ -226,7 +256,9 @@ function DashboardBody({ data, granularity, sortBy, onSort, dayRange }: {
         <div className="px-5 py-4 border-b border-line-soft flex flex-wrap items-center justify-between gap-3">
           <div>
             <h4 className="text-lg font-semibold text-content">Top Performing Courses</h4>
-            <p className="text-xs text-content-subtle">All time · click Revenue or Enrollments to rank by it</p>
+            <p className="text-xs text-content-subtle">
+              All time · click Revenue or Enrollments to rank by it
+            </p>
           </div>
           <Button variant="outline" size="sm" onClick={() => navigate(ROUTES.managerCourses)}>
             View All Courses
@@ -238,12 +270,17 @@ function DashboardBody({ data, granularity, sortBy, onSort, dayRange }: {
               <tr className="text-left text-xs text-content-subtle border-b border-line-soft">
                 <th className="px-5 py-2.5 font-medium w-12">#</th>
                 <th className="px-5 py-2.5 font-medium">Course</th>
-                <SortHeader label="Revenue" align="right" active={sortBy === 'revenue'} onClick={() => onSort('revenue')} />
+                <SortHeader
+                  label="Revenue"
+                  align="right"
+                  active={sortBy === "revenue"}
+                  onClick={() => onSort("revenue")}
+                />
                 <SortHeader
                   label="Enrollments"
                   align="right"
-                  active={sortBy === 'enrollments'}
-                  onClick={() => onSort('enrollments')}
+                  active={sortBy === "enrollments"}
+                  onClick={() => onSort("enrollments")}
                 />
                 <th className="px-5 py-2.5 font-medium">Status</th>
               </tr>
@@ -253,11 +290,15 @@ function DashboardBody({ data, granularity, sortBy, onSort, dayRange }: {
                 <tr key={c.courseId} className="hover:bg-surface-hover">
                   <td className="px-5 py-3 text-content-subtle tabular-nums">{i + 1}</td>
                   <td className="px-5 py-3 font-medium text-content-secondary">{c.title}</td>
-                  <td className="px-5 py-3 text-right tabular-nums text-content whitespace-nowrap">{formatVnd(c.revenue)}</td>
-                  <td className="px-5 py-3 text-right tabular-nums text-content">{formatInteger(c.enrollments)}</td>
+                  <td className="px-5 py-3 text-right tabular-nums text-content whitespace-nowrap">
+                    {formatVnd(c.revenue)}
+                  </td>
+                  <td className="px-5 py-3 text-right tabular-nums text-content">
+                    {formatInteger(c.enrollments)}
+                  </td>
                   <td className="px-5 py-3">
-                    <Badge variant={c.status === 'PUBLISHED' ? 'success' : 'default'}>
-                      {c.status === 'PUBLISHED' ? 'Published' : 'Draft'}
+                    <Badge variant={c.status === "PUBLISHED" ? "success" : "default"}>
+                      {c.status === "PUBLISHED" ? "Published" : "Draft"}
                     </Badge>
                   </td>
                 </tr>
@@ -286,14 +327,22 @@ function AdminDashboardSkeleton() {
         ))}
       </div>
       <div className="grid grid-cols-1 xl:grid-cols-3 gap-6">
-        <div className="card p-5 xl:col-span-2"><Skeleton className="h-60 w-full rounded-[10px]" /></div>
-        <div className="card p-5"><Skeleton className="h-60 w-full rounded-[10px]" /></div>
+        <div className="card p-5 xl:col-span-2">
+          <Skeleton className="h-60 w-full rounded-[10px]" />
+        </div>
+        <div className="card p-5">
+          <Skeleton className="h-60 w-full rounded-[10px]" />
+        </div>
       </div>
-      <div className="card p-5"><Skeleton className="h-40 w-full rounded-[10px]" /></div>
+      <div className="card p-5">
+        <Skeleton className="h-40 w-full rounded-[10px]" />
+      </div>
     </div>
   );
 }
 
 function EmptyState() {
-  return <p className="px-5 py-10 text-center text-sm text-content-soft">No data for this period.</p>;
+  return (
+    <p className="px-5 py-10 text-center text-sm text-content-soft">No data for this period.</p>
+  );
 }

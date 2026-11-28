@@ -1,4 +1,4 @@
-import { useLayoutEffect, type RefObject } from 'react';
+import { useLayoutEffect, type RefObject } from "react";
 
 /**
  * Grows a textarea to fit its text, so it never shows a scrollbar. Its CSS
@@ -10,7 +10,7 @@ export function useAutoGrow(ref: RefObject<HTMLTextAreaElement | null>, value: s
     const el = ref.current;
     if (!el) return;
     const fit = () => {
-      el.style.height = 'auto';
+      el.style.height = "auto";
       // scrollHeight leaves out the border; box-sizing is border-box.
       el.style.height = `${el.scrollHeight + el.offsetHeight - el.clientHeight}px`;
     };

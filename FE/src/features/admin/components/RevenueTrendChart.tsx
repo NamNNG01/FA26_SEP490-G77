@@ -1,13 +1,13 @@
-import React, { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
-import type { Granularity, RevenuePoint } from '@/services/adminDashboard.service';
-import { formatCompact, formatPeriod, formatVnd } from '../utils/dashboardFormat';
+import React, { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
+import type { Granularity, RevenuePoint } from "@/services/adminDashboard.service";
+import { formatCompact, formatPeriod, formatVnd } from "../utils/dashboardFormat";
 
 const HEIGHT = 240;
 const PAD = { top: 12, right: 24, bottom: 28, left: 52 };
 
 export const REVENUE_SERIES = [
-  { key: 'courseSales', label: 'Course sales', color: 'var(--chart-1)' },
-  { key: 'aiSubscription', label: 'AI subscription', color: 'var(--chart-2)' },
+  { key: "courseSales", label: "Course sales", color: "var(--chart-1)" },
+  { key: "aiSubscription", label: "AI subscription", color: "var(--chart-2)" },
 ] as const;
 
 /** Rounds the axis maximum up to a 1/2/2.5/5 × 10^n step so ticks read cleanly. */
@@ -35,7 +35,13 @@ function useWidth<T extends HTMLElement>(): [React.RefObject<T | null>, number] 
  * Two-line revenue trend (course sales vs AI subscription) on one VND axis,
  * with a crosshair tooltip showing both values for the hovered period.
  */
-export function RevenueTrendChart({ data, granularity }: { data: RevenuePoint[]; granularity: Granularity }) {
+export function RevenueTrendChart({
+  data,
+  granularity,
+}: {
+  data: RevenuePoint[];
+  granularity: Granularity;
+}) {
   const [containerRef, width] = useWidth<HTMLDivElement>();
   const [hover, setHover] = useState<number | null>(null);
   const tooltipRef = useRef<HTMLDivElement>(null);
@@ -52,7 +58,8 @@ export function RevenueTrendChart({ data, granularity }: { data: RevenuePoint[];
     [data],
   );
 
-  const x = (i: number) => PAD.left + (data.length === 1 ? plotW / 2 : (i / (data.length - 1)) * plotW);
+  const x = (i: number) =>
+    PAD.left + (data.length === 1 ? plotW / 2 : (i / (data.length - 1)) * plotW);
   const y = (v: number) => PAD.top + plotH - (v / max) * plotH;
 
   const ticks = [0, 0.25, 0.5, 0.75, 1].map((f) => f * max);
@@ -86,8 +93,21 @@ export function RevenueTrendChart({ data, granularity }: { data: RevenuePoint[];
       >
         {ticks.map((t) => (
           <g key={t}>
-            <line x1={PAD.left} x2={PAD.left + plotW} y1={y(t)} y2={y(t)} stroke="var(--color-line)" strokeWidth={1} />
-            <text x={PAD.left - 8} y={y(t)} textAnchor="end" dominantBaseline="middle" className="fill-content-subtle text-[11px]">
+            <line
+              x1={PAD.left}
+              x2={PAD.left + plotW}
+              y1={y(t)}
+              y2={y(t)}
+              stroke="var(--color-line)"
+              strokeWidth={1}
+            />
+            <text
+              x={PAD.left - 8}
+              y={y(t)}
+              textAnchor="end"
+              dominantBaseline="middle"
+              className="fill-content-subtle text-[11px]"
+            >
               {formatCompact(t)}
             </text>
           </g>
@@ -95,20 +115,33 @@ export function RevenueTrendChart({ data, granularity }: { data: RevenuePoint[];
 
         {data.map((p, i) =>
           i % labelEvery === 0 || i === data.length - 1 ? (
-            <text key={p.period} x={x(i)} y={HEIGHT - 8} textAnchor="middle" className="fill-content-subtle text-[11px]">
+            <text
+              key={p.period}
+              x={x(i)}
+              y={HEIGHT - 8}
+              textAnchor="middle"
+              className="fill-content-subtle text-[11px]"
+            >
               {formatPeriod(p.period, granularity, true)}
             </text>
           ) : null,
         )}
 
         {hover !== null && (
-          <line x1={x(hover)} x2={x(hover)} y1={PAD.top} y2={PAD.top + plotH} stroke="var(--color-line-strong)" strokeWidth={1} />
+          <line
+            x1={x(hover)}
+            x2={x(hover)}
+            y1={PAD.top}
+            y2={PAD.top + plotH}
+            stroke="var(--color-line-strong)"
+            strokeWidth={1}
+          />
         )}
 
         {REVENUE_SERIES.map((s) => (
           <polyline
             key={s.key}
-            points={data.map((p, i) => `${x(i)},${y(p[s.key])}`).join(' ')}
+            points={data.map((p, i) => `${x(i)},${y(p[s.key])}`).join(" ")}
             fill="none"
             stroke={s.color}
             strokeWidth={2}
@@ -138,14 +171,18 @@ export function RevenueTrendChart({ data, granularity }: { data: RevenuePoint[];
           className="pointer-events-none absolute top-2 z-10 w-max min-w-[240px] whitespace-nowrap rounded-[10px] border border-line bg-surface px-3.5 py-2.5 shadow-lg"
           style={{ left: tooltipLeft }}
         >
-          <p className="text-xs font-semibold text-content mb-1.5">{formatPeriod(hovered.period, granularity)}</p>
+          <p className="text-xs font-semibold text-content mb-1.5">
+            {formatPeriod(hovered.period, granularity)}
+          </p>
           {REVENUE_SERIES.map((s) => (
             <div key={s.key} className="flex items-center justify-between gap-6 text-xs">
               <span className="flex items-center gap-1.5 text-content-soft">
                 <span className="w-2.5 h-2.5 rounded-full" style={{ background: s.color }} />
                 {s.label}
               </span>
-              <span className="font-medium text-content tabular-nums">{formatVnd(hovered[s.key])}</span>
+              <span className="font-medium text-content tabular-nums">
+                {formatVnd(hovered[s.key])}
+              </span>
             </div>
           ))}
           <div className="mt-1.5 pt-1.5 border-t border-line-soft flex justify-between text-xs">

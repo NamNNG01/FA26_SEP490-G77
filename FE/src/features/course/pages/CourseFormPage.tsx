@@ -117,7 +117,9 @@ export function CourseFormPage({
     try {
       await uploadService.uploadCourseThumbnail(id, thumbnail);
     } catch (err) {
-      notification.warning(getApiErrorMessage(err, "Course saved, but the thumbnail could not be uploaded."));
+      notification.warning(
+        getApiErrorMessage(err, "Course saved, but the thumbnail could not be uploaded."),
+      );
     }
   };
 
@@ -177,14 +179,15 @@ export function CourseFormPage({
     label: c.name,
     value: String(c.categoryId),
   }));
-  const hasChanges = !isEdit || Boolean(
-    initialValues && (
-      title.trim() !== initialValues.title.trim() ||
-      categoryId !== initialValues.categoryId ||
-      description.trim() !== initialValues.description.trim() ||
-      Number(price) !== Number(initialValues.price)
-    ),
-  );
+  const hasChanges =
+    !isEdit ||
+    Boolean(
+      initialValues &&
+      (title.trim() !== initialValues.title.trim() ||
+        categoryId !== initialValues.categoryId ||
+        description.trim() !== initialValues.description.trim() ||
+        Number(price) !== Number(initialValues.price)),
+    );
 
   if (loading) {
     return (
@@ -209,11 +212,7 @@ export function CourseFormPage({
           {isEdit ? "Edit Course" : "Create Course"}
         </h2>
         <div className="flex flex-wrap gap-2">
-          <Button
-            variant="secondary"
-            onClick={handleCancel}
-            disabled={submitting}
-          >
+          <Button variant="secondary" onClick={handleCancel} disabled={submitting}>
             Cancel
           </Button>
           <Button
@@ -229,9 +228,7 @@ export function CourseFormPage({
 
       <div className="grid grid-cols-1 xl:grid-cols-3 gap-6">
         <div className="xl:col-span-2 card p-6 space-y-4">
-          <h4 className="text-lg font-semibold text-content">
-            Course Information
-          </h4>
+          <h4 className="text-lg font-semibold text-content">Course Information</h4>
 
           <Input
             label="Course Title"
@@ -296,22 +293,15 @@ export function CourseFormPage({
 
         <div className="space-y-4">
           <div className="card p-5">
-            <h4 className="text-base font-semibold text-content mb-3">
-              Course Guidelines
-            </h4>
+            <h4 className="text-base font-semibold text-content mb-3">Course Guidelines</h4>
             <ul className="text-xs text-content-soft space-y-2 list-disc pl-4">
               <li>Newly created courses are saved as drafts by default.</li>
               <li>
-                A course can be published once a visible module holds an active
-                question, a published exam, or a public flashcard deck.
+                A course can be published once a visible module holds an active question, a
+                published exam, or a public flashcard deck.
               </li>
-              <li>
-                Only administrators can assign or reassign course managers.
-              </li>
-              <li>
-                Course managers can add and organize modules, questions, and
-                exams.
-              </li>
+              <li>Only administrators can assign or reassign course managers.</li>
+              <li>Course managers can add and organize modules, questions, and exams.</li>
             </ul>
           </div>
           <Alert

@@ -1,12 +1,12 @@
-import React, { useEffect, useState } from 'react';
-import { useLocation, useNavigate } from 'react-router';
-import { Button } from '@/components/ui/Button';
-import { Input } from '@/components/ui/Input';
-import { Alert } from '@/components/ui/Alert';
-import { Icon } from '@/assets/icons';
-import { ROUTES } from '@/app/routes';
-import { passwordService } from '@/services/password.service';
-import { AuthPageHeader } from '../components/AuthPageHeader';
+import React, { useEffect, useState } from "react";
+import { useLocation, useNavigate } from "react-router";
+import { Button } from "@/components/ui/Button";
+import { Input } from "@/components/ui/Input";
+import { Alert } from "@/components/ui/Alert";
+import { Icon } from "@/assets/icons";
+import { ROUTES } from "@/app/routes";
+import { passwordService } from "@/services/password.service";
+import { AuthPageHeader } from "../components/AuthPageHeader";
 
 /** Seconds the user waits before asking for another reset email. */
 const RESEND_COOLDOWN_SECONDS = 60;
@@ -25,13 +25,13 @@ const RESEND_COOLDOWN_SECONDS = 60;
 export function ForgotPasswordPage() {
   const navigate = useNavigate();
   const location = useLocation();
-  const prefillEmail = (location.state as { email?: string } | null)?.email ?? '';
+  const prefillEmail = (location.state as { email?: string } | null)?.email ?? "";
 
   const [email, setEmail] = useState(prefillEmail);
-  const [sentTo, setSentTo] = useState('');
-  const [sentMessage, setSentMessage] = useState('');
+  const [sentTo, setSentTo] = useState("");
+  const [sentMessage, setSentMessage] = useState("");
   const [loading, setLoading] = useState(false);
-  const [error, setError] = useState('');
+  const [error, setError] = useState("");
   const [cooldown, setCooldown] = useState(0);
 
   useEffect(() => {
@@ -42,13 +42,15 @@ export function ForgotPasswordPage() {
 
   const sendResetLink = async (address: string) => {
     setLoading(true);
-    setError('');
+    setError("");
     try {
       setSentMessage(await passwordService.forgotPassword(address));
       setSentTo(address);
       setCooldown(RESEND_COOLDOWN_SECONDS);
     } catch (err: unknown) {
-      setError(err instanceof Error ? err.message : 'Could not send the reset link. Please try again.');
+      setError(
+        err instanceof Error ? err.message : "Could not send the reset link. Please try again.",
+      );
     } finally {
       setLoading(false);
     }
@@ -56,20 +58,20 @@ export function ForgotPasswordPage() {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    setError('');
+    setError("");
 
     // Backend validation (from ForgotPasswordRequest):
     const trimmed = email.trim();
     if (!trimmed) {
-      setError('Email is required');
+      setError("Email is required");
       return;
     }
     if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(trimmed)) {
-      setError('Invalid email format');
+      setError("Invalid email format");
       return;
     }
     if (trimmed.length > 255) {
-      setError('Email must not exceed 255 characters');
+      setError("Email must not exceed 255 characters");
       return;
     }
 
@@ -77,19 +79,19 @@ export function ForgotPasswordPage() {
   };
 
   const changeEmail = () => {
-    setSentMessage('');
-    setSentTo('');
-    setError('');
+    setSentMessage("");
+    setSentTo("");
+    setError("");
   };
 
   return (
     <div className="flex flex-col">
       <AuthPageHeader
         icon={<Icon.Mail className="w-7 h-7" />}
-        title={sentMessage ? 'Check your email' : 'Reset password'}
+        title={sentMessage ? "Check your email" : "Reset password"}
         subtitle={
           sentMessage
-            ? 'We sent you a link to set a new password.'
+            ? "We sent you a link to set a new password."
             : "Enter your account email and we'll send you a link to reset your password."
         }
       />
@@ -98,7 +100,11 @@ export function ForgotPasswordPage() {
         {error && <Alert type="error" title="Request failed" message={error} />}
 
         {!sentMessage ? (
-          <form onSubmit={handleSubmit} noValidate className="space-y-[18px] [@media(max-height:850px)]:space-y-3.5">
+          <form
+            onSubmit={handleSubmit}
+            noValidate
+            className="space-y-[18px] [@media(max-height:850px)]:space-y-3.5"
+          >
             <Input
               label="Email"
               placeholder="you@example.com"
@@ -118,8 +124,9 @@ export function ForgotPasswordPage() {
             <div>
               <p className="text-sm text-content-soft">{sentMessage}</p>
               <p className="text-sm text-content-soft mt-3">
-                Open the link sent to <span className="font-medium text-content break-all">{sentTo}</span>.
-                It expires soon and can be used only once. Don't see it? Check your spam folder.
+                Open the link sent to{" "}
+                <span className="font-medium text-content break-all">{sentTo}</span>. It expires
+                soon and can be used only once. Don't see it? Check your spam folder.
               </p>
             </div>
             <Button
@@ -129,7 +136,7 @@ export function ForgotPasswordPage() {
               disabled={cooldown > 0}
               onClick={() => sendResetLink(sentTo)}
             >
-              {cooldown > 0 ? `Resend email in ${cooldown}s` : 'Resend email'}
+              {cooldown > 0 ? `Resend email in ${cooldown}s` : "Resend email"}
             </Button>
             <div className="flex flex-col items-center gap-2">
               <button

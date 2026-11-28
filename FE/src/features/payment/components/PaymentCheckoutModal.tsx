@@ -1,11 +1,11 @@
-import { useEffect, useRef, useState } from 'react';
-import { QRCodeSVG } from 'qrcode.react';
-import { Modal } from '@/components/ui/Modal';
-import { Button } from '@/components/ui/Button';
-import { Input } from '@/components/ui/Input';
-import { Alert } from '@/components/ui/Alert';
-import { Icon } from '@/assets/icons';
-import { getApiErrorMessage } from '@/utils/apiError';
+import { useEffect, useRef, useState } from "react";
+import { QRCodeSVG } from "qrcode.react";
+import { Modal } from "@/components/ui/Modal";
+import { Button } from "@/components/ui/Button";
+import { Input } from "@/components/ui/Input";
+import { Alert } from "@/components/ui/Alert";
+import { Icon } from "@/assets/icons";
+import { getApiErrorMessage } from "@/utils/apiError";
 import {
   PAYMENT_POLL_MS,
   formatDiscountErrorMessage,
@@ -19,7 +19,7 @@ import {
   type PaymentStatus,
   type PaymentTarget,
   type PaymentType,
-} from '@/services/payment.service';
+} from "@/services/payment.service";
 
 /** The course or plan being bought. */
 export interface PaymentItem {
@@ -32,10 +32,10 @@ export interface PaymentItem {
   price: number;
 }
 
-const FINAL_MESSAGE: Record<Exclude<PaymentStatus, 'PENDING' | 'SUCCEEDED'>, string> = {
-  EXPIRED: 'This payment link has expired. Create a new one to continue.',
-  FAILED: 'The payment did not go through. Create a new payment to try again.',
-  CANCELLED: 'This payment was cancelled.',
+const FINAL_MESSAGE: Record<Exclude<PaymentStatus, "PENDING" | "SUCCEEDED">, string> = {
+  EXPIRED: "This payment link has expired. Create a new one to continue.",
+  FAILED: "The payment did not go through. Create a new payment to try again.",
+  CANCELLED: "This payment was cancelled.",
 };
 
 type ApiErrorLike = { response?: { status?: number } };
@@ -43,11 +43,16 @@ const httpStatus = (err: unknown) => (err as ApiErrorLike)?.response?.status;
 
 /** "Oct 30, 14:05", local time. */
 function formatTime(iso: string | null | undefined): string {
-  if (!iso) return '—';
+  if (!iso) return "—";
   const d = new Date(iso);
   return Number.isNaN(d.getTime())
     ? iso
-    : d.toLocaleString(undefined, { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' });
+    : d.toLocaleString(undefined, {
+        month: "short",
+        day: "numeric",
+        hour: "2-digit",
+        minute: "2-digit",
+      });
 }
 
 /**
@@ -69,39 +74,40 @@ export function PaymentCheckoutModal({
   onClose: () => void;
   onPaid: (item: PaymentItem) => void;
 }) {
-  const [code, setCode] = useState('');
+  const [code, setCode] = useState("");
   const [discount, setDiscount] = useState<(DiscountCheck & { code: string }) | null>(null);
   const [checkingCode, setCheckingCode] = useState(false);
   const [codeError, setCodeError] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
   const [checkout, setCheckout] = useState<PaymentCheckout | null>(null);
-  const [status, setStatus] = useState<PaymentStatus>('PENDING');
+  const [status, setStatus] = useState<PaymentStatus>("PENDING");
   const [cancelling, setCancelling] = useState(false);
   const [checkingPrevious, setCheckingPrevious] = useState(false);
   const onPaidRef = useRef(onPaid);
   onPaidRef.current = onPaid;
 
-  const itemKey = item ? `${item.type}-${item.refId}` : '';
-  const courseId = item?.type === 'COURSE' ? item.refId : null;
+  const itemKey = item ? `${item.type}-${item.refId}` : "";
+  const courseId = item?.type === "COURSE" ? item.refId : null;
 
   // Check the previous course checkout when the dialog opens again.
   useEffect(() => {
-    setCode('');
+    setCode("");
     setDiscount(null);
     setCodeError(null);
     setError(null);
     setCheckout(null);
-    setStatus('PENDING');
+    setStatus("PENDING");
     if (courseId === null) {
       setCheckingPrevious(false);
       return;
     }
     let active = true;
     setCheckingPrevious(true);
-    paymentService.getLatestCourseCheckout(courseId)
-      .then(previous => {
-        if (active && previous?.status === 'EXPIRED') setStatus('EXPIRED');
+    paymentService
+      .getLatestCourseCheckout(courseId)
+      .then((previous) => {
+        if (active && previous?.status === "EXPIRED") setStatus("EXPIRED");
       })
       .catch(() => {
         // A status lookup failure still leaves the checkout form available.
@@ -109,11 +115,13 @@ export function PaymentCheckoutModal({
       .finally(() => {
         if (active) setCheckingPrevious(false);
       });
-    return () => { active = false; };
+    return () => {
+      active = false;
+    };
   }, [itemKey, courseId]);
 
   useEffect(() => {
-    if (!checkout || !item || status !== 'PENDING') return;
+    if (!checkout || !item || status !== "PENDING") return;
     let stopped = false;
     let timer: ReturnType<typeof setTimeout>;
     const poll = async () => {
@@ -123,7 +131,7 @@ export function PaymentCheckoutModal({
         if (isPaymentFinal(state.status)) {
           setStatus(state.status);
           forgetPendingPayment();
-          if (state.status === 'SUCCEEDED') onPaidRef.current(item);
+          if (state.status === "SUCCEEDED") onPaidRef.current(item);
           return;
         }
       } catch {
@@ -150,11 +158,14 @@ export function PaymentCheckoutModal({
     try {
       const res = await paymentService.validateDiscount(trimmed, item.target);
       setDiscount({ ...res, code: trimmed });
-      if (!res.valid) setCodeError(formatDiscountErrorMessage(res.reason || 'This discount code is not valid.'));
+      if (!res.valid)
+        setCodeError(formatDiscountErrorMessage(res.reason || "This discount code is not valid."));
       return res.valid;
     } catch (err) {
       setDiscount(null);
-      setCodeError(formatDiscountErrorMessage(getApiErrorMessage(err, 'Could not check the discount code.')));
+      setCodeError(
+        formatDiscountErrorMessage(getApiErrorMessage(err, "Could not check the discount code.")),
+      );
       return false;
     } finally {
       setCheckingCode(false);
@@ -169,17 +180,24 @@ export function PaymentCheckoutModal({
     setSubmitting(true);
     try {
       const created = await paymentService.checkout(item.target, trimmed || undefined);
-      rememberPendingPayment({ orderCode: created.orderCode, type: item.type, refId: item.refId, title: item.title });
-      setStatus('PENDING');
+      rememberPendingPayment({
+        orderCode: created.orderCode,
+        type: item.type,
+        refId: item.refId,
+        title: item.title,
+      });
+      setStatus("PENDING");
       setCheckout(created);
     } catch (err) {
       const statusCode = httpStatus(err);
       if (statusCode === 400 && trimmed) {
-        setCodeError(formatDiscountErrorMessage(getApiErrorMessage(err, 'This discount code is not valid.')));
+        setCodeError(
+          formatDiscountErrorMessage(getApiErrorMessage(err, "This discount code is not valid.")),
+        );
       } else if (statusCode === 404) {
-        setError(`This ${item.type === 'COURSE' ? 'course' : 'plan'} is no longer available.`);
+        setError(`This ${item.type === "COURSE" ? "course" : "plan"} is no longer available.`);
       } else {
-        setError(getApiErrorMessage(err, 'Could not create the payment. Please try again.'));
+        setError(getApiErrorMessage(err, "Could not create the payment. Please try again."));
       }
     } finally {
       setSubmitting(false);
@@ -193,20 +211,20 @@ export function PaymentCheckoutModal({
     try {
       await paymentService.cancel(checkout.orderCode);
       forgetPendingPayment();
-      setStatus('CANCELLED');
+      setStatus("CANCELLED");
     } catch (err) {
       if (httpStatus(err) === 409) {
-        const message = getApiErrorMessage(err, '');
+        const message = getApiErrorMessage(err, "");
         if (/succeed/i.test(message)) {
           // Paid in the meantime — the next poll shows it.
-          setError('This payment has already been completed.');
+          setError("This payment has already been completed.");
         } else {
           // Expired/failed link: it can no longer be cancelled, only replaced.
           forgetPendingPayment();
-          setStatus('EXPIRED');
+          setStatus("EXPIRED");
         }
       } else {
-        setError(getApiErrorMessage(err, 'Could not cancel the payment.'));
+        setError(getApiErrorMessage(err, "Could not cancel the payment."));
       }
     } finally {
       setCancelling(false);
@@ -215,33 +233,50 @@ export function PaymentCheckoutModal({
 
   function startOver() {
     setCheckout(null);
-    setStatus('PENDING');
+    setStatus("PENDING");
     setError(null);
   }
 
   if (!item) return null;
 
-  const paying = checkout != null || status === 'EXPIRED';
+  const paying = checkout != null || status === "EXPIRED";
   const busy = submitting || checkingCode;
   const footer = !paying ? (
     <>
-      <Button variant="outline" onClick={onClose} disabled={busy}>Cancel</Button>
-      <Button onClick={handleCheckout} loading={submitting || checkingPrevious} disabled={checkingCode || checkingPrevious}>Continue to payment</Button>
+      <Button variant="outline" onClick={onClose} disabled={busy}>
+        Cancel
+      </Button>
+      <Button
+        onClick={handleCheckout}
+        loading={submitting || checkingPrevious}
+        disabled={checkingCode || checkingPrevious}
+      >
+        Continue to payment
+      </Button>
     </>
-  ) : status === 'PENDING' ? (
-    <Button variant="ghost" onClick={handleCancelPayment} loading={cancelling}>Cancel payment</Button>
-  ) : status === 'SUCCEEDED' ? (
+  ) : status === "PENDING" ? (
+    <Button variant="ghost" onClick={handleCancelPayment} loading={cancelling}>
+      Cancel payment
+    </Button>
+  ) : status === "SUCCEEDED" ? (
     <Button onClick={onClose}>Done</Button>
   ) : (
     <>
-      <Button variant="outline" onClick={onClose}>Close</Button>
-      <Button onClick={startOver}>{status === 'EXPIRED' ? 'Try again' : 'New payment'}</Button>
+      <Button variant="outline" onClick={onClose}>
+        Close
+      </Button>
+      <Button onClick={startOver}>{status === "EXPIRED" ? "Try again" : "New payment"}</Button>
     </>
   );
 
   return (
-    <Modal open onClose={onClose} title={item.type === 'COURSE' ? 'Buy course' : `Upgrade to ${item.title}`} footer={footer}
-      error={error && <Alert type="error" message={error} />}>
+    <Modal
+      open
+      onClose={onClose}
+      title={item.type === "COURSE" ? "Buy course" : `Upgrade to ${item.title}`}
+      footer={footer}
+      error={error && <Alert type="error" message={error} />}
+    >
       <div className="space-y-4">
         {!paying && (
           <>
@@ -250,7 +285,9 @@ export function PaymentCheckoutModal({
                 <p className="font-semibold text-content truncate">{item.title}</p>
                 {item.subtitle && <p className="text-sm text-content-soft">{item.subtitle}</p>}
               </div>
-              <p className="text-lg font-bold text-content whitespace-nowrap">{formatVnd(item.price)}</p>
+              <p className="text-lg font-bold text-content whitespace-nowrap">
+                {formatVnd(item.price)}
+              </p>
             </div>
 
             <div className="flex items-start gap-2">
@@ -259,8 +296,13 @@ export function PaymentCheckoutModal({
                   label="Discount code (optional)"
                   placeholder="e.g. SUMMER26"
                   value={code}
-                  onChange={e => { setCode(e.target.value.toUpperCase()); setCodeError(null); }}
-                  onKeyDown={e => { if (e.key === 'Enter' && trimmed && !busy) void applyCode(); }}
+                  onChange={(e) => {
+                    setCode(e.target.value.toUpperCase());
+                    setCodeError(null);
+                  }}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter" && trimmed && !busy) void applyCode();
+                  }}
                   error={codeError ?? undefined}
                   maxLength={50}
                 />
@@ -284,7 +326,8 @@ export function PaymentCheckoutModal({
                 </div>
                 <div className="flex justify-between gap-3">
                   <dt className="text-content-soft">
-                    Discount {applied.code}{applied.discountPercent ? ` (−${Number(applied.discountPercent)}%)` : ''}
+                    Discount {applied.code}
+                    {applied.discountPercent ? ` (−${Number(applied.discountPercent)}%)` : ""}
                   </dt>
                   <dd className="text-success">−{formatVnd(applied.discountAmount)}</dd>
                 </div>
@@ -293,15 +336,17 @@ export function PaymentCheckoutModal({
                   <dd className="text-content">{formatVnd(applied.finalPrice)}</dd>
                 </div>
                 {applied.expiresAt && (
-                  <p className="text-xs text-content-soft pt-1">Code valid until {formatTime(applied.expiresAt)}</p>
+                  <p className="text-xs text-content-soft pt-1">
+                    Code valid until {formatTime(applied.expiresAt)}
+                  </p>
                 )}
               </dl>
             )}
 
             <p className="text-xs text-content-soft">
-              {item.type === 'COURSE'
-                ? 'You get access to the course as soon as PayOS confirms the payment.'
-                : 'Your plan starts as soon as PayOS confirms the payment.'}
+              {item.type === "COURSE"
+                ? "You get access to the course as soon as PayOS confirms the payment."
+                : "Your plan starts as soon as PayOS confirms the payment."}
             </p>
           </>
         )}
@@ -310,14 +355,15 @@ export function PaymentCheckoutModal({
           <>
             {checkout && <PriceBreakdown checkout={checkout} title={item.title} />}
 
-            {status === 'PENDING' && checkout && (
+            {status === "PENDING" && checkout && (
               <div className="flex flex-col items-center gap-3 text-center">
                 <PaymentQr value={checkout.qrCode} />
                 <p className="text-sm text-content-soft">
-                  Scan with your banking app, or{' '}
+                  Scan with your banking app, or{" "}
                   <a href={checkout.paymentUrl} className="font-medium text-brand-ink underline">
                     pay on the PayOS page
-                  </a>.
+                  </a>
+                  .
                 </p>
                 <p className="inline-flex items-center gap-1.5 text-xs text-content-soft">
                   <span className="w-3 h-3 border-2 border-current border-t-transparent rounded-full spinner" />
@@ -326,14 +372,20 @@ export function PaymentCheckoutModal({
               </div>
             )}
 
-            {status === 'SUCCEEDED' && (
+            {status === "SUCCEEDED" && (
               <Alert
                 type="success"
                 title="Payment received"
-                message={item.type === 'COURSE' ? `You are enrolled in ${item.title}.` : `${item.title} is now active.`}
+                message={
+                  item.type === "COURSE"
+                    ? `You are enrolled in ${item.title}.`
+                    : `${item.title} is now active.`
+                }
               />
             )}
-            {status !== 'PENDING' && status !== 'SUCCEEDED' && <Alert type="warning" message={FINAL_MESSAGE[status]} />}
+            {status !== "PENDING" && status !== "SUCCEEDED" && (
+              <Alert type="warning" message={FINAL_MESSAGE[status]} />
+            )}
           </>
         )}
       </div>
@@ -345,7 +397,9 @@ function PriceBreakdown({ checkout, title }: { checkout: PaymentCheckout; title:
   return (
     <dl className="rounded-[12px] border border-line p-4 space-y-1.5 text-sm">
       <div className="flex justify-between gap-3">
-        <dt className="text-content-soft truncate">{checkout.courseTitle ?? checkout.planName ?? title}</dt>
+        <dt className="text-content-soft truncate">
+          {checkout.courseTitle ?? checkout.planName ?? title}
+        </dt>
         <dd className="text-content">{formatVnd(checkout.originalPrice)}</dd>
       </div>
       {checkout.discountAmount > 0 && (
@@ -375,9 +429,11 @@ function PaymentQr({ value }: { value: string | null }) {
   const isImage = /^(data:image\/|https?:\/\/)/i.test(value);
   return (
     <div className="rounded-[12px] bg-white p-3 border border-line">
-      {isImage
-        ? <img src={value} alt="Payment QR code" className="w-48 h-48 object-contain" />
-        : <QRCodeSVG value={value} size={192} aria-label="Payment QR code" />}
+      {isImage ? (
+        <img src={value} alt="Payment QR code" className="w-48 h-48 object-contain" />
+      ) : (
+        <QRCodeSVG value={value} size={192} aria-label="Payment QR code" />
+      )}
     </div>
   );
 }

@@ -1,10 +1,4 @@
-import React, {
-  useCallback,
-  useEffect,
-  useLayoutEffect,
-  useRef,
-  useState,
-} from "react";
+import React, { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
 import { Button } from "@/components/ui/Button";
 import { useToast } from "@/components/ui/ToastHost";
 import { Icon } from "@/assets/icons";
@@ -39,11 +33,7 @@ export interface DeckProgress {
 
 const isTyping = (t: EventTarget | null) => {
   const el = t as HTMLElement | null;
-  return (
-    !!el &&
-    (["INPUT", "TEXTAREA", "SELECT"].includes(el.tagName) ||
-      el.isContentEditable)
-  );
+  return !!el && (["INPUT", "TEXTAREA", "SELECT"].includes(el.tagName) || el.isContentEditable);
 };
 
 /**
@@ -65,9 +55,7 @@ export function useDeckStudy(
   /** Cards counted as studied in this run. */
   const [studied, setStudied] = useState<Record<number, true>>({});
   const [summary, setSummary] = useState<StudySummary | null>(null);
-  const [starting, setStarting] = useState<
-    "session" | "review" | "starred" | null
-  >(null);
+  const [starting, setStarting] = useState<"session" | "review" | "starred" | null>(null);
   const [finishing, setFinishing] = useState(false);
   const studiedRef = useRef(studied);
   studiedRef.current = studied;
@@ -129,9 +117,7 @@ export function useDeckStudy(
       result = { ...result, studied: s.knownCount };
     } catch (err) {
       // The progress is already saved card by card; only the session summary failed.
-      toast.error(
-        getApiErrorMessage(err, "Could not close the study session."),
-      );
+      toast.error(getApiErrorMessage(err, "Could not close the study session."));
     } finally {
       setFinishing(false);
     }
@@ -146,16 +132,9 @@ export function useDeckStudy(
     setStudied(studiedRef.current);
     studentDeckService
       .writeProgress(card.cardId, { status: "KNOWN" })
-      .then((p) =>
-        onProgressRef.current({ learned: p.learnedCount, total: p.totalCards }),
-      )
+      .then((p) => onProgressRef.current({ learned: p.learnedCount, total: p.totalCards }))
       .catch((err) =>
-        toast.error(
-          getApiErrorMessage(
-            err,
-            "Could not save your progress for this card.",
-          ),
-        ),
+        toast.error(getApiErrorMessage(err, "Could not save your progress for this card.")),
       );
   };
 
@@ -184,21 +163,13 @@ export function useDeckStudy(
     const nextStar = !card.isStarred;
     const delta = nextStar ? 1 : -1;
     const cardId = card.cardId;
-    setCards((cs) =>
-      cs.map((c) => (c.cardId === cardId ? { ...c, isStarred: nextStar } : c)),
-    );
+    setCards((cs) => cs.map((c) => (c.cardId === cardId ? { ...c, isStarred: nextStar } : c)));
     onStarDeltaRef.current?.(delta);
-    studentDeckService
-      .writeProgress(cardId, { isStarred: nextStar })
-      .catch((err) => {
-        setCards((cs) =>
-          cs.map((c) =>
-            c.cardId === cardId ? { ...c, isStarred: !nextStar } : c,
-          ),
-        );
-        onStarDeltaRef.current?.(-delta);
-        toast.error(getApiErrorMessage(err, "Could not update the star."));
-      });
+    studentDeckService.writeProgress(cardId, { isStarred: nextStar }).catch((err) => {
+      setCards((cs) => cs.map((c) => (c.cardId === cardId ? { ...c, isStarred: !nextStar } : c)));
+      onStarDeltaRef.current?.(-delta);
+      toast.error(getApiErrorMessage(err, "Could not update the star."));
+    });
   };
 
   return {
@@ -251,14 +222,10 @@ export function StudyActions({
     try {
       const res = await studentDeckService.learnAll(deckId);
       onProgress({ learned: res.learnedCount, total: res.totalCards });
-      toast.success(
-        `Marked ${res.learnedCount} / ${res.totalCards} cards as learned.`,
-      );
+      toast.success(`Marked ${res.learnedCount} / ${res.totalCards} cards as learned.`);
       setConfirm(null);
     } catch (err) {
-      toast.error(
-        getApiErrorMessage(err, "Could not mark the deck as learned."),
-      );
+      toast.error(getApiErrorMessage(err, "Could not mark the deck as learned."));
     } finally {
       setWorking(false);
     }
@@ -405,9 +372,7 @@ export function StudySummaryBanner({
       </span>
       <span className="text-sm">
         <strong className="text-success">{summary.studied}</strong>{" "}
-        <span className="text-content-soft">
-          of {plural(summary.total, "card")} studied
-        </span>
+        <span className="text-content-soft">of {plural(summary.total, "card")} studied</span>
       </span>
       <button
         type="button"
@@ -426,13 +391,7 @@ const FACE_CLASS =
   "[grid-area:1/1] min-h-72 rounded-[14px] border-2 shadow-sm p-[clamp(1.25rem,4vw,2.5rem)] flex flex-col items-center justify-center gap-4 [backface-visibility:hidden]";
 
 /** The card being studied: flip, star, move. Keys: Space flip · ← previous · → next · S star. */
-export function StudySession({
-  study,
-  mode,
-}: {
-  study: DeckStudy;
-  mode: DeckMode;
-}) {
+export function StudySession({ study, mode }: { study: DeckStudy; mode: DeckMode }) {
   const { run, card, cards, index, flipped } = study;
 
   const keyRef = useRef<(e: KeyboardEvent) => void>(() => {});
@@ -449,11 +408,7 @@ export function StudySession({
       return;
     if (document.querySelector('[role="dialog"]')) return;
     if (e.key === " " || e.key === "Enter") {
-      if (
-        (e.target as HTMLElement | null)?.tagName === "BUTTON" &&
-        e.key === "Enter"
-      )
-        return;
+      if ((e.target as HTMLElement | null)?.tagName === "BUTTON" && e.key === "Enter") return;
       e.preventDefault();
       study.flip();
     } else if (e.key === "ArrowLeft") study.prev();
@@ -470,9 +425,7 @@ export function StudySession({
   const rootRef = useRef<HTMLDivElement>(null);
   useEffect(() => {
     if (!run) return;
-    const reduce = window.matchMedia(
-      "(prefers-reduced-motion: reduce)",
-    ).matches;
+    const reduce = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
     rootRef.current?.scrollIntoView({
       behavior: reduce ? "auto" : "smooth",
       block: "start",
@@ -488,12 +441,7 @@ export function StudySession({
     const moved = index !== prevIndex.current;
     prevIndex.current = index;
     const el = slideRef.current;
-    if (
-      !moved ||
-      !el ||
-      window.matchMedia("(prefers-reduced-motion: reduce)").matches
-    )
-      return;
+    if (!moved || !el || window.matchMedia("(prefers-reduced-motion: reduce)").matches) return;
     el.animate(
       [
         { transform: `translateX(${from * 56}px)`, opacity: 0 },
@@ -508,10 +456,7 @@ export function StudySession({
 
   return (
     // overflow-x-clip: the sliding card must not widen the page on a phone.
-    <div
-      ref={rootRef}
-      className="max-w-2xl mx-auto space-y-4 scroll-mt-[85px] overflow-x-clip"
-    >
+    <div ref={rootRef} className="max-w-2xl mx-auto space-y-4 scroll-mt-[85px] overflow-x-clip">
       <div className="flex items-center justify-between gap-3 text-sm">
         <span className="font-medium text-content-secondary">
           {run.kind === "review" ? "Reviewing missed cards · " : "Studying · "}
@@ -529,11 +474,7 @@ export function StudySession({
       </div>
 
       {/* Keyed by card: the next card mounts face up (no turning back that would flash its answer) and slides in. */}
-      <div
-        ref={slideRef}
-        key={card.cardId}
-        className="relative [perspective:1200px]"
-      >
+      <div ref={slideRef} key={card.cardId} className="relative [perspective:1200px]">
         <button
           type="button"
           onClick={study.flip}
@@ -543,10 +484,7 @@ export function StudySession({
         >
           {/* Both faces share one grid cell, so the card is as tall as the taller face. Only the text is
               shown: the face's colour tells question from answer, the keys line below says how to flip. */}
-          <div
-            aria-hidden={flipped}
-            className={`${FACE_CLASS} border-line-strong bg-surface`}
-          >
+          <div aria-hidden={flipped} className={`${FACE_CLASS} border-line-strong bg-surface`}>
             <CardFace card={card} mode={mode} side="front" />
           </div>
           <div
@@ -566,9 +504,7 @@ export function StudySession({
             card.isStarred ? "text-warning" : "text-content-subtle"
           }`}
         >
-          <Icon.Star
-            className={`w-5 h-5 ${card.isStarred ? "fill-current" : ""}`}
-          />
+          <Icon.Star className={`w-5 h-5 ${card.isStarred ? "fill-current" : ""}`} />
         </button>
       </div>
 
@@ -585,11 +521,7 @@ export function StudySession({
         <Button
           size="lg"
           iconRight={
-            isLast ? (
-              <Icon.Check className="w-4 h-4" />
-            ) : (
-              <Icon.ChevronRight className="w-4 h-4" />
-            )
+            isLast ? <Icon.Check className="w-4 h-4" /> : <Icon.ChevronRight className="w-4 h-4" />
           }
           onClick={study.next}
           disabled={study.finishing}

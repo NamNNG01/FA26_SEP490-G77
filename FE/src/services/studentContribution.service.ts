@@ -1,10 +1,10 @@
-import { api } from './api';
-import type { ApiResponse } from '@/types/api';
-import type { StudentPage } from './studentLearning.service';
-import type { CodeQuestionConfig, CodeTestCaseDto } from './question.service';
+import { api } from "./api";
+import type { ApiResponse } from "@/types/api";
+import type { StudentPage } from "./studentLearning.service";
+import type { CodeQuestionConfig, CodeTestCaseDto } from "./question.service";
 
-export type ContributionType = 'question' | 'document';
-export type ContributionStatus = 'PENDING' | 'ACCEPTED' | 'REJECTED';
+export type ContributionType = "question" | "document";
+export type ContributionStatus = "PENDING" | "ACCEPTED" | "REJECTED";
 
 export interface ContributionItem {
   contributionId: number;
@@ -23,14 +23,24 @@ export interface ContributionOption {
   orderIndex?: number;
 }
 
-export type ContributionQuestionType = 'SINGLE_CHOICE' | 'MULTIPLE_CHOICE' | 'TRUE_FALSE' | 'MATCHING' | 'FILL_BLANK' | 'ESSAY' | 'DIAGRAM' | 'DIAGRAM_ESSAY' | 'CODE' | 'ORDERING';
+export type ContributionQuestionType =
+  | "SINGLE_CHOICE"
+  | "MULTIPLE_CHOICE"
+  | "TRUE_FALSE"
+  | "MATCHING"
+  | "FILL_BLANK"
+  | "ESSAY"
+  | "DIAGRAM"
+  | "DIAGRAM_ESSAY"
+  | "CODE"
+  | "ORDERING";
 
 export interface ContributionDetail extends ContributionItem {
   courseId?: number;
   categoryIds?: number[];
   moduleId?: number | null;
   questionType?: ContributionQuestionType;
-  difficulty?: 'EASY' | 'MEDIUM' | 'HARD';
+  difficulty?: "EASY" | "MEDIUM" | "HARD";
   content?: string;
   questionText?: string;
   options?: ContributionOption[];
@@ -50,7 +60,7 @@ export interface QuestionContributionBody {
   courseId: number;
   moduleId: number;
   questionType: ContributionQuestionType;
-  difficulty: 'EASY' | 'MEDIUM' | 'HARD';
+  difficulty: "EASY" | "MEDIUM" | "HARD";
   content: string;
   options: ContributionOption[];
   answerKey?: unknown;
@@ -65,23 +75,30 @@ export interface QuestionContributionBody {
 function query(params: Record<string, string | number | undefined | null>) {
   const qs = new URLSearchParams();
   Object.entries(params).forEach(([key, value]) => {
-    if (value !== undefined && value !== null && value !== '') qs.set(key, String(value));
+    if (value !== undefined && value !== null && value !== "") qs.set(key, String(value));
   });
   return qs.toString();
 }
 
 function normalizeContributionType(value: string): ContributionType {
   const normalized = value.toLowerCase();
-  return normalized === 'document' ? normalized : 'question';
+  return normalized === "document" ? normalized : "question";
 }
 
 function normalizeContributionItem(item: ContributionItem): ContributionItem {
-  return { ...item, type: normalizeContributionType(String(item.type ?? 'question')) };
+  return { ...item, type: normalizeContributionType(String(item.type ?? "question")) };
 }
 
 export const studentContributionService = {
-  async getMine(params: { type?: ContributionType; status?: ContributionStatus; page?: number; size?: number }) {
-    const res = await api.get<ApiResponse<StudentPage<ContributionItem>>>(`/student/contributions?${query(params)}`);
+  async getMine(params: {
+    type?: ContributionType;
+    status?: ContributionStatus;
+    page?: number;
+    size?: number;
+  }) {
+    const res = await api.get<ApiResponse<StudentPage<ContributionItem>>>(
+      `/student/contributions?${query(params)}`,
+    );
     return { ...res.data, content: (res.data.content ?? []).map(normalizeContributionItem) };
   },
 
@@ -105,12 +122,16 @@ export const studentContributionService = {
   },
 
   async createQuestion(body: QuestionContributionBody) {
-    const res = await api.post<ApiResponse<{ contributionId: number; status: ContributionStatus; createdAt: string }>>('/student/contributions', body);
+    const res = await api.post<
+      ApiResponse<{ contributionId: number; status: ContributionStatus; createdAt: string }>
+    >("/student/contributions", body);
     return res.data;
   },
 
   async resubmit(id: number | string, body: QuestionContributionBody) {
-    const res = await api.request<ApiResponse<{ contributionId: number; status: ContributionStatus; resubmissionCount: number }>>({ method: 'put', url: `/student/contributions/${id}/resubmit`, data: body });
+    const res = await api.request<
+      ApiResponse<{ contributionId: number; status: ContributionStatus; resubmissionCount: number }>
+    >({ method: "put", url: `/student/contributions/${id}/resubmit`, data: body });
     return res.data;
   },
 };

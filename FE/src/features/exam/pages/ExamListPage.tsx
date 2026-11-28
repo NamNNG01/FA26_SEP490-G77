@@ -14,11 +14,7 @@ import { Table, type TableColumn } from "@/components/ui/Table";
 import { Icon } from "@/assets/icons";
 import { useToast } from "@/components/ui/ToastHost";
 import { getApiErrorMessage } from "@/utils/apiError";
-import {
-  examService,
-  type ExamListItem,
-  type ExamStatus,
-} from "@/services/exam.service";
+import { examService, type ExamListItem, type ExamStatus } from "@/services/exam.service";
 import {
   courseService,
   type CourseSummaryItem,
@@ -61,9 +57,7 @@ export function ExamListPage() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const [selectedExamIds, setSelectedExamIds] = useState<Set<number>>(
-    new Set(),
-  );
+  const [selectedExamIds, setSelectedExamIds] = useState<Set<number>>(new Set());
 
   const [statusDialogTarget, setStatusDialogTarget] = useState<{
     exam: ExamListItem;
@@ -72,8 +66,7 @@ export function ExamListPage() {
   const [statusUpdating, setStatusUpdating] = useState(false);
   const [statusWarnings, setStatusWarnings] = useState<string[]>([]);
 
-  const [deleteDialogTarget, setDeleteDialogTarget] =
-    useState<ExamListItem | null>(null);
+  const [deleteDialogTarget, setDeleteDialogTarget] = useState<ExamListItem | null>(null);
   const [deleteConflict409, setDeleteConflict409] = useState(false);
   const [deleting, setDeleting] = useState(false);
 
@@ -111,13 +104,10 @@ export function ExamListPage() {
         })
         .catch((err) => {
           setModules([]);
-          toast.error(
-            getApiErrorMessage(err, "Failed to load course modules."),
-            {
-              title: "Could not load course modules",
-              duration: null,
-            },
-          );
+          toast.error(getApiErrorMessage(err, "Failed to load course modules."), {
+            title: "Could not load course modules",
+            duration: null,
+          });
         });
     } else {
       setModules([]);
@@ -125,18 +115,11 @@ export function ExamListPage() {
     }
   }, [selectedCourse, toast]);
 
-  const updateUrlParams = (
-    updates: Record<string, string | number | undefined>,
-  ) => {
+  const updateUrlParams = (updates: Record<string, string | number | undefined>) => {
     setSearchParams((prev) => {
       const next = new URLSearchParams(prev);
       Object.entries(updates).forEach(([key, val]) => {
-        if (
-          val === undefined ||
-          val === "" ||
-          val === "all" ||
-          (key === "page" && val === 0)
-        ) {
+        if (val === undefined || val === "" || val === "all" || (key === "page" && val === 0)) {
           next.delete(key);
         } else {
           next.set(key, String(val));
@@ -164,8 +147,7 @@ export function ExamListPage() {
       search: searchTerm.trim() || undefined,
       courseId: selectedCourse ? Number(selectedCourse) : undefined,
       moduleId: selectedModule ? Number(selectedModule) : undefined,
-      status:
-        selectedStatus !== "all" ? (selectedStatus as ExamStatus) : undefined,
+      status: selectedStatus !== "all" ? (selectedStatus as ExamStatus) : undefined,
     };
 
     try {
@@ -190,8 +172,7 @@ export function ExamListPage() {
           currentPage += 1;
         }
         allAssessments.sort(
-          (a, b) =>
-            b.createdAt.localeCompare(a.createdAt) || b.examId - a.examId,
+          (a, b) => b.createdAt.localeCompare(a.createdAt) || b.examId - a.examId,
         );
         setExams(allAssessments.slice(page * 15, page * 15 + 15));
         setTotalElements(allAssessments.length);
@@ -215,12 +196,10 @@ export function ExamListPage() {
         name?: string;
         response?: { status?: number; data?: { message?: string } };
       };
-      if (errorObj?.name === "CanceledError" || errorObj?.name === "AbortError")
-        return;
+      if (errorObj?.name === "CanceledError" || errorObj?.name === "AbortError") return;
       if (quiet) return;
       if (errorObj?.response?.status === 403) {
-        const message =
-          "You do not have permission to view exams for this course.";
+        const message = "You do not have permission to view exams for this course.";
         setError(message);
         toast.error(message, { title: "Could not load exams", duration: null });
       } else {
@@ -241,14 +220,7 @@ export function ExamListPage() {
     }, 400);
 
     return () => clearTimeout(handler);
-  }, [
-    activeTab,
-    searchTerm,
-    selectedCourse,
-    selectedModule,
-    selectedStatus,
-    page,
-  ]);
+  }, [activeTab, searchTerm, selectedCourse, selectedModule, selectedStatus, page]);
   useAutoRefresh(() => void fetchExams("quiet"));
 
   const handleTabChange = (tab: ExamListTab) => {
@@ -322,17 +294,12 @@ export function ExamListPage() {
       `"${new Date(e.createdAt).toLocaleString()}"`,
     ]);
 
-    const csvContent =
-      "\uFEFF" +
-      [headers.join(","), ...rows.map((r) => r.join(","))].join("\r\n");
+    const csvContent = "\uFEFF" + [headers.join(","), ...rows.map((r) => r.join(","))].join("\r\n");
     const blob = new Blob([csvContent], { type: "text/csv;charset=utf-8;" });
     const url = URL.createObjectURL(blob);
     const link = document.createElement("a");
     link.href = url;
-    link.setAttribute(
-      "download",
-      `exams_export_${new Date().toISOString().slice(0, 10)}.csv`,
-    );
+    link.setAttribute("download", `exams_export_${new Date().toISOString().slice(0, 10)}.csv`);
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
@@ -363,9 +330,7 @@ export function ExamListPage() {
 
       setExams((prev) =>
         prev.map((e) =>
-          e.examId === statusDialogTarget.exam.examId
-            ? { ...e, status: res.status }
-            : e,
+          e.examId === statusDialogTarget.exam.examId ? { ...e, status: res.status } : e,
         ),
       );
 
@@ -379,12 +344,7 @@ export function ExamListPage() {
     } catch (err: unknown) {
       const errorObj = err as { response?: { status?: number } };
       if (errorObj?.response?.status === 400) {
-        toast.error(
-          getApiErrorMessage(
-            err,
-            "Exam has 0 questions and cannot be published.",
-          ),
-        );
+        toast.error(getApiErrorMessage(err, "Exam has 0 questions and cannot be published."));
       } else {
         toast.error(getApiErrorMessage(err, "Failed to update exam status."));
       }
@@ -430,9 +390,7 @@ export function ExamListPage() {
         success++;
       } catch (err) {
         failed++;
-        errors.push(
-          getApiErrorMessage(err, "Failed to delete exam #" + examId + "."),
-        );
+        errors.push(getApiErrorMessage(err, "Failed to delete exam #" + examId + "."));
       }
     }
 
@@ -477,13 +435,7 @@ export function ExamListPage() {
         const kind = asExam(value).examKind;
         return (
           <Badge
-            variant={
-              kind === "QUIZ"
-                ? "purple"
-                : kind === "CODE"
-                  ? "warning"
-                  : "default"
-            }
+            variant={kind === "QUIZ" ? "purple" : kind === "CODE" ? "warning" : "default"}
             className="whitespace-nowrap text-2xs"
           >
             {kind === "DIAGRAM" || !kind ? "ESSAY" : kind}
@@ -520,11 +472,7 @@ export function ExamListPage() {
         return (
           <Badge
             variant={
-              status === "PUBLISHED"
-                ? "success"
-                : status === "ARCHIVED"
-                  ? "default"
-                  : "warning"
+              status === "PUBLISHED" ? "success" : status === "ARCHIVED" ? "default" : "warning"
             }
             className="whitespace-nowrap text-2xs"
           >
@@ -568,9 +516,7 @@ export function ExamListPage() {
                       {
                         label: "Publish",
                         icon: <Icon.CheckCircle className="h-4 w-4" />,
-                        disabled:
-                          exam.questionCount === 0 &&
-                          exam.generationType === "STATIC",
+                        disabled: exam.questionCount === 0 && exam.generationType === "STATIC",
                         onClick: () =>
                           setStatusDialogTarget({
                             exam,
@@ -583,8 +529,7 @@ export function ExamListPage() {
                   label: "Archive",
                   icon: <Icon.Archive className="h-4 w-4" />,
                   disabled: exam.status === "ARCHIVED",
-                  onClick: () =>
-                    setStatusDialogTarget({ exam, targetStatus: "ARCHIVED" }),
+                  onClick: () => setStatusDialogTarget({ exam, targetStatus: "ARCHIVED" }),
                 },
                 { divider: true } as { label: string; divider: true },
                 {
@@ -628,8 +573,7 @@ export function ExamListPage() {
         <div>
           <h2 className="text-xl font-bold text-content">Exams</h2>
           <p className="text-xs text-content-subtle mt-0.5">
-            Manage quizzes and assessments, including essays, diagrams, and
-            other response types.
+            Manage quizzes and assessments, including essays, diagrams, and other response types.
           </p>
         </div>
 
@@ -760,9 +704,7 @@ export function ExamListPage() {
             value={selectedModule}
             disabled={!selectedCourse}
             onChange={handleModuleChange}
-            placeholder={
-              selectedCourse ? "All modules" : "Select a course first"
-            }
+            placeholder={selectedCourse ? "All modules" : "Select a course first"}
             searchPlaceholder="Search modules…"
             emptyText="No modules found"
             options={[
@@ -811,11 +753,7 @@ export function ExamListPage() {
             <p className="text-sm font-medium text-danger">
               Exam list could not be loaded. See the notification for details.
             </p>
-            <Button
-              size="sm"
-              variant="outline"
-              onClick={() => void fetchExams()}
-            >
+            <Button size="sm" variant="outline" onClick={() => void fetchExams()}>
               Retry
             </Button>
           </div>
@@ -829,12 +767,10 @@ export function ExamListPage() {
         ) : exams.length === 0 ? (
           <div className="space-y-3 p-16 text-center">
             <Icon.ClipboardList className="mx-auto h-10 w-10 text-content-subtle" />
-            <h4 className="text-base font-semibold text-content">
-              No exams found
-            </h4>
+            <h4 className="text-base font-semibold text-content">No exams found</h4>
             <p className="mx-auto max-w-sm text-xs text-content-subtle">
-              There are no exams matching your search criteria. Create a quiz or
-              assessment to get started.
+              There are no exams matching your search criteria. Create a quiz or assessment to get
+              started.
             </p>
             <div className="flex justify-center pt-2">
               {activeTab === "ASSESSMENT" ? (
@@ -867,9 +803,7 @@ export function ExamListPage() {
             data={tableRows}
             selectable
             selectedKeys={new Set([...selectedExamIds].map(String))}
-            onSelectionChange={(keys) =>
-              setSelectedExamIds(new Set([...keys].map(Number)))
-            }
+            onSelectionChange={(keys) => setSelectedExamIds(new Set([...keys].map(Number)))}
             onRowClick={(row) => handleEditExam(row as unknown as ExamListItem)}
             isRowActive={(row) => selectedExamIds.has(Number(row.examId))}
             perPage={15}
@@ -894,14 +828,8 @@ export function ExamListPage() {
         title={`Change status to ${statusDialogTarget?.targetStatus}?`}
         description={
           <>
-            <strong className="text-content">
-              "{statusDialogTarget?.exam.title}"
-            </strong>{" "}
-            will be moved to{" "}
-            <strong className="text-brand-ink">
-              {statusDialogTarget?.targetStatus}
-            </strong>
-            .
+            <strong className="text-content">"{statusDialogTarget?.exam.title}"</strong> will be
+            moved to <strong className="text-brand-ink">{statusDialogTarget?.targetStatus}</strong>.
           </>
         }
         confirmLabel="Confirm"
@@ -945,11 +873,9 @@ export function ExamListPage() {
         title="Delete this exam?"
         description={
           <>
-            <strong className="text-content">
-              "{deleteDialogTarget?.title}"
-            </strong>{" "}
-            will be permanently deleted. Only drafts with no submissions can be
-            deleted — archive an exam to keep its attempt history.
+            <strong className="text-content">"{deleteDialogTarget?.title}"</strong> will be
+            permanently deleted. Only drafts with no submissions can be deleted — archive an exam to
+            keep its attempt history.
           </>
         }
         confirmLabel="Delete"
@@ -964,10 +890,7 @@ export function ExamListPage() {
         onConfirm={async () => {
           if (!deleteDialogTarget) return;
           try {
-            await examService.patchPublishExam(
-              deleteDialogTarget.examId,
-              "ARCHIVED",
-            );
+            await examService.patchPublishExam(deleteDialogTarget.examId, "ARCHIVED");
           } catch (err: unknown) {
             toast.error(getApiErrorMessage(err, "Failed to archive exam."));
             return;
@@ -999,9 +922,7 @@ export function ExamListPage() {
         onClose={() => setBulkDeleteSummary(null)}
         title="Bulk Delete Summary"
         size="sm"
-        footer={
-          <Button onClick={() => setBulkDeleteSummary(null)}>Done</Button>
-        }
+        footer={<Button onClick={() => setBulkDeleteSummary(null)}>Done</Button>}
       >
         <div className="space-y-2 text-sm text-content">
           {bulkDeleteSummary && bulkDeleteSummary.success > 0 && (

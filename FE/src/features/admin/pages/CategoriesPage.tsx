@@ -1,5 +1,5 @@
 import React, { useEffect, useState, useMemo } from "react";
-import { useAutoRefresh } from '@/hooks/useAutoRefresh';
+import { useAutoRefresh } from "@/hooks/useAutoRefresh";
 import { Button } from "@/components/ui/Button";
 import { Input } from "@/components/ui/Input";
 import { Badge } from "@/components/ui/Badge";
@@ -28,28 +28,24 @@ export function CategoriesPage() {
   const [addIsActive, setAddIsActive] = useState(true);
   const [submittingAdd, setSubmittingAdd] = useState(false);
 
-  const [editingCategory, setEditingCategory] =
-    useState<AdminCategoryNode | null>(null);
+  const [editingCategory, setEditingCategory] = useState<AdminCategoryNode | null>(null);
   const [editName, setEditName] = useState("");
   const [editDescription, setEditDescription] = useState("");
   const [editIsActive, setEditIsActive] = useState(true);
   const [submittingEdit, setSubmittingEdit] = useState(false);
 
-  const [deletingCategory, setDeletingCategory] =
-    useState<AdminCategoryNode | null>(null);
+  const [deletingCategory, setDeletingCategory] = useState<AdminCategoryNode | null>(null);
   const [submittingDelete, setSubmittingDelete] = useState(false);
 
   /** `'quiet'` = shared auto-refresh: no loader, no error toast. */
-  const loadCategories = async (mode?: 'quiet') => {
-    const quiet = mode === 'quiet';
+  const loadCategories = async (mode?: "quiet") => {
+    const quiet = mode === "quiet";
     if (!quiet) setLoading(true);
     try {
       const data = await categoryService.getAdminCategories();
       setCategories(data);
     } catch (error) {
-      if (!quiet) notification.error(
-        getApiErrorMessage(error, "Failed to load categories."),
-      );
+      if (!quiet) notification.error(getApiErrorMessage(error, "Failed to load categories."));
     } finally {
       setLoading(false);
     }
@@ -58,7 +54,7 @@ export function CategoriesPage() {
   useEffect(() => {
     loadCategories();
   }, []);
-  useAutoRefresh(() => void loadCategories('quiet'));
+  useAutoRefresh(() => void loadCategories("quiet"));
 
   const handleOpenAdd = () => {
     setAddName("");
@@ -85,9 +81,7 @@ export function CategoriesPage() {
       setIsAddModalOpen(false);
       await loadCategories();
     } catch (error) {
-      notification.error(
-        getApiErrorMessage(error, "Failed to create category."),
-      );
+      notification.error(getApiErrorMessage(error, "Failed to create category."));
     } finally {
       setSubmittingAdd(false);
     }
@@ -125,9 +119,7 @@ export function CategoriesPage() {
       setEditingCategory(null);
       await loadCategories();
     } catch (error) {
-      notification.error(
-        getApiErrorMessage(error, "Failed to update category."),
-      );
+      notification.error(getApiErrorMessage(error, "Failed to update category."));
     } finally {
       setSubmittingEdit(false);
     }
@@ -142,9 +134,7 @@ export function CategoriesPage() {
       setDeletingCategory(null);
       await loadCategories();
     } catch (error) {
-      notification.error(
-        getApiErrorMessage(error, "Failed to delete category."),
-      );
+      notification.error(getApiErrorMessage(error, "Failed to delete category."));
     } finally {
       setSubmittingDelete(false);
     }
@@ -181,11 +171,7 @@ export function CategoriesPage() {
         >
           {node.slug || "Generated on save"}
         </span>
-        <Badge
-          variant={node.isActive ? "success" : "default"}
-          size="sm"
-          className="w-fit"
-        >
+        <Badge variant={node.isActive ? "success" : "default"} size="sm" className="w-fit">
           {node.isActive ? "Active" : "Inactive"}
         </Badge>
         <div className="flex items-center gap-1.5">
@@ -217,9 +203,7 @@ export function CategoriesPage() {
     <div className="p-8 space-y-6">
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
-          <h2 className="text-xl font-bold text-content">
-            Category Management
-          </h2>
+          <h2 className="text-xl font-bold text-content">Category Management</h2>
           <p className="text-sm text-content-soft mt-0.5">
             Manage category names, slugs, and active status.
           </p>
@@ -255,9 +239,7 @@ export function CategoriesPage() {
             className="w-full pl-9 pr-4 py-2 text-sm bg-surface-subtle rounded-lg border border-line-soft focus:outline-none focus:border-brand-primary text-content"
           />
         </div>
-        <div className="text-sm text-content-soft">
-          {filteredCategories.length} categories
-        </div>
+        <div className="text-sm text-content-soft">{filteredCategories.length} categories</div>
       </div>
 
       {loading ? (
@@ -268,9 +250,7 @@ export function CategoriesPage() {
       ) : filteredCategories.length === 0 ? (
         <div className="text-center py-16 bg-surface rounded-xl border border-dashed border-line-soft">
           <Icon.Folder className="w-12 h-12 text-content-soft mx-auto mb-3" />
-          <h3 className="text-base font-semibold text-content">
-            No categories found
-          </h3>
+          <h3 className="text-base font-semibold text-content">No categories found</h3>
           <p className="text-sm text-content-soft mt-1">
             {search
               ? "Try modifying your search query."
@@ -397,9 +377,7 @@ export function CategoriesPage() {
               />
             </div>
             <div className="flex items-center justify-between py-2">
-              <span className="text-sm font-medium text-content">
-                Active Status
-              </span>
+              <span className="text-sm font-medium text-content">Active Status</span>
               <Switch checked={editIsActive} onChange={setEditIsActive} />
             </div>
 
@@ -436,10 +414,8 @@ export function CategoriesPage() {
           description={
             <>
               Category{" "}
-              <strong className="text-content font-semibold">
-                {deletingCategory.name}
-              </strong>{" "}
-              will be deleted.
+              <strong className="text-content font-semibold">{deletingCategory.name}</strong> will
+              be deleted.
             </>
           }
           confirmLabel="Delete"

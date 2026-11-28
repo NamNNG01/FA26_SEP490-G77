@@ -1,25 +1,25 @@
-import React from 'react';
-import { Icon } from '@/assets/icons';
-import type { StudentNotification } from '@/services/studentNotification.service';
-import { ROUTES } from '@/app/routes';
+import React from "react";
+import { Icon } from "@/assets/icons";
+import type { StudentNotification } from "@/services/studentNotification.service";
+import { ROUTES } from "@/app/routes";
 
 /** Icon per NT-01 `type`; unknown types fall back to the bell. */
 function typeIcon(type: string | null): React.ReactNode {
-  const cls = 'w-4 h-4';
+  const cls = "w-4 h-4";
   switch (type) {
-    case 'EXAM_REMINDER':
+    case "EXAM_REMINDER":
       return <Icon.Clock className={cls} />;
-    case 'GRADING_COMPLETED':
+    case "GRADING_COMPLETED":
       return <Icon.CheckCircle className={cls} />;
-    case 'CONTEST_REWARD':
+    case "CONTEST_REWARD":
       return <Icon.Trophy className={cls} />;
-    case 'CONTEST_CANCELLED':
+    case "CONTEST_CANCELLED":
       return <Icon.XCircle className={cls} />;
-    case 'CONTEST_REMINDER':
+    case "CONTEST_REMINDER":
       return <Icon.Clock className={cls} />;
-    case 'AI_EXPLANATION_READY':
+    case "AI_EXPLANATION_READY":
       return <Icon.Zap className={cls} />;
-    case 'AI_EXPLANATION_FAILED':
+    case "AI_EXPLANATION_FAILED":
       return <Icon.AlertCircle className={cls} />;
     default:
       return <Icon.Bell className={cls} />;
@@ -31,28 +31,33 @@ export function formatRelativeTime(iso: string): string {
   const t = new Date(iso).getTime();
   if (Number.isNaN(t)) return iso;
   const s = Math.max(0, Math.round((Date.now() - t) / 1000));
-  if (s < 60) return 'Just now';
+  if (s < 60) return "Just now";
   if (s < 3600) return `${Math.floor(s / 60)}m ago`;
   if (s < 86_400) return `${Math.floor(s / 3600)}h ago`;
   if (s < 7 * 86_400) return `${Math.floor(s / 86_400)}d ago`;
-  return new Date(t).toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric' });
+  return new Date(t).toLocaleDateString(undefined, {
+    year: "numeric",
+    month: "short",
+    day: "numeric",
+  });
 }
 
 /** In-app path for the notification, or null when it only informs (clicking just marks it read). */
 export function notificationTarget(n: StudentNotification): string | null {
   // AI-04 batch done: open the batch on New Questions, where every question can be fixed and published in place.
-  if (n.type?.startsWith('AI_EXPLANATION_') && n.link) {
+  if (n.type?.startsWith("AI_EXPLANATION_") && n.link) {
     const match = /^\/manager\/question-bank(?:\/(\d+)|\?ids=([\d,]+))$/.exec(n.link);
     const ids = match?.[1] ?? match?.[2];
     if (ids) return `${ROUTES.managerQuestionCreate}?review=${ids}`;
   }
-  if (n.link && n.link.startsWith('/')) {
-    if (n.link.startsWith('/contributions/')) return `/student${n.link}`;
-    if (n.link.startsWith('/decks/')) return `${ROUTES.studentFlashcards}/${n.link.slice('/decks/'.length)}`;
+  if (n.link && n.link.startsWith("/")) {
+    if (n.link.startsWith("/contributions/")) return `/student${n.link}`;
+    if (n.link.startsWith("/decks/"))
+      return `${ROUTES.studentFlashcards}/${n.link.slice("/decks/".length)}`;
     return n.link;
   }
   // Contest notifications carry no link yet (docs/notes/contest-be-gaps-2026-10-31.md): open the contests page.
-  return n.type?.startsWith('CONTEST_') ? ROUTES.studentContests : null;
+  return n.type?.startsWith("CONTEST_") ? ROUTES.studentContests : null;
 }
 
 /**
@@ -74,27 +79,33 @@ export function NotificationItem({
       data-menu-item
       onClick={() => onClick(n)}
       className={`w-full flex items-start gap-3 text-left cursor-pointer transition-colors duration-150 hover:bg-accent ${
-        compact ? 'px-3 py-2.5 rounded-[8px]' : 'px-5 py-4'
-      } ${n.isRead ? '' : 'bg-primary-light/40'}`}
+        compact ? "px-3 py-2.5 rounded-[8px]" : "px-5 py-4"
+      } ${n.isRead ? "" : "bg-primary-light/40"}`}
     >
       <span
         className={`mt-0.5 flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-full ${
-          n.isRead ? 'bg-surface-muted text-content-subtle' : 'bg-primary-light text-brand-ink'
+          n.isRead ? "bg-surface-muted text-content-subtle" : "bg-primary-light text-brand-ink"
         }`}
         aria-hidden="true"
       >
         {typeIcon(n.type)}
       </span>
       <span className="min-w-0 flex-1">
-        <span className={`block text-sm leading-snug ${n.isRead ? 'font-normal text-content-secondary' : 'font-semibold text-content'}`}>
+        <span
+          className={`block text-sm leading-snug ${n.isRead ? "font-normal text-content-secondary" : "font-semibold text-content"}`}
+        >
           {n.title}
         </span>
         {n.body && (
-          <span className={`mt-0.5 block text-sm text-content-soft ${compact ? 'line-clamp-2' : ''} ${n.isRead ? '' : 'font-medium'}`}>
+          <span
+            className={`mt-0.5 block text-sm text-content-soft ${compact ? "line-clamp-2" : ""} ${n.isRead ? "" : "font-medium"}`}
+          >
             {n.body}
           </span>
         )}
-        <span className="mt-1 block text-xs text-content-subtle">{formatRelativeTime(n.createdAt)}</span>
+        <span className="mt-1 block text-xs text-content-subtle">
+          {formatRelativeTime(n.createdAt)}
+        </span>
       </span>
       {!n.isRead && (
         <span className="mt-2 h-2 w-2 flex-shrink-0 rounded-full bg-primary" aria-label="Unread" />

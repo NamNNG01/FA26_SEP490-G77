@@ -1,6 +1,6 @@
-import { useState } from 'react';
-import { useDebounce } from '@/hooks';
-import { useCatalogCourses } from './usePublicCatalog';
+import { useState } from "react";
+import { useDebounce } from "@/hooks";
+import { useCatalogCourses } from "./usePublicCatalog";
 
 /**
  * useCourseSearch
@@ -9,12 +9,19 @@ import { useCatalogCourses } from './usePublicCatalog';
  * course title via CL-01 (`keyword`) — questions, exams, users, modules and
  * the question bank are never searched from here.
  */
-export function useCourseSearch(initialQuery = '', { delay = 250, size = 6 }: { delay?: number; size?: number } = {}) {
+export function useCourseSearch(
+  initialQuery = "",
+  { delay = 250, size = 6 }: { delay?: number; size?: number } = {},
+) {
   const [query, setQuery] = useState(initialQuery);
   const debouncedQuery = useDebounce(query, delay);
   const trimmed = debouncedQuery.trim();
 
-  const { data, loading, error } = useCatalogCourses({ keyword: trimmed, size, enabled: trimmed.length > 0 });
+  const { data, loading, error } = useCatalogCourses({
+    keyword: trimmed,
+    size,
+    enabled: trimmed.length > 0,
+  });
 
   const results = data?.content ?? [];
   const total = data?.totalElements ?? 0;

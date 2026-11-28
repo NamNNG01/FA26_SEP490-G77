@@ -1,7 +1,7 @@
-import { api } from './api';
-import { apiClient } from './axios';
-import type { ApiResponse } from '@/types/api';
-import type { PageResponse } from './course.service';
+import { api } from "./api";
+import { apiClient } from "./axios";
+import type { ApiResponse } from "@/types/api";
+import type { PageResponse } from "./course.service";
 
 /**
  * StudentMaterialService — Material to Quiz Creator (spec §13, StudentMaterialController).
@@ -26,14 +26,14 @@ import type { PageResponse } from './course.service';
  * MQ-05 409 job not COMPLETED; DELETE 409 while a quiz is being generated, 404 already gone.
  */
 
-export const MATERIAL_ACCEPT = '.pdf,.docx';
+export const MATERIAL_ACCEPT = ".pdf,.docx";
 export const MATERIAL_MAX_BYTES = 20 * 1024 * 1024;
 /** Files one account may keep (FE only — the BE does not count). Re-using a file uploaded before is not a new file. */
 export const MATERIAL_MAX_FILES = 10;
 export const MATERIAL_QUESTIONS = { min: 5, max: 30, default: 10 };
 
-export type MaterialDifficulty = 'EASY' | 'MEDIUM' | 'HARD';
-export type MaterialJobStatus = 'PENDING' | 'PROCESSING' | 'COMPLETED' | 'FAILED';
+export type MaterialDifficulty = "EASY" | "MEDIUM" | "HARD";
+export type MaterialJobStatus = "PENDING" | "PROCESSING" | "COMPLETED" | "FAILED";
 
 /** MQ-01 */
 export interface UploadedMaterial {
@@ -142,18 +142,19 @@ export interface MaterialHistoryItem {
 }
 
 /** Running jobs: MQ-03 refuses a second one for the same material. */
-export const isJobRunning = (status: MaterialJobStatus) => status === 'PENDING' || status === 'PROCESSING';
+export const isJobRunning = (status: MaterialJobStatus) =>
+  status === "PENDING" || status === "PROCESSING";
 
 export const materialService = {
   /** MQ-01 */
   async upload(file: File, courseId?: number, title?: string): Promise<UploadedMaterial> {
     const form = new FormData();
-    form.append('file', file);
+    form.append("file", file);
     // No course: the material belongs to none.
-    if (courseId != null) form.append('courseId', String(courseId));
-    if (title?.trim()) form.append('title', title.trim());
-    const res = await apiClient.post<ApiResponse<UploadedMaterial>>('/student/materials', form, {
-      headers: { 'Content-Type': 'multipart/form-data' },
+    if (courseId != null) form.append("courseId", String(courseId));
+    if (title?.trim()) form.append("title", title.trim());
+    const res = await apiClient.post<ApiResponse<UploadedMaterial>>("/student/materials", form, {
+      headers: { "Content-Type": "multipart/form-data" },
       timeout: 120000,
     });
     return res.data.data;
@@ -162,13 +163,17 @@ export const materialService = {
   /** MQ-02 */
   async list(courseId: number | null, page = 0, size = 10): Promise<PageResponse<MaterialItem>> {
     const qs = new URLSearchParams({ page: String(page), size: String(size) });
-    if (courseId != null) qs.set('courseId', String(courseId));
-    return api.get<ApiResponse<PageResponse<MaterialItem>>>(`/student/materials?${qs}`).then(r => r.data);
+    if (courseId != null) qs.set("courseId", String(courseId));
+    return api
+      .get<ApiResponse<PageResponse<MaterialItem>>>(`/student/materials?${qs}`)
+      .then((r) => r.data);
   },
 
   /** Account material storage usage and quota */
   async getStorageQuota(): Promise<MaterialStorageQuota> {
-    return api.get<ApiResponse<MaterialStorageQuota>>('/student/materials/storage-quota').then(r => r.data);
+    return api
+      .get<ApiResponse<MaterialStorageQuota>>("/student/materials/storage-quota")
+      .then((r) => r.data);
   },
 
   /** MQ-02, every page; courseId null = every material of the student. */
@@ -186,19 +191,30 @@ export const materialService = {
    * (items without `courses`) it loads MQ-02 per enrolled course instead, so the same file uploaded
    * for two courses is still two materials there.
    */
-  async listWithCourses(enrolled: MaterialCourse[]): Promise<{ items: MaterialItem[]; linked: boolean }> {
+  async listWithCourses(
+    enrolled: MaterialCourse[],
+  ): Promise<{ items: MaterialItem[]; linked: boolean }> {
     const all = await materialService.listAll(null);
     if (all.length === 0 || hasCourseLinks(all)) return { items: all, linked: hasCourseLinks(all) };
     const lists = await Promise.all(
-      enrolled.map(c => materialService.listAll(c.courseId).then(items => items.map(m => ({ ...m, courses: [c] })))),
+      enrolled.map((c) =>
+        materialService
+          .listAll(c.courseId)
+          .then((items) => items.map((m) => ({ ...m, courses: [c] }))),
+      ),
     );
-    return { items: lists.flat().sort((a, b) => b.uploadedAt.localeCompare(a.uploadedAt)), linked: false };
+    return {
+      items: lists.flat().sort((a, b) => b.uploadedAt.localeCompare(a.uploadedAt)),
+      linked: false,
+    };
   },
 
   /** Material with the same content (SHA-256), or null — also null when the BE has no lookup yet. */
   async lookup(sha256: string): Promise<MaterialLookup | null> {
     try {
-      return await api.get<ApiResponse<MaterialLookup>>(`/student/materials/lookup?sha256=${sha256}`).then(r => r.data ?? null);
+      return await api
+        .get<ApiResponse<MaterialLookup>>(`/student/materials/lookup?sha256=${sha256}`)
+        .then((r) => r.data ?? null);
     } catch {
       return null;
     }
@@ -211,32 +227,51 @@ export const materialService = {
 
   /** Deletes a material from every course it is attached to, with its generation jobs and stored file. */
   async remove(documentId: number): Promise<void> {
-    await api.request<ApiResponse<unknown>>({ method: 'delete', url: `/student/materials/${documentId}` });
+    await api.request<ApiResponse<unknown>>({
+      method: "delete",
+      url: `/student/materials/${documentId}`,
+    });
   },
 
   /** MQ-03 */
   async generateQuiz(documentId: number, body: GenerateQuizRequest): Promise<MaterialJobAccepted> {
-    return api.post<ApiResponse<MaterialJobAccepted>>(`/student/materials/${documentId}/generate-quiz`, body).then(r => r.data);
+    return api
+      .post<ApiResponse<MaterialJobAccepted>>(
+        `/student/materials/${documentId}/generate-quiz`,
+        body,
+      )
+      .then((r) => r.data);
   },
 
   /** MQ-04. `retryAfterMs` comes from the Retry-After header. */
   async getJob(jobId: number): Promise<{ job: MaterialJobState; retryAfterMs: number | null }> {
-    const res = await apiClient.get<ApiResponse<MaterialJobState>>(`/student/materials/quiz-jobs/${jobId}`);
-    const seconds = Number(res.headers['retry-after']);
-    return { job: res.data.data, retryAfterMs: Number.isFinite(seconds) && seconds > 0 ? seconds * 1000 : null };
+    const res = await apiClient.get<ApiResponse<MaterialJobState>>(
+      `/student/materials/quiz-jobs/${jobId}`,
+    );
+    const seconds = Number(res.headers["retry-after"]);
+    return {
+      job: res.data.data,
+      retryAfterMs: Number.isFinite(seconds) && seconds > 0 ? seconds * 1000 : null,
+    };
   },
 
   /** MQ-05 — the questions in the response are reloaded by the take-exam screen (SA-02). */
-  async start(jobId: number, takeAs?: 'EXAM' | 'PRACTICE'): Promise<MaterialQuizStarted> {
-    return api.post<ApiResponse<MaterialQuizStarted>>(
-      `/student/materials/quiz-jobs/${jobId}/start`,
-      takeAs ? { takeAs } : undefined,
-    ).then(r => r.data);
+  async start(jobId: number, takeAs?: "EXAM" | "PRACTICE"): Promise<MaterialQuizStarted> {
+    return api
+      .post<ApiResponse<MaterialQuizStarted>>(
+        `/student/materials/quiz-jobs/${jobId}/start`,
+        takeAs ? { takeAs } : undefined,
+      )
+      .then((r) => r.data);
   },
 
   /** MQ-06 */
   async history(page = 0, size = 10): Promise<PageResponse<MaterialHistoryItem>> {
-    return api.get<ApiResponse<PageResponse<MaterialHistoryItem>>>(`/student/materials/quiz-history?page=${page}&size=${size}`).then(r => r.data);
+    return api
+      .get<ApiResponse<PageResponse<MaterialHistoryItem>>>(
+        `/student/materials/quiz-history?page=${page}&size=${size}`,
+      )
+      .then((r) => r.data);
   },
 
   /** MQ-06, every page — Exam History merges it with ME-01. */
@@ -256,14 +291,15 @@ export function errorStatus(err: unknown): number | null {
 }
 
 /** True when MQ-02 items carry their courses (one material for several courses). */
-export const hasCourseLinks = (items: MaterialItem[]) => items.length > 0 && items.every(m => Array.isArray(m.courses));
+export const hasCourseLinks = (items: MaterialItem[]) =>
+  items.length > 0 && items.every((m) => Array.isArray(m.courses));
 
 /** Hex SHA-256 of the file content; null where Web Crypto is unavailable (non-secure context). */
 export async function fileSha256(file: File): Promise<string | null> {
   if (!globalThis.crypto?.subtle) return null;
   try {
-    const digest = await crypto.subtle.digest('SHA-256', await file.arrayBuffer());
-    return [...new Uint8Array(digest)].map(b => b.toString(16).padStart(2, '0')).join('');
+    const digest = await crypto.subtle.digest("SHA-256", await file.arrayBuffer());
+    return [...new Uint8Array(digest)].map((b) => b.toString(16).padStart(2, "0")).join("");
   } catch {
     return null;
   }

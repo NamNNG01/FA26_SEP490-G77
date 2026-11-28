@@ -7,8 +7,8 @@ import React, {
   useRef,
   useState,
   type ReactNode,
-} from 'react';
-import { Icon } from '@/assets/icons';
+} from "react";
+import { Icon } from "@/assets/icons";
 
 /**
  * ToastHost
@@ -26,7 +26,7 @@ import { Icon } from '@/assets/icons';
  * it is closed). Hovering a toast pauses its timer.
  */
 
-type ToastKind = 'success' | 'error' | 'info' | 'warning';
+type ToastKind = "success" | "error" | "info" | "warning";
 
 export interface ToastOptions {
   /** Bold first line; the message goes under it. */
@@ -56,19 +56,19 @@ const DEFAULT_DURATION = 4000;
 const KIND_STYLES: Record<ToastKind, { icon: ReactNode; classes: string }> = {
   success: {
     icon: <Icon.CheckCircle className="w-5 h-5" />,
-    classes: 'text-success bg-success-light border-success-line',
+    classes: "text-success bg-success-light border-success-line",
   },
   error: {
     icon: <Icon.XCircle className="w-5 h-5" />,
-    classes: 'text-danger bg-danger-light border-danger-line',
+    classes: "text-danger bg-danger-light border-danger-line",
   },
   warning: {
     icon: <Icon.AlertCircle className="w-5 h-5" />,
-    classes: 'text-warning bg-warning-light border-warning-line',
+    classes: "text-warning bg-warning-light border-warning-line",
   },
   info: {
     icon: <Icon.Info className="w-5 h-5" />,
-    classes: 'text-info bg-info-light border-brand-line',
+    classes: "text-info bg-info-light border-brand-line",
   },
 };
 
@@ -97,13 +97,7 @@ export function ToastHost({ children }: { children: ReactNode }) {
   );
 }
 
-function ToastCard({
-  toast,
-  onDone,
-}: {
-  toast: ToastItem;
-  onDone: (id: number) => void;
-}) {
+function ToastCard({ toast, onDone }: { toast: ToastItem; onDone: (id: number) => void }) {
   const [paused, setPaused] = useState(false);
   const duration = toast.duration === undefined ? DEFAULT_DURATION : toast.duration;
 
@@ -116,7 +110,7 @@ function ToastCard({
   const style = KIND_STYLES[toast.kind];
   return (
     <div
-      role={toast.kind === 'error' ? 'alert' : 'status'}
+      role={toast.kind === "error" ? "alert" : "status"}
       onMouseEnter={() => setPaused(true)}
       onMouseLeave={() => setPaused(false)}
       className={`flex items-start gap-2.5 px-4 py-3 rounded-[10px] border shadow-lg w-full sm:w-auto max-w-sm ${style.classes}`}
@@ -127,13 +121,18 @@ function ToastCard({
         <p>{toast.message}</p>
         {toast.details && toast.details.length > 0 && (
           <ul className="mt-1 list-disc pl-4 space-y-0.5 max-h-40 overflow-y-auto">
-            {toast.details.map((d, i) => <li key={i}>{d}</li>)}
+            {toast.details.map((d, i) => (
+              <li key={i}>{d}</li>
+            ))}
           </ul>
         )}
         {toast.action && (
           <button
             type="button"
-            onClick={() => { toast.action!.onClick(); onDone(toast.id); }}
+            onClick={() => {
+              toast.action!.onClick();
+              onDone(toast.id);
+            }}
             className="mt-2 text-sm font-semibold underline underline-offset-2 hover:opacity-80 cursor-pointer"
           >
             {toast.action.label}
@@ -153,13 +152,16 @@ function ToastCard({
 
 export function useToast() {
   const ctx = useContext(ToastContext);
-  if (!ctx) throw new Error('useToast must be used within a ToastHost');
+  if (!ctx) throw new Error("useToast must be used within a ToastHost");
   const { show } = ctx;
-  return useMemo(() => ({
-    show,
-    success: (m: string, o?: ToastOptions) => show('success', m, o),
-    error: (m: string, o?: ToastOptions) => show('error', m, o),
-    info: (m: string, o?: ToastOptions) => show('info', m, o),
-    warning: (m: string, o?: ToastOptions) => show('warning', m, o),
-  }), [show]);
+  return useMemo(
+    () => ({
+      show,
+      success: (m: string, o?: ToastOptions) => show("success", m, o),
+      error: (m: string, o?: ToastOptions) => show("error", m, o),
+      info: (m: string, o?: ToastOptions) => show("info", m, o),
+      warning: (m: string, o?: ToastOptions) => show("warning", m, o),
+    }),
+    [show],
+  );
 }

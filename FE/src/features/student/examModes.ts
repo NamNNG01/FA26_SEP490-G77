@@ -12,7 +12,7 @@
  * A new DB mode is one line in EXAM_MODES. A mode missing from it is treated as EXAM, so a paper
  * never shows its answers early.
  */
-export type ExamKind = 'EXAM' | 'PRACTICE';
+export type ExamKind = "EXAM" | "PRACTICE";
 
 export interface ExamModeBehavior {
   kind: ExamKind;
@@ -24,8 +24,18 @@ export interface ExamModeBehavior {
   historyType: string | null;
 }
 
-const EXAM: ExamModeBehavior = { kind: 'EXAM', timed: true, instantCheck: false, historyType: null };
-const PRACTICE: ExamModeBehavior = { kind: 'PRACTICE', timed: false, instantCheck: true, historyType: 'PRACTICE' };
+const EXAM: ExamModeBehavior = {
+  kind: "EXAM",
+  timed: true,
+  instantCheck: false,
+  historyType: null,
+};
+const PRACTICE: ExamModeBehavior = {
+  kind: "PRACTICE",
+  timed: false,
+  instantCheck: true,
+  historyType: "PRACTICE",
+};
 /** A self-made (PQ-01) exam the student chose to take as an exam: on the clock, scored at the end. */
 const SELF_MADE_EXAM: ExamModeBehavior = { ...PRACTICE, timed: true, instantCheck: false };
 
@@ -45,29 +55,37 @@ export function examModeBehavior(mode: string | null | undefined): ExamModeBehav
   if (behavior) return behavior;
   if (mode && !warned.has(mode)) {
     warned.add(mode);
-    console.warn(`Exam mode "${mode}" is not in EXAM_MODES (features/student/examModes.ts); treated as EXAM.`);
+    console.warn(
+      `Exam mode "${mode}" is not in EXAM_MODES (features/student/examModes.ts); treated as EXAM.`,
+    );
   }
   return EXAM;
 }
 
 /** How the student chose to take a self-made exam. */
-export type TakeAs = 'EXAM' | 'PRACTICE';
+export type TakeAs = "EXAM" | "PRACTICE";
 
 /**
  * Self-made exams offer the Exam / Practice choice; a course exam or contest is always an exam.
  * PRACTICE (notebook review) is one too, and is what attempts of PQ-01 exams made before V75 still carry.
  */
-export const SELF_MADE_MODES: ReadonlySet<string> = new Set(['PRACTICE', 'PRACTICE_EXAM', 'SMART_PRACTICE', 'MATERIAL_QUIZ']);
+export const SELF_MADE_MODES: ReadonlySet<string> = new Set([
+  "PRACTICE",
+  "PRACTICE_EXAM",
+  "SMART_PRACTICE",
+  "MATERIAL_QUIZ",
+]);
 
-export const canChooseTakeMode = (mode: string | null | undefined) => mode != null && SELF_MADE_MODES.has(mode);
+export const canChooseTakeMode = (mode: string | null | undefined) =>
+  mode != null && SELF_MADE_MODES.has(mode);
 
 /** `?as=` of the take-exam URL or server `takeAs`. */
 export const parseTakeAs = (value: string | null | undefined): TakeAs | null => {
   const normalized = value?.trim().toLowerCase();
-  return normalized === 'exam' ? 'EXAM' : normalized === 'practice' ? 'PRACTICE' : null;
+  return normalized === "exam" ? "EXAM" : normalized === "practice" ? "PRACTICE" : null;
 };
 
-const TAKE_AS_PREFIX = 'take-as:';
+const TAKE_AS_PREFIX = "take-as:";
 
 /**
  * The choice is the FE's only (SA-01 has no mode yet: docs/notes), so it is kept per attempt here and a
@@ -101,8 +119,13 @@ export function forgetTakeAs(attemptId: number) {
  * The take screen's behaviour: the DB mode's, except a self-made exam taken as an EXAM runs on the clock
  * without instant check. It keeps its PRACTICE kind, so leaving it still leads to Exam History.
  */
-export function takeExamBehavior(mode: string | null | undefined, takeAs: TakeAs | null): ExamModeBehavior {
+export function takeExamBehavior(
+  mode: string | null | undefined,
+  takeAs: TakeAs | null,
+): ExamModeBehavior {
   const behavior = examModeBehavior(mode);
   if (!takeAs || !canChooseTakeMode(mode)) return behavior;
-  return takeAs === 'EXAM' ? { ...behavior, timed: true, instantCheck: false } : { ...behavior, timed: false, instantCheck: true };
+  return takeAs === "EXAM"
+    ? { ...behavior, timed: true, instantCheck: false }
+    : { ...behavior, timed: false, instantCheck: true };
 }

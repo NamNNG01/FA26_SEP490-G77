@@ -1,9 +1,9 @@
-import React from 'react';
-import { Link } from 'react-router';
-import { Icon } from '@/assets/icons';
-import { Badge } from '@/components/ui/Badge';
-import { publicExamPathFor } from '@/app/routes';
-import { useAuth } from '@/auth/authContext';
+import React from "react";
+import { Link } from "react-router";
+import { Icon } from "@/assets/icons";
+import { Badge } from "@/components/ui/Badge";
+import { publicExamPathFor } from "@/app/routes";
+import { useAuth } from "@/auth/authContext";
 import {
   DIFFICULTY_ACCENT,
   EXAM_TYPE_META,
@@ -11,10 +11,15 @@ import {
   courseMeta,
   examSubtitle,
   type PublicExam,
-} from '../mockPublicExams';
+} from "../mockPublicExams";
 
 /** Icon + label pair used in the three-up information strip. */
-function InfoCell({ icon, label, value, accent }: {
+function InfoCell({
+  icon,
+  label,
+  value,
+  accent,
+}: {
   icon: React.ReactNode;
   label: string;
   value: string;
@@ -28,7 +33,13 @@ function InfoCell({ icon, label, value, accent }: {
         {label}
       </span>
       <span className="flex items-center gap-1.5 text-sm font-semibold text-foreground">
-        {accent && <span aria-hidden="true" className="h-1.5 w-1.5 rounded-full" style={{ background: accent }} />}
+        {accent && (
+          <span
+            aria-hidden="true"
+            className="h-1.5 w-1.5 rounded-full"
+            style={{ background: accent }}
+          />
+        )}
         {value}
       </span>
     </div>
@@ -53,7 +64,7 @@ function InfoCell({ icon, label, value, accent }: {
  *
  * `mt-auto` on the strip keeps it bottom-anchored now that the action row is
  * gone, so the grid stays visually aligned whether or not a card has a score.
- */export function PublicExamCard({ exam }: { exam: PublicExam }) {
+ */ export function PublicExamCard({ exam }: { exam: PublicExam }) {
   const { user } = useAuth();
   const course = courseMeta(exam.course);
   const status = STATUS_META[exam.status];
@@ -100,7 +111,12 @@ function InfoCell({ icon, label, value, accent }: {
       <div className="mt-auto grid grid-cols-3 divide-x divide-line overflow-hidden rounded-[12px] border border-line bg-surface-alt">
         <InfoCell icon={<Icon.Clock />} label="Duration" value={`${exam.duration} min`} />
         <InfoCell icon={<Icon.ClipboardList />} label="Questions" value={String(exam.questions)} />
-        <InfoCell icon={<Icon.Activity />} label="Difficulty" value={exam.difficulty} accent={difficulty} />
+        <InfoCell
+          icon={<Icon.Activity />}
+          label="Difficulty"
+          value={exam.difficulty}
+          accent={difficulty}
+        />
       </div>
     </Link>
   );

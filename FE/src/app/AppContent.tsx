@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState } from "react";
 import {
   createBrowserRouter,
   RouterProvider,
@@ -7,21 +7,27 @@ import {
   Navigate,
   useLocation,
   useSearchParams,
-} from 'react-router';
-import { useAuth, landingPathForRole, AFTER_AUTH_STATE } from '@/auth/authContext';
-import { RequireRole, ROLE_ADMIN, ROLE_MANAGER, ROLE_STUDENT, ROLE_COURSE_MANAGER_ONLY } from '@/auth/RequireRole';
-import { ROUTES } from '@/app/routes';
-import { loginPathFor, safeRedirect } from '@/hooks/useRequireAuth';
-import { AuthLayout } from '@/layouts/AuthLayout';
-import { DashboardLayout } from '@/layouts/DashboardLayout';
-import { PublicLayout } from '@/layouts/PublicLayout';
-import { LoadingScreen } from '@/components/LoadingScreen';
-import { Role } from '@/utils/permissions';
+} from "react-router";
+import { useAuth, landingPathForRole, AFTER_AUTH_STATE } from "@/auth/authContext";
+import {
+  RequireRole,
+  ROLE_ADMIN,
+  ROLE_MANAGER,
+  ROLE_STUDENT,
+  ROLE_COURSE_MANAGER_ONLY,
+} from "@/auth/RequireRole";
+import { ROUTES } from "@/app/routes";
+import { loginPathFor, safeRedirect } from "@/hooks/useRequireAuth";
+import { AuthLayout } from "@/layouts/AuthLayout";
+import { DashboardLayout } from "@/layouts/DashboardLayout";
+import { PublicLayout } from "@/layouts/PublicLayout";
+import { LoadingScreen } from "@/components/LoadingScreen";
+import { Role } from "@/utils/permissions";
 
-import { LoginPage, RegisterPage, ForgotPasswordPage, ResetPasswordPage } from '@/features/auth';
-import { LandingPage } from '@/features/landing';
-import { PlaceholderPage, PricingPage } from '@/features/public';
-import { ProfilePage } from '@/features/profile';
+import { LoginPage, RegisterPage, ForgotPasswordPage, ResetPasswordPage } from "@/features/auth";
+import { LandingPage } from "@/features/landing";
+import { PlaceholderPage, PricingPage } from "@/features/public";
+import { ProfilePage } from "@/features/profile";
 import {
   MyCoursesPage,
   StudentCourseDetailPage,
@@ -45,21 +51,25 @@ import {
   StudentWeaknessReportPage,
   StudentNotificationsPage,
   StudentQuestionIssuesPage,
-} from '@/features/student';
-import { PaymentHistoryPage, PaymentReturnPage } from '@/features/payment';
-import { ExamListPage, ExamFormPage } from '@/features/exam';
-import { ManagerContestListPage, ManagerContestFormPage, ManagerContestDetailPage } from '@/features/contest';
-import { PublicExamsPage, PublicExamDetailPage } from '@/features/public-exam';
+} from "@/features/student";
+import { PaymentHistoryPage, PaymentReturnPage } from "@/features/payment";
+import { ExamListPage, ExamFormPage } from "@/features/exam";
+import {
+  ManagerContestListPage,
+  ManagerContestFormPage,
+  ManagerContestDetailPage,
+} from "@/features/contest";
+import { PublicExamsPage, PublicExamDetailPage } from "@/features/public-exam";
 import {
   CMDashboard,
   ManagerDiscussionPage,
   ManagerReviewPage,
   ManagerQuestionIssuesPage,
-} from '@/features/content-manager';
-import { QuestionBankPage, QuestionCreatePage, QuestionDetailPage } from '@/features/question';
-import { CourseListPage, CourseDetailPage, CourseFormPage } from '@/features/course';
-import { FlashcardManagementPage, FlashcardDeckDetailPage } from '@/features/flashcard';
-import { PublicCoursesPage, PublicCourseDetailPage } from '@/features/catalog';
+} from "@/features/content-manager";
+import { QuestionBankPage, QuestionCreatePage, QuestionDetailPage } from "@/features/question";
+import { CourseListPage, CourseDetailPage, CourseFormPage } from "@/features/course";
+import { FlashcardManagementPage, FlashcardDeckDetailPage } from "@/features/flashcard";
+import { PublicCoursesPage, PublicCourseDetailPage } from "@/features/catalog";
 import {
   AdminDashboard,
   UsersPage,
@@ -71,7 +81,7 @@ import {
   CategoriesPage,
   DiscountsPage,
   AdminCommunityDecksPage,
-} from '@/features/admin';
+} from "@/features/admin";
 
 /**
  * AppContent
@@ -98,7 +108,7 @@ export function AppContent() {
  * A data router so pages can use `useBlocker` (unsaved-changes guard). The
  * route table itself stays in <AppRoutes /> as descendant <Routes>.
  */
-const router = createBrowserRouter([{ path: '*', element: <AppRoutes /> }]);
+const router = createBrowserRouter([{ path: "*", element: <AppRoutes /> }]);
 
 /**
  * Landing route per role — keeps role-based routing in one place.
@@ -150,8 +160,10 @@ function LoggedInLoginRedirect() {
   const location = useLocation();
   const landing = useLandingPath();
   const fromState = (location.state as { from?: string } | null)?.from;
-  const redirect = safeRedirect(searchParams.get('redirect')) ?? safeRedirect(fromState);
-  return <Navigate to={redirect ?? landing} replace state={redirect ? undefined : AFTER_AUTH_STATE} />;
+  const redirect = safeRedirect(searchParams.get("redirect")) ?? safeRedirect(fromState);
+  return (
+    <Navigate to={redirect ?? landing} replace state={redirect ? undefined : AFTER_AUTH_STATE} />
+  );
 }
 
 /** Preserves the requested deep path across the login redirect for unauthenticated users. */
@@ -202,7 +214,8 @@ function AppRoutes() {
     // Stored session rejected (token dead, or account changed on the server)
     // → straight to the login form, whatever page was requested.
     if (reauthRequired && location.pathname !== ROUTES.login) {
-      const from = location.pathname === ROUTES.landing ? undefined : location.pathname + location.search;
+      const from =
+        location.pathname === ROUTES.landing ? undefined : location.pathname + location.search;
       return <Navigate to={ROUTES.login} replace state={{ from, sessionChanged: true }} />;
     }
 
@@ -258,120 +271,159 @@ function AppRoutes() {
   //     exactly once and persists across route changes.
   return (
     <>
-    <Routes>
-      {publicRoutes(<SignedInHome isEntry={location.key === entryKey} />, !isStudent)}
+      <Routes>
+        {publicRoutes(<SignedInHome isEntry={location.key === entryKey} />, !isStudent)}
 
-      {/* STUDENT — header (Home · Courses) + sidebar, like the other roles. */}
-      <Route element={<DashboardLayout />}>
+        {/* STUDENT — header (Home · Courses) + sidebar, like the other roles. */}
+        <Route element={<DashboardLayout />}>
+          <Route element={<RequireRole roles={ROLE_STUDENT} />}>
+            <Route path={ROUTES.courses} element={<PublicCoursesPage />} />
+            <Route path={ROUTES.courseDetail} element={<PublicCourseDetailPage />} />
+            <Route path={ROUTES.studentMaterials} element={<MyMaterialsPage />} />
+            <Route path={ROUTES.studentSubscription} element={<StudentSubscriptionPage />} />
+            <Route path={ROUTES.studentDiscounts} element={<StudentDiscountsPage />} />
+            <Route path={ROUTES.studentDiscountDetail} element={<StudentDiscountsPage />} />
+            <Route path={ROUTES.studentPayments} element={<PaymentHistoryPage />} />
+            <Route path={ROUTES.paymentReturn} element={<PaymentReturnPage />} />
+            <Route path={ROUTES.paymentCancel} element={<PaymentReturnPage cancelled />} />
+            <Route
+              path={ROUTES.studentPracticeExams}
+              element={<Navigate to={`${ROUTES.studentExams}?type=PRACTICE`} replace />}
+            />
+            <Route path={ROUTES.studentProfile} element={<ProfilePage />} />
+            <Route
+              path={ROUTES.studentDashboard}
+              element={<Navigate to={ROUTES.studentCourses} replace />}
+            />
+            <Route path={ROUTES.studentCourses} element={<MyCoursesPage />} />
+            <Route path={ROUTES.studentCourseDetail} element={<StudentCourseDetailPage />} />
+            <Route path={ROUTES.studentWeaknessReport} element={<StudentWeaknessReportPage />} />
+            <Route path={ROUTES.studentModuleDetail} element={<StudentModuleDetailPage />} />
+            <Route path={ROUTES.studentExams} element={<MyExamsPage />} />
+            <Route path={ROUTES.studentMyExams} element={<MyExamsPage />} />
+            <Route
+              path={ROUTES.studentQuestionNotebook}
+              element={<StudentQuestionNotebookPage />}
+            />
+            <Route path={ROUTES.studentContests} element={<StudentContestsPage />} />
+            <Route path={ROUTES.studentContestDetail} element={<StudentContestsPage />} />
+            <Route path={ROUTES.studentDiscussions} element={<StudentCommunityPage />} />
+            <Route path={ROUTES.studentDiscussionDetail} element={<StudentCommunityPage />} />
+            <Route path={ROUTES.studentContributions} element={<StudentContributionsPage />} />
+            <Route path={ROUTES.studentContributionDetail} element={<StudentContributionsPage />} />
+            <Route path={ROUTES.studentNotifications} element={<StudentNotificationsPage />} />
+            <Route path={ROUTES.studentQuestionIssues} element={<StudentQuestionIssuesPage />} />
+            <Route path={ROUTES.studentFlashcards} element={<StudentFlashcardsPage />} />
+            <Route path={ROUTES.studentFlashcardDeck} element={<StudentDeckStudyPage />} />
+            <Route path={ROUTES.studentPublicExam} element={<PublicExamsPage />} />
+            <Route path={ROUTES.studentPublicExamDetail} element={<PublicExamDetailPage />} />
+            <Route path={ROUTES.studentExamDetail} element={<StudentExamDetailPage />} />
+            <Route path={ROUTES.studentExamResult} element={<StudentExamResultPage />} />
+            <Route path={ROUTES.studentPracticeResult} element={<StudentPracticeResultPage />} />
+          </Route>
+        </Route>
+
         <Route element={<RequireRole roles={ROLE_STUDENT} />}>
-          <Route path={ROUTES.courses} element={<PublicCoursesPage />} />
-          <Route path={ROUTES.courseDetail} element={<PublicCourseDetailPage />} />
-          <Route path={ROUTES.studentMaterials} element={<MyMaterialsPage />} />
-          <Route path={ROUTES.studentSubscription} element={<StudentSubscriptionPage />} />
-          <Route path={ROUTES.studentDiscounts} element={<StudentDiscountsPage />} />
-          <Route path={ROUTES.studentDiscountDetail} element={<StudentDiscountsPage />} />
-          <Route path={ROUTES.studentPayments} element={<PaymentHistoryPage />} />
-          <Route path={ROUTES.paymentReturn} element={<PaymentReturnPage />} />
-          <Route path={ROUTES.paymentCancel} element={<PaymentReturnPage cancelled />} />
-          <Route path={ROUTES.studentPracticeExams} element={<Navigate to={`${ROUTES.studentExams}?type=PRACTICE`} replace />} />
-          <Route path={ROUTES.studentProfile} element={<ProfilePage />} />
-          <Route path={ROUTES.studentDashboard} element={<Navigate to={ROUTES.studentCourses} replace />} />
-          <Route path={ROUTES.studentCourses} element={<MyCoursesPage />} />
-          <Route path={ROUTES.studentCourseDetail} element={<StudentCourseDetailPage />} />
-          <Route path={ROUTES.studentWeaknessReport} element={<StudentWeaknessReportPage />} />
-          <Route path={ROUTES.studentModuleDetail} element={<StudentModuleDetailPage />} />
-          <Route path={ROUTES.studentExams} element={<MyExamsPage />} />
-          <Route path={ROUTES.studentMyExams} element={<MyExamsPage />} />
-          <Route path={ROUTES.studentQuestionNotebook} element={<StudentQuestionNotebookPage />} />
-          <Route path={ROUTES.studentContests} element={<StudentContestsPage />} />
-          <Route path={ROUTES.studentContestDetail} element={<StudentContestsPage />} />
-          <Route path={ROUTES.studentDiscussions} element={<StudentCommunityPage />} />
-          <Route path={ROUTES.studentDiscussionDetail} element={<StudentCommunityPage />} />
-          <Route path={ROUTES.studentContributions} element={<StudentContributionsPage />} />
-          <Route path={ROUTES.studentContributionDetail} element={<StudentContributionsPage />} />
-          <Route path={ROUTES.studentNotifications} element={<StudentNotificationsPage />} />
-          <Route path={ROUTES.studentQuestionIssues} element={<StudentQuestionIssuesPage />} />
-          <Route path={ROUTES.studentFlashcards} element={<StudentFlashcardsPage />} />
-          <Route path={ROUTES.studentFlashcardDeck} element={<StudentDeckStudyPage />} />
-          <Route path={ROUTES.studentPublicExam} element={<PublicExamsPage />} />
-          <Route path={ROUTES.studentPublicExamDetail} element={<PublicExamDetailPage />} />
-          <Route path={ROUTES.studentExamDetail} element={<StudentExamDetailPage />} />
-          <Route path={ROUTES.studentExamResult} element={<StudentExamResultPage />} />
-          <Route path={ROUTES.studentPracticeResult} element={<StudentPracticeResultPage />} />
-        </Route>
-      </Route>
-
-      <Route element={<RequireRole roles={ROLE_STUDENT} />}>
-        <Route path={ROUTES.studentExam} element={<StudentTakeExamPage />} />
-        <Route path={ROUTES.studentFlashcardLearn} element={<StudentDeckLearnPage />} />
-        <Route path={ROUTES.studentFlashcardTest} element={<StudentDeckTestPage />} />
-      </Route>
-
-      <Route element={<DashboardLayout />}>
-        {/* Already signed in — respect ?redirect= before falling back. */}
-        <Route path={ROUTES.login} element={<LoggedInLoginRedirect />} />
-        <Route path={ROUTES.register} element={<LoggedInLoginRedirect />} />
-        <Route path={ROUTES.forgotPassword} element={<ForgotPasswordPage />} />
-        <Route path={ROUTES.resetPassword} element={<ResetPasswordPage />} />
-
-        {/* Shared Course shell & profile — accessible to both COURSE_MANAGER and ADMIN. */}
-        <Route element={<RequireRole roles={ROLE_MANAGER} />}>
-          <Route path={ROUTES.profile} element={<ProfilePage />} />
-          <Route path={ROUTES.managerCourses} element={<CourseListPage />} />
-          <Route path={ROUTES.managerCourseDetail} element={<CourseDetailPage />} />
+          <Route path={ROUTES.studentExam} element={<StudentTakeExamPage />} />
+          <Route path={ROUTES.studentFlashcardLearn} element={<StudentDeckLearnPage />} />
+          <Route path={ROUTES.studentFlashcardTest} element={<StudentDeckTestPage />} />
         </Route>
 
-        {/* COURSE_MANAGER only — ADMIN is NOT allowed here. */}
-        <Route element={<RequireRole roles={ROLE_COURSE_MANAGER_ONLY} />}>
-          <Route path={ROUTES.managerReviews} element={<ManagerReviewPage />} />
-          <Route path={ROUTES.managerQuestionIssues} element={<ManagerQuestionIssuesPage />} />
-          <Route path={ROUTES.managerDashboard} element={<CMDashboard />} />
-          <Route path={ROUTES.managerQuestions} element={<QuestionBankPage />} />
-          <Route path={ROUTES.managerQuestionCreate} element={<QuestionCreatePage />} />
-          <Route path={ROUTES.managerQuestionEdit} element={<QuestionDetailPage />} />
-          <Route path={ROUTES.managerExams} element={<ExamListPage />} />
-          <Route path={ROUTES.managerExamQuizNew} element={<ExamFormPage formKind="QUIZ" mode="create" />} />
-          <Route path={ROUTES.managerExamQuizEdit} element={<ExamFormPage formKind="QUIZ" mode="edit" />} />
-          <Route path={ROUTES.managerExamEssayNew} element={<ExamFormPage formKind="ESSAY" mode="create" />} />
-          <Route path={ROUTES.managerExamEssayEdit} element={<ExamFormPage formKind="ESSAY" mode="edit" />} />
-          <Route path={ROUTES.managerExamDiagramNew} element={<ExamFormPage formKind="ESSAY" mode="create" />} />
-          <Route path={ROUTES.managerExamDiagramEdit} element={<ExamFormPage formKind="ESSAY" mode="edit" />} />
-          <Route path={ROUTES.managerExamCodeNew} element={<ExamFormPage formKind="CODE" mode="create" />} />
-          <Route path={ROUTES.managerExamCodeEdit} element={<ExamFormPage formKind="CODE" mode="edit" />} />
-          {/* Same shared components as the student practice-exam area. */}
-          <Route path={ROUTES.managerPracticeExams} element={<PublicExamsPage />} />
-          <Route path={ROUTES.managerPracticeExamDetail} element={<PublicExamDetailPage />} />
-          <Route path={ROUTES.managerContests} element={<ManagerContestListPage />} />
-          <Route path={ROUTES.managerContestCreate} element={<ManagerContestFormPage mode="create" />} />
-          <Route path={ROUTES.managerContestDetail} element={<ManagerContestDetailPage />} />
-          <Route path={ROUTES.managerContestEdit} element={<ManagerContestFormPage mode="edit" />} />
-          <Route path={ROUTES.managerFlashcards} element={<FlashcardManagementPage />} />
-          <Route path={ROUTES.managerFlashcardDetail} element={<FlashcardDeckDetailPage />} />
-        </Route>
+        <Route element={<DashboardLayout />}>
+          {/* Already signed in — respect ?redirect= before falling back. */}
+          <Route path={ROUTES.login} element={<LoggedInLoginRedirect />} />
+          <Route path={ROUTES.register} element={<LoggedInLoginRedirect />} />
+          <Route path={ROUTES.forgotPassword} element={<ForgotPasswordPage />} />
+          <Route path={ROUTES.resetPassword} element={<ResetPasswordPage />} />
 
-        {/* ADMIN — system administration only. */}
-        <Route element={<RequireRole roles={ROLE_ADMIN} />}>
-          <Route path={ROUTES.adminDashboard} element={<AdminDashboard />} />
-          {/* Only administrators create courses; Course Managers edit their content. */}
-          <Route path={ROUTES.managerCourseCreate} element={<CourseFormPage mode="create" />} />
-          <Route path={ROUTES.adminUsers} element={<UsersPage />} />
-          <Route path={`${ROUTES.adminUsers}/:userId`} element={<UserDetailPage />} />
-          <Route path={ROUTES.adminCategories} element={<CategoriesPage />} />
-          <Route path={ROUTES.adminDiscounts} element={<DiscountsPage />} />
-          <Route path={ROUTES.adminSubscriptions} element={<SubscriptionPackagesPage />} />
-          <Route path={ROUTES.adminCommunityDecks} element={<AdminCommunityDecksPage />} />
-          <Route path={ROUTES.managerDiscussions} element={<ManagerDiscussionPage />} />
-          <Route path={ROUTES.adminAnalytics} element={<AnalyticsPage />} />
-          <Route path={ROUTES.adminAuditLogs} element={<AuditLogsPage />} />
-          <Route path={ROUTES.adminSettings} element={<SystemSettingsPage />} />
-        </Route>
+          {/* Shared Course shell & profile — accessible to both COURSE_MANAGER and ADMIN. */}
+          <Route element={<RequireRole roles={ROLE_MANAGER} />}>
+            <Route path={ROUTES.profile} element={<ProfilePage />} />
+            <Route path={ROUTES.managerCourses} element={<CourseListPage />} />
+            <Route path={ROUTES.managerCourseDetail} element={<CourseDetailPage />} />
+          </Route>
 
-        {/* Fallback (404) — goes to the role landing, NOT /login (which
+          {/* COURSE_MANAGER only — ADMIN is NOT allowed here. */}
+          <Route element={<RequireRole roles={ROLE_COURSE_MANAGER_ONLY} />}>
+            <Route path={ROUTES.managerReviews} element={<ManagerReviewPage />} />
+            <Route path={ROUTES.managerQuestionIssues} element={<ManagerQuestionIssuesPage />} />
+            <Route path={ROUTES.managerDashboard} element={<CMDashboard />} />
+            <Route path={ROUTES.managerQuestions} element={<QuestionBankPage />} />
+            <Route path={ROUTES.managerQuestionCreate} element={<QuestionCreatePage />} />
+            <Route path={ROUTES.managerQuestionEdit} element={<QuestionDetailPage />} />
+            <Route path={ROUTES.managerExams} element={<ExamListPage />} />
+            <Route
+              path={ROUTES.managerExamQuizNew}
+              element={<ExamFormPage formKind="QUIZ" mode="create" />}
+            />
+            <Route
+              path={ROUTES.managerExamQuizEdit}
+              element={<ExamFormPage formKind="QUIZ" mode="edit" />}
+            />
+            <Route
+              path={ROUTES.managerExamEssayNew}
+              element={<ExamFormPage formKind="ESSAY" mode="create" />}
+            />
+            <Route
+              path={ROUTES.managerExamEssayEdit}
+              element={<ExamFormPage formKind="ESSAY" mode="edit" />}
+            />
+            <Route
+              path={ROUTES.managerExamDiagramNew}
+              element={<ExamFormPage formKind="ESSAY" mode="create" />}
+            />
+            <Route
+              path={ROUTES.managerExamDiagramEdit}
+              element={<ExamFormPage formKind="ESSAY" mode="edit" />}
+            />
+            <Route
+              path={ROUTES.managerExamCodeNew}
+              element={<ExamFormPage formKind="CODE" mode="create" />}
+            />
+            <Route
+              path={ROUTES.managerExamCodeEdit}
+              element={<ExamFormPage formKind="CODE" mode="edit" />}
+            />
+            {/* Same shared components as the student practice-exam area. */}
+            <Route path={ROUTES.managerPracticeExams} element={<PublicExamsPage />} />
+            <Route path={ROUTES.managerPracticeExamDetail} element={<PublicExamDetailPage />} />
+            <Route path={ROUTES.managerContests} element={<ManagerContestListPage />} />
+            <Route
+              path={ROUTES.managerContestCreate}
+              element={<ManagerContestFormPage mode="create" />}
+            />
+            <Route path={ROUTES.managerContestDetail} element={<ManagerContestDetailPage />} />
+            <Route
+              path={ROUTES.managerContestEdit}
+              element={<ManagerContestFormPage mode="edit" />}
+            />
+            <Route path={ROUTES.managerFlashcards} element={<FlashcardManagementPage />} />
+            <Route path={ROUTES.managerFlashcardDetail} element={<FlashcardDeckDetailPage />} />
+          </Route>
+
+          {/* ADMIN — system administration only. */}
+          <Route element={<RequireRole roles={ROLE_ADMIN} />}>
+            <Route path={ROUTES.adminDashboard} element={<AdminDashboard />} />
+            {/* Only administrators create courses; Course Managers edit their content. */}
+            <Route path={ROUTES.managerCourseCreate} element={<CourseFormPage mode="create" />} />
+            <Route path={ROUTES.adminUsers} element={<UsersPage />} />
+            <Route path={`${ROUTES.adminUsers}/:userId`} element={<UserDetailPage />} />
+            <Route path={ROUTES.adminCategories} element={<CategoriesPage />} />
+            <Route path={ROUTES.adminDiscounts} element={<DiscountsPage />} />
+            <Route path={ROUTES.adminSubscriptions} element={<SubscriptionPackagesPage />} />
+            <Route path={ROUTES.adminCommunityDecks} element={<AdminCommunityDecksPage />} />
+            <Route path={ROUTES.managerDiscussions} element={<ManagerDiscussionPage />} />
+            <Route path={ROUTES.adminAnalytics} element={<AnalyticsPage />} />
+            <Route path={ROUTES.adminAuditLogs} element={<AuditLogsPage />} />
+            <Route path={ROUTES.adminSettings} element={<SystemSettingsPage />} />
+          </Route>
+
+          {/* Fallback (404) — goes to the role landing, NOT /login (which
             would immediately bounce back here and could look like a
             logout). */}
-        <Route path="*" element={<Navigate to={landing} replace />} />
-      </Route>
-    </Routes>
+          <Route path="*" element={<Navigate to={landing} replace />} />
+        </Route>
+      </Routes>
     </>
   );
 }

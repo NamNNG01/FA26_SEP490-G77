@@ -1,5 +1,5 @@
-import { api } from './api';
-import type { ApiResponse } from '@/types/api';
+import { api } from "./api";
+import type { ApiResponse } from "@/types/api";
 
 /**
  * DASH-04 — the admin dashboard report (GET /api/v1/dashboard/admin/report).
@@ -9,8 +9,8 @@ import type { ApiResponse } from '@/types/api';
  * the server's calendar units; `revenueSeries` always carries one entry per period of the filter.
  */
 
-export type Granularity = 'day' | 'month' | 'year';
-export type TopCourseSort = 'revenue' | 'enrollments';
+export type Granularity = "day" | "month" | "year";
+export type TopCourseSort = "revenue" | "enrollments";
 
 export interface DashboardFilter {
   granularity: Granularity;
@@ -41,7 +41,7 @@ export interface TopCourse {
   title: string;
   revenue: number;
   enrollments: number;
-  status: 'PUBLISHED' | 'DRAFT';
+  status: "PUBLISHED" | "DRAFT";
 }
 
 export interface AiUsageLog {
@@ -85,7 +85,9 @@ export const adminDashboardService = {
       to: filter.to,
       sortBy,
     });
-    const body = await api.get<ApiResponse<AdminDashboardReport>>(`/dashboard/admin/report?${params.toString()}`);
+    const body = await api.get<ApiResponse<AdminDashboardReport>>(
+      `/dashboard/admin/report?${params.toString()}`,
+    );
     return body.data;
   },
 };
